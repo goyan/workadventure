@@ -6,6 +6,7 @@
     import PixelIcon from "../ActionsMenu/PixelIcon.svelte";
     import type { PixelIconName } from "../ActionsMenu/PixelIcons";
     import {
+        airplaneVolumeStore,
         doorVolumeStore,
         footstepVolumeStore,
         jungleVolumeStore,
@@ -23,6 +24,17 @@
     }
 
     let { preview = createSoundPreview() }: Props = $props();
+
+    // What the player chose: a slider does not move when a silent zone cuts the sounds.
+    const footstepSetting = footstepVolumeStore.setting;
+    const airplaneSetting = airplaneVolumeStore.setting;
+    const skateboardSetting = skateboardVolumeStore.setting;
+    const weatherSetting = weatherVolumeStore.setting;
+    const doorSetting = doorVolumeStore.setting;
+    const nerfSetting = nerfVolumeStore.setting;
+    const jungleSetting = jungleVolumeStore.setting;
+    const mapSoundsSetting = mapSoundsVolumeStore.setting;
+    const notificationSoundSetting = notificationSoundVolumeStore.setting;
 
     type Row = {
         id: string;
@@ -44,17 +56,25 @@
                     id: "footstep-volume",
                     label: $LL.menu.settings.soundEffects.footsteps(),
                     icon: "footsteps",
-                    store: footstepVolumeStore,
-                    value: $footstepVolumeStore,
+                    store: footstepVolumeStore.setting,
+                    value: $footstepSetting,
                     family: "footsteps",
                 },
                 {
                     id: "skateboard-volume",
                     label: $LL.menu.settings.soundEffects.skateboard(),
                     icon: "skateboard",
-                    store: skateboardVolumeStore,
-                    value: $skateboardVolumeStore,
+                    store: skateboardVolumeStore.setting,
+                    value: $skateboardSetting,
                     family: "skateboard",
+                },
+                {
+                    id: "airplane-volume",
+                    label: $LL.menu.settings.soundEffects.airplane(),
+                    icon: "airplane",
+                    store: airplaneVolumeStore.setting,
+                    value: $airplaneSetting,
+                    family: "airplane",
                 },
             ],
         },
@@ -64,41 +84,42 @@
                 {
                     id: "weather-volume",
                     label: $LL.menu.settings.soundEffects.weather(),
+                    hint: $LL.menu.settings.soundEffects.weatherHint(),
                     icon: "weather",
-                    store: weatherVolumeStore,
-                    value: $weatherVolumeStore,
+                    store: weatherVolumeStore.setting,
+                    value: $weatherSetting,
                     family: "weather",
                 },
                 {
                     id: "door-volume",
                     label: $LL.menu.settings.soundEffects.doors(),
                     icon: "door",
-                    store: doorVolumeStore,
-                    value: $doorVolumeStore,
+                    store: doorVolumeStore.setting,
+                    value: $doorSetting,
                     family: "doors",
                 },
                 {
                     id: "nerf-volume",
                     label: $LL.menu.settings.soundEffects.nerf(),
                     icon: "nerf",
-                    store: nerfVolumeStore,
-                    value: $nerfVolumeStore,
+                    store: nerfVolumeStore.setting,
+                    value: $nerfSetting,
                     family: "nerf",
                 },
                 {
                     id: "jungle-volume",
                     label: $LL.menu.settings.soundEffects.jungle(),
                     icon: "paw",
-                    store: jungleVolumeStore,
-                    value: $jungleVolumeStore,
+                    store: jungleVolumeStore.setting,
+                    value: $jungleSetting,
                     family: "jungle",
                 },
                 {
                     id: "map-sounds-volume",
                     label: $LL.menu.settings.soundEffects.mapSounds(),
                     icon: "dance",
-                    store: mapSoundsVolumeStore,
-                    value: $mapSoundsVolumeStore,
+                    store: mapSoundsVolumeStore.setting,
+                    value: $mapSoundsSetting,
                     hint: $LL.menu.settings.soundEffects.mapSoundsHint(),
                 },
             ],
@@ -110,8 +131,8 @@
                     id: "notification-sound-volume",
                     label: $LL.menu.settings.soundEffects.notifications(),
                     icon: "bell",
-                    store: notificationSoundVolumeStore,
-                    value: $notificationSoundVolumeStore,
+                    store: notificationSoundVolumeStore.setting,
+                    value: $notificationSoundSetting,
                     family: "notifications",
                     hint: $LL.menu.settings.soundEffects.notificationsHint(),
                 },

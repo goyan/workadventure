@@ -9,6 +9,7 @@ import {
 } from "../../src/common/RealWeather";
 import type { ObservedWeather, RealWeatherSlot } from "../../src/common/RealWeather";
 import { OPEN_METEO_ASKED_AT, OPEN_METEO_PARIS } from "./OpenMeteoFixture";
+import { OPEN_METEO_RAINY } from "./OpenMeteoRainyFixture";
 
 describe("weatherFromWmoCode", () => {
     // WMO weather interpretation codes, as listed by the Open-Meteo documentation.
@@ -27,13 +28,14 @@ describe("weatherFromWmoCode", () => {
         [65, WeatherType.Rain],
         [66, WeatherType.Rain],
         [67, WeatherType.Rain],
-        [71, WeatherType.Snow],
-        [75, WeatherType.Snow],
-        [77, WeatherType.Snow],
+        // Snow falls are a precipitation like the rain: the cold of the map, not the code, makes them flakes.
+        [71, WeatherType.Rain],
+        [75, WeatherType.Rain],
+        [77, WeatherType.Rain],
         [80, WeatherType.Rain],
         [82, WeatherType.Rain],
-        [85, WeatherType.Snow],
-        [86, WeatherType.Snow],
+        [85, WeatherType.Rain],
+        [86, WeatherType.Rain],
         [95, WeatherType.Storm],
         [96, WeatherType.Storm],
         [99, WeatherType.Storm],
@@ -170,6 +172,35 @@ describe("cloudinessFromWmoCode", () => {
         ]);
     });
 
+    it("takes the humidity of the air (%) of each quarter hour when Open-Meteo gives it", () => {
+        expect(
+            slotsFromOpenMeteo({
+                minutely_15: {
+                    time: [0, 900],
+                    weather_code: [0, 0],
+                    temperature_2m: [5, 5],
+                    relative_humidity_2m: [73, null],
+                },
+            }),
+        ).toEqual([
+            { at: 0, weather: WeatherType.Clear, temperature: 5, humidity: 73 },
+            { at: SLOT, weather: WeatherType.Clear, temperature: 5 },
+        ]);
+    });
+
+    it("refuses a humidity column of another length", () => {
+        expect(
+            slotsFromOpenMeteo({
+                minutely_15: {
+                    time: [0, 900],
+                    weather_code: [0, 0],
+                    temperature_2m: [5, 5],
+                    relative_humidity_2m: [73],
+                },
+            }),
+        ).toBeUndefined();
+    });
+
     it("gives the wind of the quarter hour under way and of the one before, for turning", () => {
         const slots: RealWeatherSlot[] = [
             { at: 0, weather: WeatherType.Clear, temperature: 5, windFrom: 350 },
@@ -264,5 +295,48 @@ describe("RealWeatherForecast", () => {
         expect(RealWeatherForecast.safeParse({ slots: [{ at: 0, weather: "real", temperature: null }] }).success).toBe(
             false,
         );
+    });
+});
+
+describe("how hard it rains", () => {
+    it("reads the rate of a real rain: the precipitation of the quarter hour, four times that an hour", () => {
+        const slots = slotsFromOpenMeteo(OPEN_METEO_RAINY);
+        // Code 53 with 0.2 mm, 51 with 0.1 mm, then showers (80) with 0.4 mm over the quarter hour.
+        expect(slots?.[0]).toMatchObject({ weather: WeatherType.Rain, rainRate: 0.8 });
+        expect(slots?.[2]).toMatchObject({ weather: WeatherType.Rain, rainRate: 0.4 });
+        expect(slots?.[6]).toMatchObject({ weather: WeatherType.Rain, rainRate: 1.6 });
+    });
+
+    it("gives no rate outside a rain or a storm, nor to an answer without precipitation", () => {
+        expect(slotsFromOpenMeteo(OPEN_METEO_PARIS)?.every((slot) => slot.rainRate === undefined)).toBe(true);
+        const clear = {
+            minutely_15: { time: [0, 900], weather_code: [0, 45], temperature_2m: [5, 5], precipitation: [0, 0.3] },
+        };
+        expect(slotsFromOpenMeteo(clear)?.some((slot) => "rainRate" in slot)).toBe(false);
+    });
+
+    it("gives a snow fall the rate of the water it holds, and the humidity of its air", () => {
+        const snowy = {
+            minutely_15: {
+                time: [0, 900],
+                weather_code: [73, 85],
+                temperature_2m: [-1, 0.5],
+                precipitation: [0.3, 0.1],
+                relative_humidity_2m: [85, 92],
+            },
+        };
+        const slots = slotsFromOpenMeteo(snowy) ?? [];
+        expect(slots.map((slot) => slot.weather)).toEqual([WeatherType.Rain, WeatherType.Rain]);
+        expect(slots[0].rainRate).toBeCloseTo(1.2);
+        expect(realWeatherAt(slots, 1)).toMatchObject({ temperature: -1, humidity: 85, rainSince: 0 });
+    });
+
+    it("tells the rate of the quarter hour under way and of the one before", () => {
+        const slots: RealWeatherSlot[] = [
+            { at: 0, weather: WeatherType.Rain, temperature: 5, rainRate: 0.4 },
+            { at: SLOT, weather: WeatherType.Rain, temperature: 5, rainRate: 8 },
+        ];
+        expect(realWeatherAt(slots, SLOT + 1)).toMatchObject({ rainRate: 8, rainRateBefore: 0.4 });
+        expect(realWeatherAt(slots, 1)).toMatchObject({ rainRate: 0.4, rainRateBefore: undefined });
     });
 });

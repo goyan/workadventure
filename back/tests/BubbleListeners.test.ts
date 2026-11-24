@@ -12,12 +12,14 @@ interface FakeUser {
     silent: boolean;
     group?: Group;
     disconnected: boolean;
+    floorZ: number;
 }
 
-function fakeGroup(x: number, y: number, { locked = false } = {}) {
+function fakeGroup(x: number, y: number, { locked = false, floorZ = 0 } = {}) {
     const state = { x, y, locked, isDestroyed: false };
     const group = {
         getPosition: () => ({ x: state.x, y: state.y }),
+        getFloorZ: () => floorZ,
         isLocked: () => state.locked,
         get isDestroyed() {
             return state.isDestroyed;
@@ -27,9 +29,10 @@ function fakeGroup(x: number, y: number, { locked = false } = {}) {
 }
 
 function fakeUser(x: number, y: number): { user: User; state: FakeUser } {
-    const state: FakeUser = { x, y, moving: false, silent: false, disconnected: false };
+    const state: FakeUser = { x, y, moving: false, silent: false, disconnected: false, floorZ: 0 };
     const user = {
         getPosition: () => ({ x: state.x, y: state.y, moving: state.moving }),
+        getFloorZ: () => state.floorZ,
         get silent() {
             return state.silent;
         },
@@ -139,6 +142,21 @@ describe("BubbleListeners", () => {
 
         expect(callbacks.startListening).toHaveBeenCalledOnce();
         expect(callbacks.startListening).toHaveBeenCalledWith(user, close.group);
+    });
+
+    it("does not hear a bubble of another floor of the map, and stops hearing one when going up", () => {
+        const upstairs = fakeGroup(GROUP_RADIUS + 10, 0, { floorZ: 52 });
+        const ground = fakeGroup(-GROUP_RADIUS - 20, 0);
+        const { user, state } = fakeUser(0, 0);
+        const { callbacks, listeners } = setup([upstairs.group, ground.group]);
+
+        listeners.update(user);
+        expect(callbacks.startListening).toHaveBeenCalledWith(user, ground.group);
+
+        state.floorZ = 52;
+        listeners.update(user);
+        expect(callbacks.stopListening).toHaveBeenCalledWith(user, ground.group);
+        expect(callbacks.startListening).toHaveBeenLastCalledWith(user, upstairs.group);
     });
 
     it("starts hearing a bubble that moved next to a user standing still", () => {

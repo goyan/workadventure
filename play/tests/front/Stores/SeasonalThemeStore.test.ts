@@ -13,8 +13,9 @@ describe("seasonalThemeModeStore", () => {
         localStorage.setItem("christmasTheme", "always");
         localStorage.setItem("groundMode", "seasonal");
         const { seasonalThemeModeStore } = await load();
-        expect(get(seasonalThemeModeStore)).toBe("christmas");
-        expect(localStorage.getItem("seasonalTheme")).toBe("christmas");
+        // The Christmas theme is gone: its former "always" follows the calendar.
+        expect(get(seasonalThemeModeStore)).toBe("auto");
+        expect(localStorage.getItem("seasonalTheme")).toBe("auto");
         expect(localStorage.getItem("christmasTheme")).toBeNull();
         expect(localStorage.getItem("groundMode")).toBeNull();
     });
@@ -24,6 +25,18 @@ describe("seasonalThemeModeStore", () => {
         localStorage.setItem("christmasTheme", "always");
         const { seasonalThemeModeStore } = await load();
         expect(get(seasonalThemeModeStore)).toBe("autumn");
+    });
+
+    it("reads a saved Christmas theme, now gone, as auto", async () => {
+        localStorage.setItem("seasonalTheme", "christmas");
+        const { seasonalThemeModeStore } = await load();
+        expect(get(seasonalThemeModeStore)).toBe("auto");
+    });
+
+    it("keeps the winter theme a player chose", async () => {
+        localStorage.setItem("seasonalTheme", "winter");
+        const { seasonalThemeModeStore } = await load();
+        expect(get(seasonalThemeModeStore)).toBe("winter");
     });
 
     it("defaults to auto", async () => {
@@ -36,23 +49,5 @@ describe("seasonalThemeModeStore", () => {
         const { SeasonalThemeMode } = await import("../../../src/front/Phaser/Game/Seasonal/SeasonalTheme");
         seasonalThemeModeStore.set(SeasonalThemeMode.None);
         expect(localStorage.getItem("seasonalTheme")).toBe("none");
-    });
-});
-
-describe("mapSnowShownStore", () => {
-    beforeEach(() => localStorage.clear());
-
-    it("follows the theme mode and the weather switch", async () => {
-        const { mapSnowShownStore, seasonalThemeModeStore } = await load();
-        const { weatherEffectsEnabledStore } = await import("../../../src/front/Stores/WeatherStore");
-        const { SeasonalThemeMode } = await import("../../../src/front/Phaser/Game/Seasonal/SeasonalTheme");
-        const seen: boolean[] = [];
-        const unsubscribe = mapSnowShownStore.subscribe((shown) => seen.push(shown));
-        seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
-        seasonalThemeModeStore.set(SeasonalThemeMode.Auto);
-        weatherEffectsEnabledStore.set(false);
-        weatherEffectsEnabledStore.set(true);
-        unsubscribe();
-        expect(seen).toEqual([true, false, true, false, true]);
     });
 });

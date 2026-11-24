@@ -57,7 +57,7 @@ function createModifyAreaCommand(
         ? T extends { $case: "modifyAreaMessage"; modifyAreaMessage: infer M }
             ? M
             : never
-        : never
+        : never,
 ): EditMapCommandMessage {
     return {
         id: commandId,
@@ -82,17 +82,22 @@ function createDeleteAreaCommand(commandId: string, areaId: string): EditMapComm
     };
 }
 
+interface TestUser {
+    getPosition(): TestPoint;
+    getFloorZ(): number;
+}
+
 function createHarness(initialWam: WAMFileFormat): {
     tracker: AreaZoneTracker;
     wamManager: WamManager;
-    userMoveSubject: Subject<{ user: { getPosition(): TestPoint }; oldPosition: TestPoint }>;
-    userLeaveSubject: Subject<{ getPosition(): TestPoint }>;
-    addUser: (user: { getPosition(): TestPoint }) => void;
+    userMoveSubject: Subject<{ user: TestUser; oldPosition: TestPoint; oldFloorZ?: number }>;
+    userLeaveSubject: Subject<TestUser>;
+    addUser: (user: TestUser) => void;
 } {
     const wamManager = new WamManager(initialWam);
-    const userMoveSubject = new Subject<{ user: { getPosition(): TestPoint }; oldPosition: TestPoint }>();
-    const userLeaveSubject = new Subject<{ getPosition(): TestPoint }>();
-    const users = new Map<number, { getPosition(): TestPoint }>();
+    const userMoveSubject = new Subject<{ user: TestUser; oldPosition: TestPoint; oldFloorZ?: number }>();
+    const userLeaveSubject = new Subject<TestUser>();
+    const users = new Map<number, TestUser>();
     let nextUserId = 1;
 
     const gameRoom = {
@@ -115,16 +120,22 @@ function createHarness(initialWam: WAMFileFormat): {
 }
 
 function createUser(initialPosition: TestPoint): {
-    user: { getPosition(): TestPoint };
+    user: TestUser;
     setPosition: (position: TestPoint) => void;
+    setFloorZ: (z: number) => void;
 } {
     let currentPosition = initialPosition;
+    let floorZ = 0;
     return {
         user: {
             getPosition: () => currentPosition,
+            getFloorZ: () => floorZ,
         },
         setPosition: (position: TestPoint) => {
             currentPosition = position;
+        },
+        setFloorZ: (z: number) => {
+            floorZ = z;
         },
     };
 }
@@ -159,9 +170,39 @@ describe("AreaZoneTracker", () => {
         leaveSubscription.unsubscribe();
     });
 
+    it("only applies an area to the users of its floor: going up leaves the area of the ground", () => {
+        const { tracker, userMoveSubject } = createHarness(createWam([areaWithProperties([lockableProperty()])]));
+        const enterEvents: AreaData[] = [];
+        const leaveEvents: AreaData[] = [];
+        const enterSubscription = tracker
+            .registerEventListener("enter", "lockableAreaPropertyData")
+            .subscribe((area) => enterEvents.push(area));
+        const leaveSubscription = tracker
+            .registerEventListener("leave", "lockableAreaPropertyData")
+            .subscribe((area) => leaveEvents.push(area));
+
+        // On a raised floor, drawn over the area of the ground: not in it.
+        const { user, setPosition, setFloorZ } = createUser(point(-5, -5));
+        setFloorZ(52);
+        setPosition(point(5, 5));
+        userMoveSubject.next({ user, oldPosition: point(-5, -5) });
+        expect(enterEvents).toHaveLength(0);
+
+        // Down to the ground without moving on the screen: in the area; and back up: out of it.
+        setFloorZ(0);
+        userMoveSubject.next({ user, oldPosition: point(5, 5), oldFloorZ: 52 });
+        expect(enterEvents).toHaveLength(1);
+        setFloorZ(52);
+        userMoveSubject.next({ user, oldPosition: point(5, 5), oldFloorZ: 0 });
+        expect(leaveEvents).toHaveLength(1);
+
+        enterSubscription.unsubscribe();
+        leaveSubscription.unsubscribe();
+    });
+
     it("emits one event per tracked property type in the same area", () => {
         const { tracker, userMoveSubject } = createHarness(
-            createWam([areaWithProperties([lockableProperty(), silentProperty()])])
+            createWam([areaWithProperties([lockableProperty(), silentProperty()])]),
         );
 
         const lockableEvents: AreaData[] = [];
@@ -189,7 +230,7 @@ describe("AreaZoneTracker", () => {
 
     it("reacts to geometry updates from WamManager", async () => {
         const { tracker, wamManager, userMoveSubject } = createHarness(
-            createWam([areaWithProperties([lockableProperty()])])
+            createWam([areaWithProperties([lockableProperty()])]),
         );
         const enterEvents: AreaData[] = [];
         const enterSubscription = tracker
@@ -208,7 +249,7 @@ describe("AreaZoneTracker", () => {
                 y: 20,
                 properties: [],
                 modifyProperties: false,
-            })
+            }),
         );
 
         setPosition(point(25, 25));
@@ -246,7 +287,7 @@ describe("AreaZoneTracker", () => {
                 y: 20,
                 properties: [],
                 modifyProperties: false,
-            })
+            }),
         );
 
         expect(enterEvents).toHaveLength(1);
@@ -260,7 +301,7 @@ describe("AreaZoneTracker", () => {
 
     it("stops listening when tracked property type is removed", async () => {
         const { tracker, wamManager, userMoveSubject } = createHarness(
-            createWam([areaWithProperties([lockableProperty()])])
+            createWam([areaWithProperties([lockableProperty()])]),
         );
         const enterEvents: AreaData[] = [];
         const enterSubscription = tracker
@@ -272,7 +313,7 @@ describe("AreaZoneTracker", () => {
                 id: "area-1",
                 properties: [silentProperty()],
                 modifyProperties: true,
-            })
+            }),
         );
 
         const { user, setPosition } = createUser(point(-5, -5));
@@ -285,7 +326,7 @@ describe("AreaZoneTracker", () => {
 
     it("stops listening when area is deleted", async () => {
         const { tracker, wamManager, userMoveSubject } = createHarness(
-            createWam([areaWithProperties([lockableProperty()])])
+            createWam([areaWithProperties([lockableProperty()])]),
         );
         const enterEvents: AreaData[] = [];
         const enterSubscription = tracker

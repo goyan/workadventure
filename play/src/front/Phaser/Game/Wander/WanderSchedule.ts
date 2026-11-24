@@ -1,6 +1,10 @@
 import { mulberry32, wanderSeed } from "./WanderRandom";
 
-export type Point = { x: number; y: number };
+/**
+ * A place of the map, in pixels: where the feet are on the ground, and with `z` how high over it they stand on a
+ * raised floor or a stair (absent on the ground). On the screen, what stands at `z` is drawn `z` further north.
+ */
+export type Point = { x: number; y: number; z?: number };
 export type WanderDirection = "down" | "left" | "right" | "up";
 
 export interface WanderPose {
@@ -13,19 +17,43 @@ export interface WanderPose {
      * pause: the true length of the previous pause would depend on whether that leg was computed on this client.
      */
     pausedMs: number;
+    /** Set while the character drinks at the water it is turned to (`direction`). */
+    drinking?: true;
+    /** How high over the ground it stands, on a raised floor or a stair: absent on the ground (see Point). */
+    z?: number;
+}
+
+/** Where a character can drink (pixels, the centre of a dry tile by the water), and which way the water is. */
+export interface Shore extends Point {
+    toward: WanderDirection;
 }
 
 export interface WanderMap {
     /** Tile coordinates. Must return false outside the grid. */
     isWalkable(tile: Point): boolean;
-    /** Pixel coordinates. Resolves to [] when the destination is unreachable. */
+    /**
+     * Pixel coordinates. Resolves to [] when the destination is unreachable. On a map with raised floors the points
+     * may stand on one (see Point): the walk then goes up and down the stairs.
+     */
     findPath(from: Point, to: Point): Promise<Point[]>;
+    /**
+     * The altitudes of the raised floors a character can stand on over a tile (tile coordinates), lowest first.
+     * Without it, or without any, the characters stay on the ground. The same on every client.
+     */
+    levelsAt?(tile: Point): number[];
     /** Where the feet of a character sitting on each seat of the map are (pixels). The same on every client. */
     seats?(): Point[];
+    /** Where the characters can drink now. The same on every client. */
+    shores?(): Shore[];
+    /** How long a character waits between two drinks. Without it, or without shores, nobody drinks. */
+    drinkIntervalMs?(): number | undefined;
 }
 
-/** A destination, and for a seat (inside the hitbox of its object) the walkable spot next to it, reached first. */
-type Destination = Point & { approach?: Point };
+/**
+ * A destination; for a seat (inside the hitbox of its object) the walkable spot next to it, reached first; for a
+ * shore, which way the water to drink is.
+ */
+type Destination = Point & { approach?: Point; drink?: WanderDirection };
 
 /** Share of the legs an animal spends on a seat, when one is within reach. */
 export const SEAT_CHANCE = 0.35;
@@ -36,6 +64,8 @@ export const RADIUS_TILES = 10;
 export const SPEED_PX_PER_S = 64;
 export const MAX_ATTEMPTS = 8;
 export const TILE_SIZE = 32;
+/** A thirsty character chooses among that many of the shores nearest to its nest. */
+export const DRINK_CANDIDATES = 6;
 
 /**
  * Per entity shift of the leg boundaries, in [0, LEG_MS): the characters do not all start a new leg (and compute their
@@ -45,7 +75,27 @@ export function wanderLegOffset(entityId: string): number {
     return wanderSeed(entityId, 0, 0) % LEG_MS;
 }
 
+/**
+ * Whether a character goes to drink on that leg: on the first leg of each interval, the intervals of a character
+ * being shifted by its id so that the animals of a map do not all drink at once. Only depends on its arguments, so
+ * it is the same on every client. An interval shorter than a leg is a drink on every leg.
+ */
+export function isDrinkLeg(entityId: string, leg: number, intervalMs: number): boolean {
+    const interval = Math.max(LEG_MS, intervalMs);
+    const start = leg * LEG_MS + (wanderSeed(entityId, 0, 2000) % interval);
+    return Math.floor(start / interval) !== Math.floor((start - LEG_MS) / interval);
+}
+
+/** A destination as a point of a walk: where it is, and how high (see Point). */
+function placeOf(destination: Destination): Point {
+    const place: Point = { x: destination.x, y: destination.y };
+    if ((destination.z ?? 0) > 0) place.z = destination.z;
+    return place;
+}
+
 interface Leg {
+    /** Set when the leg ends at a shore: the character drinks there, turned that way. */
+    drink?: WanderDirection;
     points: Point[];
     // Cumulative distance of each point from the first one.
     distances: number[];
@@ -150,6 +200,10 @@ export class WanderSchedule {
 
     private async computeDestination(leg: number): Promise<Destination> {
         const nest = this.nest;
+        const shore = await this.computeDrinkDestination(leg);
+        if (shore) {
+            return shore;
+        }
         const seat = await this.computeSeatDestination(leg);
         if (seat) {
             return seat;
@@ -160,13 +214,19 @@ export class WanderSchedule {
             const dx = Math.floor(random() * (2 * this.radiusTiles + 1)) - this.radiusTiles;
             const dy = Math.floor(random() * (2 * this.radiusTiles + 1)) - this.radiusTiles;
             const tile = { x: nestTile.x + dx, y: nestTile.y + dy };
-            if (!this.safeIsWalkable(tile)) {
+            // Where it can stand over that tile: the ground, the raised floors. With one choice only (always, on a
+            // map without floors) nothing more is drawn: the walks of such a map are what they always were.
+            const raised = this.safeLevelsAt(tile);
+            const levels = this.safeIsWalkable(tile) ? [0, ...raised] : raised;
+            if (levels.length === 0) {
                 continue;
             }
-            if (dx === 0 && dy === 0) {
+            const z = levels.length === 1 ? levels[0] : levels[Math.floor(random() * levels.length)];
+            if (dx === 0 && dy === 0 && Math.abs(z - (nest.z ?? 0)) < 2) {
                 return nest;
             }
-            const centre = { x: tile.x * TILE_SIZE + TILE_SIZE / 2, y: tile.y * TILE_SIZE + TILE_SIZE / 2 };
+            const centre: Point = { x: tile.x * TILE_SIZE + TILE_SIZE / 2, y: tile.y * TILE_SIZE + TILE_SIZE / 2 };
+            if (z > 0) centre.z = z;
             // Attempts are sequential on purpose: the first valid one wins.
             // eslint-disable-next-line no-await-in-loop
             const path = await this.safeFindPath(nest, centre);
@@ -175,6 +235,35 @@ export class WanderSchedule {
             }
         }
         return nest;
+    }
+
+    /**
+     * Once in each interval the map tells, a character goes to drink: at one of the shores nearest to its nest
+     * within its wandering radius, chosen from the leg number like the other destinations, so that every client sees
+     * it at the same one. The first it can walk to wins.
+     */
+    private async computeDrinkDestination(leg: number): Promise<Destination | undefined> {
+        const intervalMs = this.safeDrinkIntervalMs();
+        if (intervalMs === undefined || !isDrinkLeg(this.entityId, leg, intervalMs)) return undefined;
+        const nest = this.nest;
+        const radius = this.radiusTiles * TILE_SIZE;
+        const distance = (shore: Shore): number => (shore.x - nest.x) ** 2 + (shore.y - nest.y) ** 2;
+        const shores = this.safeShores()
+            .filter((shore) => Math.abs(shore.x - nest.x) <= radius && Math.abs(shore.y - nest.y) <= radius)
+            .sort((a, b) => distance(a) - distance(b) || a.y - b.y || a.x - b.x)
+            .slice(0, DRINK_CANDIDATES);
+        if (shores.length === 0) return undefined;
+        const first = Math.floor(mulberry32(wanderSeed(this.entityId, leg, 2000))() * shores.length);
+        for (let attempt = 0; attempt < shores.length; attempt++) {
+            const shore = shores[(first + attempt) % shores.length];
+            // Attempts are sequential on purpose: the first valid one wins.
+            // eslint-disable-next-line no-await-in-loop
+            const path = await this.safeFindPath(nest, shore);
+            if (path.length > 0) {
+                return { x: shore.x, y: shore.y, drink: shore.toward };
+            }
+        }
+        return undefined;
     }
 
     /**
@@ -221,27 +310,27 @@ export class WanderSchedule {
         // Off a seat first (to the spot next to it), and onto a seat last (from the spot next to it).
         const start: Point = startDestination.approach ?? startDestination;
         const end: Point = endDestination.approach ?? endDestination;
-        const points: Point[] = [{ x: startDestination.x, y: startDestination.y }];
+        const points: Point[] = [placeOf(startDestination)];
         if (startDestination.approach) points.push(startDestination.approach);
-        if (start.x !== end.x || start.y !== end.y) {
+        if (start.x !== end.x || start.y !== end.y || (start.z ?? 0) !== (end.z ?? 0)) {
             const path = await this.safeFindPath(start, end);
             if (path.length > 0) {
                 points.push(...path);
                 const last = points[points.length - 1];
-                if (last.x !== end.x || last.y !== end.y) {
+                if (last.x !== end.x || last.y !== end.y || (last.z ?? 0) !== (end.z ?? 0)) {
                     // Make sure the leg ends exactly where the next one starts.
                     points.push(end);
                 }
             }
         }
-        if (endDestination.approach) points.push({ x: endDestination.x, y: endDestination.y });
+        if (endDestination.approach) points.push(placeOf(endDestination));
         const distances = [0];
         for (let i = 1; i < points.length; i++) {
             distances.push(distances[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y));
         }
         const length = distances[distances.length - 1];
         const speed = Math.max(SPEED_PX_PER_S, length / ((LEG_MS - MIN_PAUSE_MS) / 1000));
-        return { points, distances, speed };
+        return { points, distances, speed, drink: endDestination.drink };
     }
 
     private poseOnLeg(leg: Leg, elapsedMs: number): WanderPose {
@@ -264,7 +353,16 @@ export class WanderSchedule {
         }
 
         if (segment === -1) {
-            return { x: points[0].x, y: points[0].y, direction: "down", moving: false, pausedMs: LEG_MS + elapsedMs };
+            const still: WanderPose = {
+                x: points[0].x,
+                y: points[0].y,
+                direction: leg.drink ?? "down",
+                moving: false,
+                pausedMs: LEG_MS + elapsedMs,
+            };
+            if (leg.drink) still.drinking = true;
+            if ((points[0].z ?? 0) > 0) still.z = points[0].z;
+            return still;
         }
         const from = points[segment];
         const to = points[segment + 1];
@@ -278,7 +376,16 @@ export class WanderSchedule {
             direction = dy < 0 ? "up" : "down";
         }
         const pausedMs = moving ? 0 : Math.max(0, elapsedMs - (total / leg.speed) * 1000);
-        return { x: from.x + dx * ratio, y: from.y + dy * ratio, direction, moving, pausedMs };
+        const pose: WanderPose = { x: from.x + dx * ratio, y: from.y + dy * ratio, direction, moving, pausedMs };
+        // On a stair or a ramp its altitude goes from the one of an end to the one of the other.
+        const z = (from.z ?? 0) + ((to.z ?? 0) - (from.z ?? 0)) * ratio;
+        if (z > 0) pose.z = z;
+        if (!moving && leg.drink) {
+            // Arrived at the shore: turned to the water, whichever way it came.
+            pose.direction = leg.drink;
+            pose.drinking = true;
+        }
+        return pose;
     }
 
     private safeIsWalkable(tile: Point): boolean {
@@ -287,6 +394,34 @@ export class WanderSchedule {
         } catch (e) {
             console.warn("Wander: isWalkable failed", e);
             return false;
+        }
+    }
+
+    private safeLevelsAt(tile: Point): number[] {
+        try {
+            return this.map.levelsAt?.(tile) ?? [];
+        } catch (e) {
+            console.warn("Wander: levelsAt failed", e);
+            return [];
+        }
+    }
+
+    private safeShores(): Shore[] {
+        try {
+            return this.map.shores?.() ?? [];
+        } catch (e) {
+            console.warn("Wander: shores failed", e);
+            return [];
+        }
+    }
+
+    private safeDrinkIntervalMs(): number | undefined {
+        try {
+            const intervalMs = this.map.drinkIntervalMs?.();
+            return intervalMs !== undefined && Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : undefined;
+        } catch (e) {
+            console.warn("Wander: drinkIntervalMs failed", e);
+            return undefined;
         }
     }
 

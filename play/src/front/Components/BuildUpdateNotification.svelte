@@ -5,6 +5,7 @@
     import { getNewReleaseNotes, releaseNotes } from "../../common/ReleaseNotes";
     import type { ReleaseNote } from "../../common/ReleaseNotes";
     import ReleaseNotesModal from "./Modal/ReleaseNotesModal.svelte";
+    import ReleaseNoteItem from "./ReleaseNoteItem.svelte";
     import ToastContainer from "./Toasts/ToastContainer.svelte";
     import { modals } from "@wa-modals";
 
@@ -37,14 +38,14 @@
 {#if updateAvailable}
     <div
         role="status"
-        class="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] w-max max-w-[calc(100vw-2rem)] pointer-events-auto"
+        class="fixed top-52 left-1/2 -translate-x-1/2 z-[1000] w-max max-w-[calc(100vw-2rem)] pointer-events-auto"
     >
         <ToastContainer theme="secondary" extraClasses="w-full max-w-sm">
             <p class="m-0 text-sm leading-snug">{$LL.refreshPrompt.newVersion()}</p>
             {#if newNotes.length > 0}
                 <ul class="my-2 pl-4 text-sm max-h-40 overflow-y-auto">
                     {#each newNotes as note (note.id)}
-                        <li>{note.description}</li>
+                        <ReleaseNoteItem {note} />
                     {/each}
                 </ul>
             {:else}
@@ -70,14 +71,14 @@
 {:else if reloadedNotes !== undefined}
     <div
         role="status"
-        class="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] w-max max-w-[calc(100vw-2rem)] pointer-events-auto"
+        class="fixed top-52 left-1/2 -translate-x-1/2 z-[1000] w-max max-w-[calc(100vw-2rem)] pointer-events-auto"
     >
         <ToastContainer theme="secondary" extraClasses="w-full max-w-sm">
             <p class="m-0 text-sm leading-snug">{$LL.refreshPrompt.updated()}</p>
             {#if reloadedNotes.length > 0}
                 <ul class="my-2 pl-4 text-sm max-h-40 overflow-y-auto">
                     {#each reloadedNotes as note (note.id)}
-                        <li>{note.description}</li>
+                        <ReleaseNoteItem {note} />
                     {/each}
                 </ul>
             {:else}

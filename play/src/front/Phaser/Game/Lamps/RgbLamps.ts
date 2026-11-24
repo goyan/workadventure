@@ -5,9 +5,14 @@ import type { GameScene } from "../GameScene";
 import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { ServerNightClock } from "../Night/ServerNightClock";
 import { lampSource } from "./LampReconcile";
-import { LightObstacleReader } from "./LightObstacleReader";
+import { LightObstaclesByLevel } from "./LightObstacleReader";
+import { bounceSources, secondBounceSources } from "./LightBounce";
+import { lightBounceStrengthNow, lightSecondBounceNow, lightSoftEdgeVersion } from "./LightSoftEdge";
+import type { LightObstacleReader } from "./LightObstacleReader";
 import { coneOfLitPolygon, litPolygon, type LightCone, type Point } from "./RgbLampGeometry";
 import { obstacleSegments } from "./RgbLampObstacles";
+import { ENERGY_SAVING_FADE_MS } from "./EnergySaving";
+import { RgbLampPower } from "./RgbLampPower";
 import { isTurning, rgbLampBeamDirection } from "./RgbLampRotation";
 import { rgbLampColour, rgbLampLight, rgbLampSettingsOf, type RgbLampSettings } from "./RgbLampSettings";
 import { RgbLampVisual } from "./RgbLampVisual";
@@ -37,6 +42,9 @@ interface PlacedRgbLamp {
     fullTurn: readonly Point[] | undefined;
     /** The image of the last drawing: the turning lamps drawn longest ago come first when too many wait. */
     drawnAt: number;
+    /** The lights the walls send back (see bounceSources): their images, kept, and how many are lit now. */
+    bounceVisuals: RgbLampVisual[];
+    bounces: LightCone[];
 }
 
 /** The beam of a turning lamp, to be drawn: where it points now, in the colour and at the intensity that were set. */
@@ -54,6 +62,15 @@ export interface RgbLampsOptions {
     now?: () => number;
     /** The preference of the system: turning lamps stand still. */
     reducedMotion?: boolean;
+    /** Whether a switch left the lamp on (see EntityStatesManager); every lamp is on when absent. */
+    isOn?: (entityId: string) => boolean;
+    /**
+     * Whether the energy saving of the map puts the lamp out now (see EnergySaving), whatever its switch says; no lamp
+     * is when absent. It writes nothing in the state of the switch: the lamp comes back as its switch left it.
+     */
+    isSaved?: (lamp: Entity) => boolean;
+    /** The clock the fade of a lamp switched on or off follows: the one of the computer when absent. */
+    fadeNow?: () => number;
 }
 
 function isRgbLamp(entity: Entity): boolean {
@@ -83,11 +100,17 @@ export class RgbLamps {
     private frame = 0;
     private readonly reducedMotion: boolean;
     private readonly now: () => number;
+    private readonly isOn: (entityId: string) => boolean;
+    private readonly isSaved: (lamp: Entity) => boolean;
+    private readonly fadeNow: () => number;
+    private readonly power: RgbLampPower;
+    // The energy saving fades its lamps slower than a switch does.
+    private readonly saving: RgbLampPower;
     // Asked for the time only once a lamp turns: a map without one sends nothing to the server.
     private serverClock: ServerNightClock | undefined;
 
     // The obstacles of the map, as last read: each lamp checks whether what stops its own light changed.
-    private readonly obstacles: LightObstacleReader;
+    private readonly obstacles: LightObstaclesByLevel;
 
     constructor(
         private readonly scene: GameScene,
@@ -95,8 +118,13 @@ export class RgbLamps {
         options: RgbLampsOptions = {},
     ) {
         this.unsubscribePreview = rgbLampPreviewStore.subscribe((preview) => (this.preview = preview));
-        this.obstacles = new LightObstacleReader(scene, () => this.tileSize());
+        this.obstacles = new LightObstaclesByLevel(scene, () => this.tileSize());
         this.reducedMotion = options.reducedMotion ?? false;
+        this.isOn = options.isOn ?? ((): boolean => true);
+        this.isSaved = options.isSaved ?? ((): boolean => false);
+        this.fadeNow = options.fadeNow ?? Date.now;
+        this.power = new RgbLampPower(() => this.reducedMotion);
+        this.saving = new RgbLampPower(() => this.reducedMotion, ENERGY_SAVING_FADE_MS);
         // The clock of the server, so that a computer whose clock is wrong turns its lamps with the others; the
         // computer's clock until the server answered (the beams jump once, then).
         this.now =
@@ -118,7 +146,10 @@ export class RgbLamps {
             // An object can be replaced under the same id (an undo, a model changed).
             if (entities.get(id) !== lamp.entity || !isRgbLamp(lamp.entity)) {
                 lamp.visual.destroy();
+                lamp.bounceVisuals.forEach((visual) => visual.destroy());
                 this.lamps.delete(id);
+                this.power.forget(id);
+                this.saving.forget(id);
                 removed = true;
             }
         }
@@ -136,6 +167,8 @@ export class RgbLamps {
                     turnKey: "",
                     fullTurn: undefined,
                     drawnAt: 0,
+                    bounceVisuals: [],
+                    bounces: [],
                 });
             }
         }
@@ -154,7 +187,7 @@ export class RgbLamps {
      * effects turned off for this player (lampEffectsEnabledStore), the turning lamps stand still at the direction that
      * was set; they turn again in step with the clock once both are back.
      */
-    public update(editorOpen = false, effectsEnabled = true): void {
+    public update(editorOpen = false, effectsEnabled = true, lightsInEditor = false): void {
         if (this.lamps.size === 0) {
             return;
         }
@@ -166,15 +199,36 @@ export class RgbLamps {
         let changed = false;
         for (const [id, lamp] of this.lamps) {
             const { entity } = lamp;
+            // A lamp a switch put out gives no light, and nothing through the night veil; nor one the energy saving
+            // puts out by day. In the map editor every lamp is out (its glow would hide what is being built), or shines
+            // when the editor shows the game lighting, so that it can be set.
+            const power = editorOpen ? (lightsInEditor ? 1 : 0) : this.levelOf(id, entity);
+            const shown = entity.visible && power > 0;
+            if (power === 0) {
+                if (lamp.light || lamp.visible) {
+                    // Drawn again from scratch once it is back on.
+                    lamp.light = undefined;
+                    lamp.key = "";
+                    lamp.turnKey = "";
+                    lamp.fullTurn = undefined;
+                    lamp.visible = false;
+                    lamp.visual.setVisible(false);
+                    this.clearBounces(lamp);
+                    changed = true;
+                }
+                continue;
+            }
             // Read at every image: a script will be able to drive the lamp through its property.
             const settings =
                 this.preview?.entityId === id ? this.preview.settings : rgbLampSettingsOf(entity.getProperties());
             const light = rgbLampLight(lampSource(entity, entity.getPrefab().lamp?.anchor), settings, tileSize);
-            const intensity = settings.intensity ?? 1;
+            const intensity = (settings.intensity ?? 1) * power;
             if (isTurning(settings, still)) {
                 time ??= this.now();
                 const direction = rgbLampBeamDirection(settings, time, still);
                 const beam = { lamp, light, colour: rgbLampColour(settings.color), intensity, direction };
+                // A turning beam sends nothing back: its bounces would be cast again at every image.
+                this.clearBounces(lamp);
                 if (this.castFullTurn(id, lamp, light, settings.color, intensity)) {
                     // Set, moved, or newly turning: its first beam is drawn now, whatever the budget.
                     this.drawBeam(beam);
@@ -185,9 +239,12 @@ export class RgbLamps {
             } else {
                 changed = this.drawStill(id, lamp, light, settings.color, intensity) || changed;
             }
-            if (lamp.visible !== entity.visible) {
-                lamp.visible = entity.visible;
+            if (lamp.visible !== shown) {
+                lamp.visible = shown;
                 lamp.visual.setVisible(lamp.visible);
+                lamp.bounceVisuals.forEach((visual, index) =>
+                    visual.setVisible(lamp.visible && index < lamp.bounces.length),
+                );
                 changed = true;
             }
         }
@@ -199,16 +256,23 @@ export class RgbLamps {
         }
     }
 
+    /** How much of its light a lamp gives out of the editor: its switch, then the energy saving, each with its fade. */
+    private levelOf(id: string, entity: Entity): number {
+        const now = this.fadeNow();
+        // Both are asked at every image, so that each follows its own fade.
+        const switched = this.power.level(id, this.isOn(id), now);
+        const saved = this.saving.level(id, !this.isSaved(entity), now);
+        return switched * saved;
+    }
+
     /** The segments that stop a light, the lamp itself apart. */
-    private segmentsFor(id: string, light: LightCone) {
+    private segmentsFor(id: string, light: LightCone, obstacles: LightObstacleReader) {
         const segments = obstacleSegments(light, {
-            grid: this.obstacles.grid,
+            grid: obstacles.grid,
             tileSize: this.tileSize(),
-            walls: this.obstacles.walls,
+            walls: obstacles.walls,
             // A lamp that is itself a tall object does not stand in its own light.
-            rectangles: this.obstacles.casters
-                .filter((caster) => caster.entityId !== id)
-                .map((caster) => caster.rectangle),
+            rectangles: obstacles.casters.filter((caster) => caster.entityId !== id).map((caster) => caster.rectangle),
         });
         const segmentsKey = segments
             .map((segment) => `${segment.ax},${segment.ay},${segment.bx},${segment.by}`)
@@ -218,21 +282,25 @@ export class RgbLamps {
 
     /** A lamp that does not turn: drawn again when it was moved or set, or when what stops its light changed. */
     private drawStill(id: string, lamp: PlacedRgbLamp, light: LightCone, color: string, intensity: number): boolean {
-        const key = `${light.x},${light.y},${light.radius},${light.direction},${light.angle},${color},${intensity}`;
-        if (key === lamp.key && lamp.obstaclesVersion === this.obstacles.version) {
+        // What stops the light on the floor of the map the lamp stands on.
+        const obstacles = this.obstacles.at(lamp.entity.getElevation());
+        const key = `${light.x},${light.y},${light.radius},${light.direction},${light.angle},${color},${intensity},${lightSoftEdgeVersion()}`;
+        if (key === lamp.key && lamp.obstaclesVersion === obstacles.version) {
             return false;
         }
-        const { segments, segmentsKey } = this.segmentsFor(id, light);
+        const { segments, segmentsKey } = this.segmentsFor(id, light, obstacles);
         let drawn = false;
         if (key !== lamp.key || segmentsKey !== lamp.segmentsKey) {
-            lamp.visual.draw(light, litPolygon(light, segments), rgbLampColour(color), intensity);
+            const polygon = litPolygon(light, segments);
+            lamp.visual.draw(light, polygon, rgbLampColour(color), intensity);
+            this.drawBounces(id, lamp, light, polygon, rgbLampColour(color), intensity, obstacles);
             lamp.revision = ++this.revisions;
             lamp.light = light;
             drawn = true;
         }
         lamp.key = key;
         lamp.segmentsKey = segmentsKey;
-        lamp.obstaclesVersion = this.obstacles.version;
+        lamp.obstaclesVersion = obstacles.version;
         // It may turn again later: its full turn is cast again then.
         lamp.turnKey = "";
         lamp.fullTurn = undefined;
@@ -240,16 +308,64 @@ export class RgbLamps {
     }
 
     /**
+     * The lights the walls send back from a lamp that does not turn (one bounce): each is a small light of its own,
+     * cast against the same obstacles, in the colour of the lamp. They are cast again only with the lamp.
+     */
+    private drawBounces(
+        id: string,
+        lamp: PlacedRgbLamp,
+        light: LightCone,
+        polygon: readonly Point[],
+        colour: number,
+        intensity: number,
+        obstacles: LightObstacleReader,
+    ): void {
+        const strength = lightBounceStrengthNow();
+        const first = bounceSources(light, polygon, strength).map((source) => ({
+            source,
+            polygon: litPolygon(source, this.segmentsFor(id, source, obstacles).segments),
+        }));
+        // A second bounce, when asked: from the walls the first ones light.
+        const second = lightSecondBounceNow()
+            ? secondBounceSources(first, strength).map((source) => ({
+                  source,
+                  polygon: litPolygon(source, this.segmentsFor(id, source, obstacles).segments),
+              }))
+            : [];
+        const bounces = [...first, ...second];
+        bounces.forEach(({ source, polygon: reached }, index) => {
+            const visual = (lamp.bounceVisuals[index] ??= new RgbLampVisual(
+                this.scene,
+                `${id}:bounce:${index}`,
+                this.depth,
+            ));
+            visual.draw(source, reached, colour, source.intensity * intensity);
+            visual.setVisible(lamp.visible);
+        });
+        lamp.bounceVisuals.slice(bounces.length).forEach((visual) => visual.setVisible(false));
+        lamp.bounces = bounces.map(({ source }) => source);
+    }
+
+    private clearBounces(lamp: PlacedRgbLamp): void {
+        if (lamp.bounces.length > 0) {
+            lamp.bounceVisuals.forEach((visual) => visual.setVisible(false));
+            lamp.bounces = [];
+        }
+    }
+
+    /**
      * A turning lamp: casts its full turn of light again when it was moved or set, or when what stops its light
      * changed. True when its beam must be drawn now (its full turn is new).
      */
     private castFullTurn(id: string, lamp: PlacedRgbLamp, light: LightCone, color: string, intensity: number): boolean {
+        // What stops the light on the floor of the map the lamp stands on.
+        const obstacles = this.obstacles.at(lamp.entity.getElevation());
         const turnKey = `${light.x},${light.y},${light.radius},${light.angle},${color},${intensity}`;
-        if (turnKey === lamp.turnKey && lamp.obstaclesVersion === this.obstacles.version && lamp.fullTurn) {
+        if (turnKey === lamp.turnKey && lamp.obstaclesVersion === obstacles.version && lamp.fullTurn) {
             return false;
         }
-        const { segments, segmentsKey } = this.segmentsFor(id, light);
-        lamp.obstaclesVersion = this.obstacles.version;
+        const { segments, segmentsKey } = this.segmentsFor(id, light, obstacles);
+        lamp.obstaclesVersion = obstacles.version;
         if (turnKey === lamp.turnKey && segmentsKey === lamp.segmentsKey && lamp.fullTurn) {
             // An obstacle changed elsewhere on the map: this light stays as it is.
             return false;
@@ -309,6 +425,24 @@ export class RgbLamps {
                     size: lamp.light.radius * 2,
                     textureKey: lamp.visual.textureKey,
                     revision: lamp.revision,
+                    polygon: lamp.visual.polygon,
+                    // The strength of the lamp is drawn into its texture, which pierces the veil as it is.
+                    elevation: lamp.entity.getElevation(),
+                    ...(lamp.visual.strength < 1 ? { ambient: lamp.visual.strength } : {}),
+                });
+                lamp.bounces.forEach((bounce, index) => {
+                    const visual = lamp.bounceVisuals[index];
+                    lights.push({
+                        id: `${id}:bounce:${index}`,
+                        x: bounce.x - bounce.radius,
+                        y: bounce.y - bounce.radius,
+                        size: bounce.radius * 2,
+                        textureKey: visual.textureKey,
+                        revision: lamp.revision,
+                        polygon: visual.polygon,
+                        elevation: lamp.entity.getElevation(),
+                        ambient: visual.strength,
+                    });
                 });
             }
         }
@@ -321,6 +455,7 @@ export class RgbLamps {
         this.serverClock = undefined;
         for (const lamp of this.lamps.values()) {
             lamp.visual.destroy();
+            lamp.bounceVisuals.forEach((visual) => visual.destroy());
         }
         this.lamps.clear();
         rgbLampLightsStore.set([]);

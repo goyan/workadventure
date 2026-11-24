@@ -1,13 +1,12 @@
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { PUBLISHED } from "./release-note-pattern.mjs";
 
 // Only public commit subjects and author names are published, never emails or commit bodies.
 const root = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
 const FORMAT = "--format=%H%x00%cI%x00%aN%x00%P%x00%s";
 const PULL_REQUEST_MERGE = /^Merge pull request #\d+ from goyan\//;
-// The user-facing scopes: the front, and the map tool ("carte"), which is part of it.
-const PUBLISHED = /^(feat|fix)\((?:front|carte)\): (.+)$/;
 
 const notes = [];
 for (const applied of log(["--first-parent", "v1.32.6..HEAD"])) {

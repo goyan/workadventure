@@ -3,7 +3,7 @@ import { localUserStore } from "../../Connection/LocalUserStore";
 import { connectionManager } from "../../Connection/ConnectionManager";
 import { gameManager } from "../Game/GameManager";
 import { analyticsClient } from "../../Administration/AnalyticsClient";
-import { isUserNameTooLong, isUserNameValid } from "../../Connection/LocalUserUtils";
+import { isUserNameTooLong, isUserNameValid, normalizeUserName } from "../../Connection/LocalUserUtils";
 import { NameNotValidError, NameTooLongError } from "../../Exception/NameError";
 import { hasCapability } from "../../Connection/Capabilities";
 import { ResizableScene } from "./ResizableScene";
@@ -44,6 +44,7 @@ export class LoginScene extends ResizableScene {
     }
 
     public async login(name: string): Promise<void> {
+        name = normalizeUserName(name);
         if (isUserNameTooLong(name)) {
             throw new NameTooLongError();
         }

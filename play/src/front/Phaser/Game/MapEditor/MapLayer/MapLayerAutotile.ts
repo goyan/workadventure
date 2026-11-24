@@ -30,6 +30,8 @@ export interface MapLayerPlacement {
     prefabId: string;
     x: number;
     y: number;
+    /** Altitude of the raised floor the entity stands on; absent on the ground. */
+    elevation?: number;
 }
 
 export function placementKey(collectionName: string, prefabId: string, x: number, y: number): string {

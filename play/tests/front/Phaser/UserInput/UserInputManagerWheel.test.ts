@@ -7,11 +7,12 @@ import { GameSceneUserInputHandler } from "../../../../src/front/Phaser/UserInpu
 import { UserInputManager } from "../../../../src/front/Phaser/UserInput/UserInputManager";
 import { mapEditorModeStore } from "../../../../src/front/Stores/MapEditorStore";
 import { releaseNotesVisibleStore } from "../../../../src/front/Stores/ReleaseNotesStore";
-import { karaokeInputFocusStore } from "../../../../src/front/Stores/UserInputStore";
+import { inputFormFocusStore, karaokeInputFocusStore } from "../../../../src/front/Stores/UserInputStore";
 import { loadLocaleAsync } from "../../../../src/i18n/i18n-util.async";
 import { setLocale } from "../../../../src/i18n/i18n-svelte";
 import type { NerfManager } from "../../../../src/front/Phaser/Game/Nerf/NerfManager";
 import type { ActivatablesManager } from "../../../../src/front/Phaser/Game/ActivatablesManager";
+import { armWaterLevelPipette, disarmWaterLevelPipette } from "../../../../src/front/Stores/WaterLevelPipetteStore";
 
 // The wheel integration only needs the real handler methods, not character rendering or UI stores.
 vi.mock("../../../../src/front/Phaser/Player/Player", () => ({ Player: class {} }));
@@ -108,6 +109,78 @@ describe("UserInputManager wheel and Nerf events", () => {
         vi.restoreAllMocks();
     });
 
+    // The pipette of a source of water, through the real dispatch of the pointer (lessons-learned §2).
+    it("gives a click of the map to an armed pipette, in the map editor, without walking", () => {
+        mapEditorModeStore.set(true);
+        const camera = mock<Phaser.Cameras.Scene2D.Camera>();
+        camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(480, 640));
+        cameraManager.getCamera.mockReturnValue(camera);
+        scene.Map = mock<Phaser.Tilemaps.Tilemap>({ widthInPixels: 1504, heightInPixels: 1184 });
+        // The relief is not shown in 3/4 (never in the editor): what the pointer shows is the point under it.
+        scene.seenPointUnder.mockImplementation((point) => point);
+        const take = vi.fn();
+        armWaterLevelPipette(take);
+        try {
+            const click = mock<Phaser.Input.Pointer>({ x: 120, y: 160, wasTouch: false, id: 1 });
+            click.event = new MouseEvent("mouseup", { button: 0, detail: 1 });
+            click.leftButtonDown.mockReturnValue(true);
+            click.leftButtonReleased.mockReturnValue(true);
+            click.getDuration.mockReturnValue(50);
+            scene.input.emit(Phaser.Input.Events.POINTER_DOWN, click, []);
+            click.leftButtonDown.mockReturnValue(false);
+            scene.input.emit(Phaser.Input.Events.POINTER_UP, click, []);
+
+            expect(take.mock.calls).toEqual([[{ x: 480, y: 640 }, false]]);
+            expect(scene.moveTo.mock.calls).toEqual([]);
+        } finally {
+            disarmWaterLevelPipette();
+        }
+    });
+
+    describe("after a control of a panel was used", () => {
+        // What MainLayout does for the whole page: a focused field suspends the game inputs until it is left.
+        const onFocusIn = (): void => inputFormFocusStore.set(true);
+        const onFocusOut = (): void => inputFormFocusStore.set(false);
+        let field: HTMLInputElement;
+        const focusField = (type: string): void => {
+            field = document.createElement("input");
+            field.type = type;
+            document.body.appendChild(field);
+            document.addEventListener("focusin", onFocusIn);
+            document.addEventListener("focusout", onFocusOut);
+            field.focus();
+        };
+        afterEach(() => {
+            document.removeEventListener("focusin", onFocusIn);
+            document.removeEventListener("focusout", onFocusOut);
+            field.remove();
+            inputFormFocusStore.set(false);
+        });
+        const scroll = (): void =>
+            emitWheel(new WheelEvent("wheel", { deltaX: 4, deltaY: 6, deltaMode: WheelEvent.DOM_DELTA_PIXEL }), 4, 6);
+
+        // Seen in the relief editor: after moving a slider, scrolling over the map did nothing until a click on it,
+        // and a click digs.
+        it.each(["range", "checkbox", "color", "radio"])(
+            "scrolls the map again without a click after a %s was used: the wheel over the map leaves it",
+            (type) => {
+                focusField(type);
+                expect(manager.isControlsEnabled).toBe(false);
+                scroll();
+                expect(document.activeElement).not.toBe(field);
+                expect(manager.isControlsEnabled).toBe(true);
+                expect(cameraManager.panBy.mock.calls).toEqual([[4, 6]]);
+            },
+        );
+
+        it.each(["text", "number", "search"])("leaves a %s field being typed in alone", (type) => {
+            focusField(type);
+            scroll();
+            expect(document.activeElement).toBe(field);
+            expect(cameraManager.panBy.mock.calls).toEqual([]);
+        });
+    });
+
     it("routes trackpad scrolling and pinch zoom through the active scene handler", () => {
         emitWheel(new WheelEvent("wheel", { deltaX: 4, deltaY: 6, deltaMode: WheelEvent.DOM_DELTA_PIXEL }), 4, 6);
         emitWheel(new WheelEvent("wheel", { ctrlKey: true, deltaY: 3, deltaMode: WheelEvent.DOM_DELTA_PIXEL }), 0, 3);
@@ -141,6 +214,35 @@ describe("UserInputManager wheel and Nerf events", () => {
         expect(nerf.fire.mock.calls).toEqual([[]]);
         expect(event.defaultPrevented).toBe(true);
         expect(scene.getActivatablesManager.mock.calls).toEqual([]);
+    });
+
+    it("takes off a parked airplane with a real SPACE press, without the airplane's hint getting the pilot out", () => {
+        Object.defineProperty(nerf, "isEquipped", { configurable: true, value: false });
+        const activatables = mock<ActivatablesManager>();
+        scene.getActivatablesManager.mockReturnValue(activatables);
+        const parked = {
+            isInAirplane: () => true,
+            isFlying: () => false,
+            isAirplanePromptShown: () => true,
+            handlePressSpacePlayerTextCallback: vi.fn(),
+        };
+        Object.defineProperty(scene, "CurrentPlayer", { configurable: true, value: parked });
+        const getOut = vi.fn();
+        manager.addSpaceEventListener(getOut);
+        const press = (): void => {
+            scene.input.keyboard?.emit("keydown", new KeyboardEvent("keydown", { key: " ", code: "Space" }));
+            scene.input.keyboard?.emit("keyup-SPACE", new KeyboardEvent("keyup", { key: " ", code: "Space" }));
+            scene.input.keyboard?.emit("keyup", new KeyboardEvent("keyup", { key: " ", code: "Space" }));
+        };
+        press();
+        expect(manager.userInputHandler.isClimbPressed?.()).toBe(true);
+        expect(getOut).not.toHaveBeenCalled();
+        // Another prompt is shown along with the hint: the key is the prompt's, as before.
+        Object.assign(parked, { isAirplanePromptShown: () => false });
+        press();
+        expect(manager.userInputHandler.isClimbPressed?.()).toBe(false);
+        expect(getOut).toHaveBeenCalledTimes(1);
+        manager.removeSpaceEventListener(getOut);
     });
 
     it.each(["input", "textarea", "button", "div"])("leaves SPACE in a focused %s to its native action", (tag) => {

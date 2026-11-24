@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { refreshCanvasTexture } from "../CanvasTextureRefresh";
 import type { WeatherView } from "./WeatherFrame";
 
 /** Where a block canvas lies on the map: its top left corner (map pixels) and its size, one pixel a block. */
@@ -77,6 +78,12 @@ function blend(
     pixels[index + 3] = total * 255;
 }
 
+/** What was painted on a block canvas at some point, to lay it back later instead of painting it again. */
+export interface BlockSnapshot {
+    pixels: Uint8ClampedArray;
+    painted: boolean;
+}
+
 /** Blocks of the weather drawn on the map (fog, clouds, their shadows), each layer over the one before. */
 export interface BlockSurface {
     /** Starts a new image over `view`, one pixel a cell of `resolution` map pixels: the cells of the canvas. */
@@ -92,6 +99,10 @@ export interface BlockSurface {
     ): void;
     /** Shows what was painted since `begin` (nothing painted: hidden). */
     end(): void;
+    /** What was painted since `begin`, to keep: layers that seldom change are painted once (see restore). */
+    snapshot?(): BlockSnapshot | undefined;
+    /** Lays back a snapshot taken on a canvas of the same size, in place of what is painted; false if it cannot. */
+    restore?(snapshot: BlockSnapshot): boolean;
     hide(): void;
     destroy(): void;
 }
@@ -116,6 +127,8 @@ export class CanvasBlockSurface implements BlockSurface {
     constructor(
         private readonly scene: Phaser.Scene,
         depth: number,
+        /** Blends neighbouring blocks instead of showing each as a sharp square (the relief of the ground). */
+        private readonly smooth = false,
     ) {
         this.image = scene.add.image(0, 0, "__DEFAULT").setOrigin(0, 0).setDepth(depth).setVisible(false);
     }
@@ -135,7 +148,9 @@ export class CanvasBlockSurface implements BlockSurface {
             this.texture =
                 this.scene.textures.addCanvas(`weather-blocks:${this.id}:${this.sizes++}:${columns}x${rows}`, canvas) ??
                 undefined;
-            this.texture?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+            this.texture?.setFilter(
+                this.smooth ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST,
+            );
             this.pixels = this.texture?.getContext().createImageData(columns, rows);
             if (this.texture) this.image.setTexture(this.texture.key);
             previous?.destroy();
@@ -158,13 +173,24 @@ export class CanvasBlockSurface implements BlockSurface {
         this.painted = true;
     }
 
+    public snapshot(): BlockSnapshot | undefined {
+        return this.pixels ? { pixels: this.pixels.data.slice(), painted: this.painted } : undefined;
+    }
+
+    public restore(snapshot: BlockSnapshot): boolean {
+        if (!this.pixels || snapshot.pixels.length !== this.pixels.data.length) return false;
+        this.pixels.data.set(snapshot.pixels);
+        this.painted = snapshot.painted;
+        return true;
+    }
+
     public end(): void {
         if (!this.texture || !this.pixels || !this.painted) {
             this.image.setVisible(false);
             return;
         }
         this.texture.getContext().putImageData(this.pixels, 0, 0);
-        this.texture.refresh();
+        refreshCanvasTexture(this.texture);
         this.image
             .setPosition(this.area.x, this.area.y)
             .setDisplaySize(this.area.columns * this.resolution, this.area.rows * this.resolution)
@@ -181,6 +207,6 @@ export class CanvasBlockSurface implements BlockSurface {
     }
 }
 
-export function createBlockSurface(scene: Phaser.Scene, depth: number): BlockSurface {
-    return new CanvasBlockSurface(scene, depth);
+export function createBlockSurface(scene: Phaser.Scene, depth: number, smooth = false): BlockSurface {
+    return new CanvasBlockSurface(scene, depth, smooth);
 }

@@ -22,6 +22,7 @@
     import {
         mapEditorAskToClaimPersonalAreaStore,
         mapEditorModeStore,
+        mapEditorPlacementLevelStore,
         mapEditorSelectedToolStore,
         mapEditorVisibilityStore,
         mapExplorationObjectSelectedStore,
@@ -51,11 +52,17 @@
     import { jamAudioSession } from "../ListeningZone/GameJamAudioSession";
     import { allJamRoomsStore } from "../ListeningZone/ListeningZoneController";
     import { joinedJamStore } from "../ListeningZone/ListeningZoneStore";
-    import { requestedMicrophoneDeviceIdStore } from "../Stores/MediaStore";
+    import { requestedMicrophoneDeviceIdStore, silentStore } from "../Stores/MediaStore";
+    import { hideActionBarStoreBecauseOfChatBar } from "../Chat/ChatSidebarWidthStore";
+    import { floorLevelsStore } from "../Stores/FloorLevelsStore";
+    import { mapLayerPickLevelStore } from "../Stores/MapLayerStore";
+    import { basicActiveStore } from "../Stores/BasicModeStore";
+    import AvatarVideoBubbles from "./Video/AvatarVideoBubbles.svelte";
     import { mapEditorSideBarWidthStore } from "./MapEditor/MapEditorSideBarWidthStore";
     import { calendarRemindersStore, startCalendarReminders } from "./Calendar/CalendarReminder";
     import ActionBar from "./ActionBar/ActionBar.svelte";
     import ActionBarButton from "./ActionBar/ActionBarButton.svelte";
+    import SilentBlock from "./ActionBar/SilentBlock.svelte";
 
     import HelpWebRtcSettingsPopup from "./HelpSettings/HelpWebRtcSettingsPopup.svelte";
     import HelpNotificationSettingsPopup from "./HelpSettings/HelpNotificationSettingPopup.svelte";
@@ -76,7 +83,12 @@
     import WaveCards from "./Wave/WaveCards.svelte";
     import JamLinkRequestCard from "./ListeningZone/JamLinkRequestCard.svelte";
     import NerfHearts from "./Nerf/NerfHearts.svelte";
+    import FishingCards from "./Fishing/FishingCards.svelte";
+    import CallStrip from "./Video/CallStrip/CallStrip.svelte";
+    import FishingContestPanel from "./Fishing/FishingContestPanel.svelte";
     import WeatherForecastBanner from "./Weather/WeatherForecastBanner.svelte";
+    import ClockLineChips from "./ClockLine/ClockLineChips.svelte";
+    import VisualisationPanel from "./Visualisation/VisualisationPanel.svelte";
     import CoffeeCards from "./Coffee/CoffeeCards.svelte";
     import HelpPopUpBlocked from "./HelpSettings/HelpPopUpBlocked.svelte";
     import Notification from "./UI/Notification.svelte";
@@ -92,6 +104,8 @@
     import AudioStreamWrapper from "./Video/PictureInPicture/AudioStreamWrapper.svelte";
     import RaisedHandsDock from "./Video/RaisedHandsDock.svelte";
     import WorldClock from "./ActionsMenu/WorldClock.svelte";
+    import RainbowButton from "./ActionsMenu/RainbowButton.svelte";
+    import FloorLevelStack from "./Floors/FloorLevelStack.svelte";
     import JamDrawer from "./ListeningZone/JamDrawer.svelte";
     import JamAudioPlayback from "./ListeningZone/JamAudioPlayback.svelte";
     import Karaoke from "./ListeningZone/Karaoke.svelte";
@@ -118,6 +132,12 @@
     const listeningSpaceName = jamAudioSession.listeningSpaceName;
     let jamSidePanel: HTMLDivElement | undefined = $state();
     let jamPanelAnchorTop = $state(0);
+
+    /** In the map editor, the stack under the clock chooses the level worked on, as the picker of its panel does. */
+    function chooseEditorLevel(level: number | undefined): void {
+        mapLayerPickLevelStore.set(false);
+        mapEditorPlacementLevelStore.set(level ?? "auto");
+    }
 
     $effect(() => {
         const sidePanel = jamSidePanel;
@@ -406,6 +426,15 @@
 
     <div class="flex min-h-full flex-col-reverse mobile:flex-col">
         <section id="main-layout-main" class="pb-0 flex-1 pointer-events-none h-full w-full relative">
+            <!-- A silent-zone notice must not resize the action bar and move the clock and music dock. -->
+            {#if $silentStore && !$hideActionBarStoreBecauseOfChatBar}
+                <div
+                    class="absolute top-0 inset-x-0 mx-auto w-fit max-w-[80%] z-[301]"
+                    data-testid="silent-zone-banner"
+                >
+                    <SilentBlock />
+                </div>
+            {/if}
             <div class="fixed z-[1000] bottom-0 start-0 right-0 m-auto w-max mobile:w-[98vw] md:max-w-[80%]">
                 <div class="popups flex items-end relative w-full justify-center mobile:mb-24 mb-4 h-[calc(100%-96px)]">
                     {#each $popupStore.slice().reverse() as popup, index (popup.uuid)}
@@ -431,13 +460,6 @@
             {/if}
             <ProximityNotificationContainer />
             <BubbleListeningHint />
-            {#if $notificationPlayingStore}
-                <div class="flex flex-col absolute w-auto end-0">
-                    {#each [...$notificationPlayingStore.values()] as notification, index (`${index}-${notification.id}`)}
-                        <Notification {notification} />
-                    {/each}
-                </div>
-            {/if}
 
             {#if $warningBannerStore}
                 <WarningBanner />
@@ -461,6 +483,12 @@
 
             <!-- The hearts of the local player while they carry a Nerf, top left under the chat buttons. -->
             <NerfHearts />
+
+            <!-- The participants of the call out of the view of the map: who is there, talks, and has the mic or camera on. -->
+            <CallStrip />
+
+            <!-- What just happened at the end of a fishing line (a catch and its weight, a fish that got away). -->
+            <FishingCards />
 
             <!-- Toast stack, below the action bar, with the meeting reminders and the host-side raised-hands dock
                  stacked under it so nothing covers anything else's buttons (the dock self-gates on
@@ -499,9 +527,49 @@
                 style:top={`${jamPanelAnchorTop}px`}
                 bind:offsetHeight={jamDockHeight}
             >
-                <div class="pointer-events-auto"><WorldClock /></div>
-                <!-- The weather now, in one hour and in four hours, under the clock (apps menu, "Weather"). -->
-                <WeatherForecastBanner />
+                <!-- The clock, the floors, the weather chip and the chips of the disasters and of the visualisation:
+                     on one line from md up, the clock rightmost and the others to its left (row-reverse keeps the
+                     stacked order below md). Items start at the top so that the weather brief, unfolded under its
+                     chip, pushes what is below without moving the clock. It wraps rather than leave the window: the
+                     chips fold to their icons first, then take a row of their own (ClockLineChips). -->
+                <div
+                    class="flex flex-col items-end gap-2 @md/main-layout:flex-row-reverse @md/main-layout:flex-wrap @md/main-layout:items-start"
+                    data-testid="clock-line"
+                >
+                    <div class="pointer-events-auto flex items-center gap-2"><RainbowButton /><WorldClock /></div>
+                    <!-- The floors of the map, the one of the avatar marked; in the map editor, the level it works on. -->
+                    <FloorLevelStack
+                        stack={$floorLevelsStore}
+                        onSelectFloor={$mapEditorModeStore ? chooseEditorLevel : undefined}
+                    />
+                    <!-- The weather now, in one hour and in four hours (apps menu, "Weather"); none in Basique. -->
+                    {#if !$basicActiveStore}
+                        <WeatherForecastBanner />
+                    {/if}
+                    <!-- The disaster picker and what to draw over the map (apps menu, "Disaster", "Visualisation"):
+                         a chip each, their controls in a popover under it. -->
+                    {#if !$basicActiveStore}
+                        <ClockLineChips />
+                    {/if}
+                </div>
+                <!-- What plays in the zone the avatar stands in (its name, its sound): in the column, never over the clock. -->
+                {#if $notificationPlayingStore}
+                    <div class="pointer-events-auto flex flex-col items-end gap-2 [&_.notification-playing]:mr-0">
+                        {#each [...$notificationPlayingStore.values()] as notification, index (`${index}-${notification.id}`)}
+                            <Notification {notification} />
+                        {/each}
+                    </div>
+                {/if}
+                <!-- The fishing contest of the room: its ranking while it runs, then its podium. -->
+                <FishingContestPanel
+                    start={(minutes) => gameManager.getCurrentGameScene().fishingManager?.startContest(minutes)}
+                    join={() => gameManager.getCurrentGameScene().fishingManager?.toggleEquipment()}
+                />
+                <!-- What is drawn over the map, read here (chosen in the Visualisation chip of the clock line): the
+                     legend of the flows of the water, the weather board. -->
+                {#if !$basicActiveStore}
+                    <VisualisationPanel />
+                {/if}
                 <JamDrawer listening={$listeningSpaceName !== undefined || $joinedJamStore !== undefined} />
             </div>
 
@@ -510,6 +578,7 @@
             {/if}
 
             {#if !$highlightFullScreen}
+                <AvatarVideoBubbles />
                 <PictureInPicture>
                     {#snippet children({ inPictureInPicture })}
                         <PresentationLayout {inPictureInPicture} />

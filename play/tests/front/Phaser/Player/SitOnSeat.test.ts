@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PositionMessage_Direction } from "@workadventure/messages";
+import { readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { Player } from "@wa/front/Phaser/Player/Player";
 import { ActiveEventList } from "@wa/front/Phaser/UserInput/UserInputManager";
 import { VehicleMode } from "@wa/front/Phaser/Vehicle/Vehicle";
@@ -33,11 +34,11 @@ function fixture() {
     const equipVehicle = vi.fn();
     const hidePrompt = vi.fn();
     Object.assign(player, {
+        vehicleState: readVehicleState(null),
         x: 16,
         y: 0,
         _lastDirection: PositionMessage_Direction.DOWN,
         swimming: false,
-        vehicleState: { mode: VehicleMode.Off },
         getBody: () => ({ height: 16, offset: { y: 8 } }),
         getBodyBox: () => ({ left: 8, right: 24, top: 8, bottom: 24 }),
         isSeated: () => false,
@@ -45,6 +46,7 @@ function fixture() {
         standUp,
         equipVehicle,
         updateSwimming: vi.fn(),
+        updateCanoe: vi.fn(),
         updateObjectAction: vi.fn(),
         releaseSeatObjectWhenOut: vi.fn(),
         slideToSeat: slide,

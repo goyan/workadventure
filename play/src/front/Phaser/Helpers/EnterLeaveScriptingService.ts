@@ -100,6 +100,7 @@ export class EnterLeaveScriptingService {
                             .isPlayerInsideAreaByName(zoneName, {
                                 x: gameScene.CurrentPlayer.x,
                                 y: gameScene.CurrentPlayer.y,
+                                z: gameScene.CurrentPlayer.getFloorZ(),
                             }) ?? false;
                     break;
                 }

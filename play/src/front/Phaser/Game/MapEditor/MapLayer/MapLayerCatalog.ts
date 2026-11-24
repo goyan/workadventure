@@ -19,17 +19,42 @@ export const MAP_LAYER_WALL_COLLECTION = "Carte Murs";
 export const MAP_LAYER_DOOR_COLLECTION = "Carte Portes";
 /** Windows: a facade whose face has a see-through glass, on one segment of a horizontal wall. */
 export const MAP_LAYER_WINDOW_COLLECTION = "Carte Fenêtres";
+/**
+ * Collection of the raised floors (slabs and stairs, see MapLayerFloors): drawn by the "Map" tool like the floors and
+ * the walls.
+ */
+export const MAP_LAYER_FLOOR_SLAB_COLLECTION = "Carte Paliers";
+
 /** Collections whose pieces are walls for the light, the outdoors and the pathfinder: a window is a wall with a glass. */
 export const MAP_LAYER_WALL_LIKE_COLLECTIONS: readonly string[] = [
     MAP_LAYER_WALL_COLLECTION,
     MAP_LAYER_DOOR_COLLECTION,
     MAP_LAYER_WINDOW_COLLECTION,
 ];
+/**
+ * The walls, doors and windows standing on a raised floor are the same pieces in collections of their own, named with
+ * this suffix (`Carte Murs Paliers`...): everything that reads the walls of the ground (the light, the outdoors, the
+ * paths, the doors) does not see them, without having to know about the floors. See MapLayerLevels.
+ */
+export const MAP_LAYER_UPPER_SUFFIX = " Paliers";
+export const MAP_LAYER_UPPER_COLLECTIONS: readonly string[] = MAP_LAYER_WALL_LIKE_COLLECTIONS.map(
+    (name) => name + MAP_LAYER_UPPER_SUFFIX,
+);
+/**
+ * Whether a collection is one of the raised floors: their slabs and stairs, or the walls standing on them. Their
+ * pieces are drawn north of where they stand: what looks at the place of an object on the ground leaves them out.
+ */
+export function isRaisedFloorCollection(collectionName: string): boolean {
+    return collectionName === MAP_LAYER_FLOOR_SLAB_COLLECTION || MAP_LAYER_UPPER_COLLECTIONS.includes(collectionName);
+}
+
 export const MAP_LAYER_COLLECTIONS: readonly string[] = [
     MAP_LAYER_FLOOR_COLLECTION,
     MAP_LAYER_WALL_COLLECTION,
     MAP_LAYER_DOOR_COLLECTION,
     MAP_LAYER_WINDOW_COLLECTION,
+    MAP_LAYER_FLOOR_SLAB_COLLECTION,
+    ...MAP_LAYER_UPPER_COLLECTIONS,
 ];
 
 export const MAP_LAYER_FLOOR_FAMILIES = [
@@ -324,8 +349,16 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
     return undefined;
 }
 
+/**
+ * Whether a placed prefab belongs to the "Map" tool: a floor, a wall, a door, a window, or a piece of the raised
+ * floors. The other tools leave those alone.
+ */
 export function isMapLayerPrefab(collectionName: string, prefabId: string): boolean {
-    return parseMapLayerPrefab(collectionName, prefabId) !== undefined;
+    return (
+        collectionName === MAP_LAYER_FLOOR_SLAB_COLLECTION ||
+        MAP_LAYER_UPPER_COLLECTIONS.includes(collectionName) ||
+        parseMapLayerPrefab(collectionName, prefabId) !== undefined
+    );
 }
 
 /**

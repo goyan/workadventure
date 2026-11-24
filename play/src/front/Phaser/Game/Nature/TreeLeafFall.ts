@@ -1,4 +1,18 @@
+import { autumnProgressAt, Season } from "@workadventure/map-editor";
+import type { SeasonPlace } from "@workadventure/map-editor";
 import { hash01, leafColor } from "../Autumn/LeafPalette";
+
+/** Wind (km/h) of the light breeze without a real weather: the trees sway with it and drop their leaves in it. */
+export const BREEZE_KMH = 10;
+
+/**
+ * Evergreens and palms keep their leaves: their autumn image is their summer one. `seasonal` is the images of an
+ * object of the catalogue by season, when it has some.
+ */
+export function keepsLeavesInAutumn(seasonal: unknown): boolean {
+    if (typeof seasonal !== "object" || seasonal === null) return false;
+    return Reflect.get(seasonal, Season.Autumn) === Reflect.get(seasonal, Season.Summer);
+}
 
 /** The image of a tree on the map: its top left corner and its size. */
 export interface TreeBox {
@@ -122,20 +136,10 @@ export function groundLeaves(seed: number, share: number, box: TreeBox): GroundL
     return leaves;
 }
 
-const parisDay = new Intl.DateTimeFormat("en", { timeZone: "Europe/Paris", month: "numeric", day: "numeric" });
-/** Days of September, October and November. */
-const AUTUMN_DAYS = 91;
-
 /**
- * How far into autumn the Paris date is, 0 on the first of September to 1 on the last of November: the leaves under
- * the trees pile up with it. Half way out of autumn, where only a personal autumn theme shows them.
+ * How far into its autumn the map is at its place (Paris without one), from its first day to its last: the leaves
+ * under the trees pile up with it. Half way out of autumn, where only a personal autumn theme shows them.
  */
-export function autumnProgress(serverDate: Date): number {
-    if (!Number.isFinite(serverDate.getTime())) return 0.5;
-    const parts = parisDay.formatToParts(serverDate);
-    const month = Number(parts.find((part) => part.type === "month")?.value);
-    const day = Number(parts.find((part) => part.type === "day")?.value);
-    if (month < 9 || month > 11) return 0.5;
-    const before = month === 9 ? 0 : month === 10 ? 30 : 61;
-    return (before + day) / AUTUMN_DAYS;
+export function autumnProgress(serverDate: Date, place?: SeasonPlace): number {
+    return autumnProgressAt(serverDate, place);
 }

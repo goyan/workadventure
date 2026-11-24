@@ -1,20 +1,22 @@
 import * as Phaser from "phaser";
 import { AvailabilityStatus } from "@workadventure/messages";
 import type { GameScene } from "../Game/GameScene";
+import type { PerceptionMark } from "../Game/Perception/PerceptionProtocol";
 import { waScaleManager, WaScaleManagerEvent } from "../Services/WaScaleManager";
 import { PLAYER_NAME_GAP, PLAYER_NAME_HEIGHT } from "./UsernameDisplaySizes";
 import { UsernameMegaphoneDisplay } from "./UsernameMegaphoneDisplay";
 import { UsernameMusicDisplay } from "./UsernameMusicDisplay";
+import { UsernamePerceptionDisplay } from "./UsernamePerceptionDisplay";
 import { UsernameRaisedHandDisplay } from "./UsernameRaisedHandDisplay";
 import { UsernameStatusDisplay } from "./UsernameStatusDisplay";
 
 const CORRECTION_RATE = 0.65; // When one game pixel is smaller than one screen pixel (zoomed-out), we zoom out the Woka name, but only up to CORRECTION_RATE. After that, the Woka name will stay at its current screen size even if we zoom out more (to keep the text readable)
-const USERNAME_FONT_SIZE = 10;
+const USERNAME_FONT_SIZE = 9;
 const USERNAME_FONT_WEIGHT = 500;
 
-const PLAYER_NAME_BACKGROUND_COLOR = "rgba(27, 42, 65, 0.5)";
-const PLAYER_NAME_BACKGROUND_RADIUS = 8;
-const PLAYER_NAME_PADDING = 4;
+const PLAYER_NAME_BACKGROUND_COLOR = "rgba(32, 32, 38, 0.62)";
+const PLAYER_NAME_BACKGROUND_RADIUS = 5;
+const PLAYER_NAME_PADDING = 5;
 
 type Position = { x: number; y: number };
 
@@ -30,6 +32,7 @@ export class UsernameDisplay {
     private readonly megaphoneDisplay: UsernameMegaphoneDisplay;
     private readonly raisedHandDisplay: UsernameRaisedHandDisplay;
     private readonly musicDisplay: UsernameMusicDisplay;
+    private readonly perceptionDisplay: UsernamePerceptionDisplay;
 
     private readonly onZoomChanged = (zoomModifier: number): void => {
         this.displayScale = this.getDisplayScale(zoomModifier);
@@ -43,6 +46,16 @@ export class UsernameDisplay {
     };
     private toForeFront: boolean = false;
     private depth: number = 0;
+    private hovered = false;
+    private readonly onMouseEnter = (): void => {
+        this.hovered = true;
+        this.onHover(true);
+    };
+    private readonly onMouseLeave = (): void => {
+        if (!this.hovered) return;
+        this.hovered = false;
+        this.onHover(false);
+    };
 
     constructor(
         private scene: GameScene,
@@ -50,6 +63,7 @@ export class UsernameDisplay {
         private y: number,
         playerName: string,
         outlineColor: number | undefined,
+        private readonly onHover: (hovered: boolean) => void,
     ) {
         this.playerName = playerName;
         this.displayScale = this.getDisplayScale(waScaleManager.zoomModifier);
@@ -59,6 +73,7 @@ export class UsernameDisplay {
         this.megaphoneDisplay = new UsernameMegaphoneDisplay();
         this.raisedHandDisplay = new UsernameRaisedHandDisplay();
         this.musicDisplay = new UsernameMusicDisplay();
+        this.perceptionDisplay = new UsernamePerceptionDisplay();
         this.playerNameElement = this.createPlayerNameElement();
 
         this.element = document.createElement("div");
@@ -66,6 +81,8 @@ export class UsernameDisplay {
         this.element.ariaHidden = "true";
         this.element.className = "username-display";
         this.element.style.background = PLAYER_NAME_BACKGROUND_COLOR;
+        this.element.addEventListener("mouseenter", this.onMouseEnter);
+        this.element.addEventListener("mouseleave", this.onMouseLeave);
 
         this.applyStyles();
         this.updatePlayerDepth();
@@ -75,6 +92,7 @@ export class UsernameDisplay {
             this.megaphoneDisplay.element,
             this.raisedHandDisplay.element,
             this.musicDisplay.element,
+            this.perceptionDisplay.element,
         );
         this.updateUsernameBackgroundColor(outlineColor);
 
@@ -118,8 +136,18 @@ export class UsernameDisplay {
         this.raisedHandDisplay.show(raised, forceClose);
     }
 
+    /** In the discussion of the local player: the name tag gets a ring of the accent colour (see retro-theme.css). */
+    public setInDiscussion(inDiscussion: boolean): void {
+        this.element.classList.toggle("in-discussion", inDiscussion);
+    }
+
     public setListeningMusic(listening: boolean): void {
         this.musicDisplay.show(listening);
+    }
+
+    /** The symbol of a perception changed by a spell, `lift` pixels of the game over the tag (see PerceptionMarkShape). */
+    public setPerceptionMark(mark: PerceptionMark | undefined, title: string, lift: number): void {
+        this.perceptionDisplay.show(mark, title, lift);
     }
 
     public getAvailabilityStatus(): AvailabilityStatus {
@@ -147,11 +175,15 @@ export class UsernameDisplay {
     }
 
     public destroy(): void {
+        this.onMouseLeave();
+        this.element.removeEventListener("mouseenter", this.onMouseEnter);
+        this.element.removeEventListener("mouseleave", this.onMouseLeave);
         this.element.remove();
         this.statusDisplay.destroy();
         this.megaphoneDisplay.destroy();
         this.raisedHandDisplay.destroy();
         this.musicDisplay.destroy();
+        this.perceptionDisplay.destroy();
         this.scene.game.events.off(WaScaleManagerEvent.ZoomChanged, this.onZoomChanged);
     }
 
@@ -179,10 +211,13 @@ export class UsernameDisplay {
         element.style.margin = "0";
         element.style.marginRight = `calc(2px * var(--username-dom-scale, 1))`;
         element.style.color = "#ffffff";
-        element.style.fontFamily = "var(--font-main)";
+        element.style.fontFamily = "Roboto, sans-serif";
         element.style.fontSize = `calc(${USERNAME_FONT_SIZE}px * var(--username-dom-scale, 1))`;
         element.style.fontWeight = `${USERNAME_FONT_WEIGHT}`;
         element.style.whiteSpace = "nowrap";
+        element.style.maxWidth = "calc(140px * var(--username-dom-scale, 1))";
+        element.style.overflow = "hidden";
+        element.style.textOverflow = "ellipsis";
         element.style.pointerEvents = "none";
 
         return element;
@@ -260,5 +295,10 @@ export class UsernameDisplay {
             this.element.classList.remove("talking");
             this.element.classList.remove("speaker");
         }
+    }
+
+    public setVideoBubbleVisible(visible: boolean): void {
+        if (visible) this.onMouseLeave();
+        this.element.style.visibility = visible ? "hidden" : "";
     }
 }

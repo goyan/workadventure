@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { EntityPrefab, WamFile } from "@workadventure/map-editor";
+import { cellKey, EntityPrefab, poolSoilCode, WamFile, withSoils } from "@workadventure/map-editor";
 import type { GameMap, WAMEntityData } from "@workadventure/map-editor";
 import { mock } from "vitest-mock-extended";
 import { get, readable } from "svelte/store";
@@ -24,6 +24,7 @@ import {
     mapEditorSelectedEntityStore,
     mapEditorSnapEnabledStore,
 } from "../../../../src/front/Stores/MapEditorStore";
+import { armWaterLevelPipette, disarmWaterLevelPipette } from "../../../../src/front/Stores/WaterLevelPipetteStore";
 
 const floorPrefab = EntityPrefab.parse({
     id: "Infogène Sols:sol-carrelage-gris-2-1:Default:Down",
@@ -134,6 +135,8 @@ describe("EntityEditorTool placement", () => {
         });
         entities = new Map();
         entitiesManager = mock<EntitiesManager>();
+        // No raised floor on this map: everything is placed on the ground.
+        entitiesManager.elevationAt.mockReturnValue(0);
         entitiesManager.getEntities.mockReturnValue(entities);
         entitiesManager.addEntity.mockImplementation((entityId: string, data: WAMEntityData) => {
             const prefab = [floorPrefab, furniturePrefab, wallPrefab].find(
@@ -259,6 +262,32 @@ describe("EntityEditorTool placement", () => {
         entityPlacementBlockerStore.set(undefined);
         vi.useRealTimers();
         vi.restoreAllMocks();
+    });
+
+    describe("while the pipette of a source aims", () => {
+        // The panel of the selected source is open: the tool is in its EDIT mode.
+        beforeEach(() => {
+            mapEditorEntityModeStore.set("EDIT");
+            armWaterLevelPipette(vi.fn());
+        });
+
+        afterEach(() => {
+            disarmWaterLevelPipette();
+        });
+
+        it("keeps the source selected: a click on empty ground does not leave the EDIT mode", () => {
+            input.emit(Phaser.Input.Events.POINTER_DOWN, pointerAt(canvas, 100, 70), []);
+
+            expect(get(mapEditorEntityModeStore)).toBe("EDIT");
+        });
+
+        it("keeps its panel open over a pool: the pool is not opened in the relief tool", () => {
+            // The cell (6, 4) under the point (100, 70) is a pool.
+            wamFile.getWam().terrain = withSoils(undefined, new Map([[cellKey(6, 4), poolSoilCode(0)]]));
+            input.emit(Phaser.Input.Events.POINTER_MOVE, pointerAt(canvas, 100, 70), []);
+
+            expect(mapEditorModeManager.equipTool.mock.calls).toEqual([]);
+        });
     });
 
     it("snaps an object without collision to the tile grid by default", async () => {

@@ -1,51 +1,19 @@
-import { WeatherType } from "@workadventure/map-editor";
-import type { AutoWeatherSettings, WeatherLocation } from "@workadventure/map-editor";
-import { snowPossibleAt } from "../Nature/SeasonClock";
-import { autoWeatherAt, slotStart } from "./WeatherSchedule";
+import type { AutoWeatherSettings, WeatherLocation, WeatherType } from "@workadventure/map-editor";
 
-export const WEATHER_PHASE_MS = 30 * 60 * 1000;
-export const SNOW_ACCUMULATION_MS = 10 * 60 * 1000;
-export const SNOW_MELT_MS = 10 * 60 * 1000;
-
-/** Server epochs keep coverage identical on reconnect and on every client. */
-export function snowCoverage(
-    configured: WeatherType,
-    epoch: number,
-    startedAt?: number,
-    auto?: AutoWeatherSettings,
-    meltFrom?: number,
-): number {
-    if (!Number.isFinite(epoch)) return 0;
-    if (configured === WeatherType.Automatic) {
-        // The ground follows the schedule: it builds up during a snowy slot and melts in the next one.
-        const date = new Date(epoch);
-        const start = slotStart(date).getTime();
-        const elapsed = epoch - start;
-        const snowing = autoWeatherAt(date, auto) === WeatherType.Snow;
-        const wasSnowing = autoWeatherAt(new Date(start - 1), auto) === WeatherType.Snow;
-        if (snowing) return wasSnowing ? 1 : Math.min(1, elapsed / SNOW_ACCUMULATION_MS);
-        return wasSnowing ? Math.max(0, 1 - elapsed / SNOW_MELT_MS) : 0;
-    }
-    if (!snowPossibleAt(new Date(epoch))) return 0;
-    // A real snow that stopped melts as an automatic one does.
-    if (configured !== WeatherType.Snow) {
-        return meltFrom === undefined ? 0 : Math.max(0, Math.min(1, 1 - (epoch - meltFrom) / SNOW_MELT_MS));
-    }
-    // Legacy maps without an episode date keep their snowy ground until their weather is edited.
-    return startedAt === undefined ? 1 : Math.max(0, Math.min(1, (epoch - startedAt) / SNOW_ACCUMULATION_MS));
-}
-
-/** The map settings the snow cover depends on. */
+/** The weather settings of a map as the game shows them (the name dates from the snow cover they once carried). */
 export interface MapSnowSettings {
     weather?: WeatherType;
     weatherStartedAt?: number;
     weatherAuto?: AutoWeatherSettings;
     /** Place of the map, for its real weather. */
     weatherLocation?: WeatherLocation;
+    /**
+     * The water of the map: its speed is the clock of its snow and its ice too (waterTimesOf), its speed of the freeze
+     * and the thaw goes over it for the melt (freezeThawTimesOf).
+     */
+    water?: { speed?: number; freezeThawSpeed?: number };
     /** Real weather only (never saved): end of the weather under way, when a fog fades out. */
     weatherEndsAt?: number;
-    /** Real weather only (never saved): when the last snow stopped, the ground melting from then. */
-    snowMeltFrom?: number;
     /** Shown weather only (never saved): clouds of a clear sky, 0 to 1 (shownWeatherSettings). */
     cloudiness?: number;
     /** Real weather only (never saved): cloud cover of a rain or a storm, 0 to 1. */
@@ -54,23 +22,12 @@ export interface MapSnowSettings {
     windFrom?: number;
     /** Real weather only (never saved): wind speed (km/h), which sets how fast the clouds go. */
     windSpeed?: number;
-}
-
-/**
- * How much the map snow covers the ground for this person, 0 to 1. `shown` is false with a chosen theme or the weather
- * hidden (mapSnowShownStore): no map snow then, even while it snows on the map.
- */
-export function mapSnowCoverage(
-    shown: boolean,
-    settings: MapSnowSettings | undefined,
-    serverDate: Date | undefined,
-): number {
-    if (!shown || !serverDate) return 0;
-    return snowCoverage(
-        settings?.weather ?? WeatherType.Clear,
-        serverDate.getTime(),
-        settings?.weatherStartedAt,
-        settings?.weatherAuto,
-        settings?.snowMeltFrom,
-    );
+    /** Real weather only (never saved): since when it has been raining, rain and storm together. */
+    rainSince?: number;
+    /** Real weather only (never saved): when the last rain stopped, the puddles drying from then. */
+    rainDryFrom?: number;
+    /** Real weather only (never saved): how hard it rains, mm an hour (rainIntensity). */
+    rainRate?: number;
+    /** A hurricane crosses the map (never saved): its own spiral of clouds takes the place of the clouds of the sky. */
+    hurricaneSky?: boolean;
 }

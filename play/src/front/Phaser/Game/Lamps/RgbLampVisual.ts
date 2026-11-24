@@ -1,4 +1,7 @@
 import * as Phaser from "phaser";
+import { refreshCanvasTexture } from "../CanvasTextureRefresh";
+import { realLightFalloff } from "./LampLumens";
+import { lightRealFalloffNow, lightSoftEdgePxNow } from "./LightSoftEdge";
 import { lightFalloff, type LightCone, type Point } from "./RgbLampGeometry";
 
 /**
@@ -10,6 +13,8 @@ const TEXELS_PER_PIXEL = 0.25;
 const LIGHT_ALPHA = 0.55;
 /** The fading of the light is drawn as a gradient of this many steps. */
 const GRADIENT_STOPS = 12;
+/** A tile of the map, in map pixels: the reach of a light in tiles sets how a real lamp fades. */
+const TILE_PX = 32;
 
 /**
  * The light of one RGB lamp on the map: a texture of its own, a gradient that is full at the lamp and gone at the end
@@ -23,6 +28,9 @@ export class RgbLampVisual {
     private texels = 0;
     /** The texture the light is drawn in now: the night veil is pierced with it. */
     public textureKey = "";
+    /** The shape last drawn, on the map, and its strength: the light bounced around the rooms is worked out of them. */
+    public polygon: readonly Point[] = [];
+    public strength = 1;
 
     constructor(
         private readonly scene: Phaser.Scene,
@@ -46,6 +54,8 @@ export class RgbLampVisual {
      */
     public draw(light: LightCone, polygon: readonly Point[], colour: number, intensity = 1): void {
         const strength = Math.min(1, Math.max(0, intensity));
+        this.polygon = polygon;
+        this.strength = strength;
         const size = light.radius * 2;
         const texels = Math.max(2, Math.ceil(size * TEXELS_PER_PIXEL));
         if (texels !== this.texels || !this.texture) {
@@ -60,9 +70,14 @@ export class RgbLampVisual {
                 const scale = texels / size;
                 const centre = texels / 2;
                 const gradient = context.createRadialGradient(centre, centre, 0, centre, centre, centre);
+                // As a real lamp fades (brighter at its foot, a long faint tail) for a player who asked for it.
+                const radiusTiles = light.radius / TILE_PX;
+                const falloff = lightRealFalloffNow()
+                    ? (distance: number): number => realLightFalloff(distance, radiusTiles)
+                    : lightFalloff;
                 for (let stop = 0; stop <= GRADIENT_STOPS; stop++) {
                     const distance = stop / GRADIENT_STOPS;
-                    gradient.addColorStop(distance, `rgba(255, 255, 255, ${lightFalloff(distance) * strength})`);
+                    gradient.addColorStop(distance, `rgba(255, 255, 255, ${falloff(distance) * strength})`);
                 }
                 context.beginPath();
                 polygon.forEach((point, index) => {
@@ -76,9 +91,18 @@ export class RgbLampVisual {
                 });
                 context.closePath();
                 context.fillStyle = gradient;
-                context.fill();
+                // The edge of the light is softened (a penumbra) by blurring the drawing; a browser whose canvas has
+                // no filter draws the sharp edge.
+                const softEdge = lightSoftEdgePxNow() * scale;
+                if (softEdge > 0 && "filter" in context) {
+                    context.filter = `blur(${softEdge}px)`;
+                    context.fill();
+                    context.filter = "none";
+                } else {
+                    context.fill();
+                }
             }
-            this.texture.refresh();
+            refreshCanvasTexture(this.texture);
         }
         this.image.setPosition(left, top).setDisplaySize(size, size).setTint(colour);
     }

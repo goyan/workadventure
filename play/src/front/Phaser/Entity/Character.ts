@@ -1,3 +1,4 @@
+import { DEFAULT_WATER_SETTINGS } from "@workadventure/map-editor";
 import * as Phaser from "phaser";
 import type { Unsubscriber, Readable } from "svelte/store";
 import { get, readable } from "svelte/store";
@@ -22,24 +23,56 @@ import { UsernameDisplay } from "@wa/front/Phaser/Components/UsernameDisplay";
 import { findSeatUnderFeet } from "@wa/front/Phaser/Player/Seat";
 import {
     BODY_CENTER_OFFSET_Y,
+    getFrozenPoolRectangles,
     getWaterRectangles,
+    isDeepTerrainWater,
     isPointInWater,
+    isPoolAt,
     isWithinOneTileOfWater,
 } from "@wa/front/Phaser/Game/Water/WaterZones";
 import { getIceRectangles, isOnIce } from "@wa/front/Phaser/Game/Ice/IceZones";
+import { currentPush } from "@wa/front/Phaser/Game/Terrain/WaterCurrent";
+import type { CurrentVector } from "@wa/front/Phaser/Game/Terrain/WaterCurrent";
 import { moveAnimationType, skateLean, stepLean } from "@wa/front/Phaser/Game/Ice/SkatePose";
 import { findActionableObject } from "@wa/front/Phaser/Player/ActionableObjects";
 import { VehicleEffect } from "@wa/front/Phaser/Vehicle/VehicleEffect";
-import { Vehicle, VehicleMode, readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
+import {
+    Vehicle,
+    VehicleMode,
+    AIRPLANE_ALTITUDE,
+    AIRPLANE_AREA_LEVEL,
+    AIRPLANE_RENDER_DEPTH,
+    airplaneLift,
+    airplaneScale,
+    isCanoeAfloat,
+    readVehicleState,
+    sharedVehicleState,
+    type VehicleState,
+} from "@wa/front/Phaser/Vehicle/Vehicle";
 import { NerfGunEffect } from "@wa/front/Phaser/Game/Nerf/NerfGunEffect";
 import { NerfHeartsEffect } from "@wa/front/Phaser/Game/Nerf/NerfHeartsEffect";
 import { TorchFlameEffect } from "@wa/front/Phaser/Game/Torch/TorchFlameEffect";
 import { decodeTorchEquipped, decodeTorchIntensity } from "@wa/front/Phaser/Game/Torch/TorchProtocol";
+import { decodeRodEquipped } from "@wa/front/Phaser/Game/Fishing/FishingProtocol";
 import type { TorchFlameShape } from "@wa/front/Phaser/Game/Torch/TorchFlameShape";
 import { decodeNerfHearts } from "@wa/front/Phaser/Game/Nerf/NerfProtocol";
 import { heartsDropped } from "@wa/front/Phaser/Game/Nerf/NerfHearts";
+import { perceptionMarkLift } from "@wa/front/Phaser/Game/Perception/PerceptionMarkShape";
+import {
+    decodePerception,
+    type Perception,
+    type PerceptionMark,
+} from "@wa/front/Phaser/Game/Perception/PerceptionProtocol";
 import { NERF_BLINK_ALPHA, NERF_BLINK_TINT, nerfBlinkTinted } from "@wa/front/Phaser/Game/Nerf/NerfBlink";
-import { cardinalVehicleHeading, vehicleHeading } from "@wa/front/Phaser/Vehicle/VehicleFrames";
+import {
+    cardinalVehicleHeading,
+    vehicleHeading,
+    VEHICLE_FEET_Y,
+    VEHICLE_FRAME_SIZE,
+} from "@wa/front/Phaser/Vehicle/VehicleFrames";
+import { isBasicActive } from "@wa/front/Stores/BasicModeStore";
+import { normalizeUserName } from "../../Connection/LocalUserUtils";
+import { floorDepth, GROUND_DEPTH_SCALE } from "../Game/MapEditor/MapLayer/FloorDepth";
 import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
 import { SpeechBubble } from "./SpeechBubble";
 import { SpeechDomElement } from "./SpeechDomElement";
@@ -60,7 +93,7 @@ import Tween = Phaser.Tweens.Tween;
 import Rectangle = Phaser.Geom.Rectangle;
 import Body = Phaser.Physics.Arcade.Body;
 
-const playerNameY = -18;
+const playerNameY = -24;
 /** The system asks for less motion: a Nerf hit flashes once instead of blinking. */
 const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 /**
@@ -93,6 +126,9 @@ export type PathFollowResult = {
     blocked?: boolean;
 };
 
+/** From this snow cover (0 to 1) on frozen water, one walks on it rather than skates. */
+const SNOW_WALKED_ON = 0.5;
+
 export abstract class Character extends Container implements OutlineableInterface, Movable {
     private readonly movedSubject = new Subject<PositionInterface>();
     public readonly moved$ = this.movedSubject.asObservable();
@@ -102,10 +138,12 @@ export abstract class Character extends Container implements OutlineableInterfac
     private availabilityStatus: AvailabilityStatusType = AvailabilityStatus.ONLINE;
     private raisedHand = false;
     private listeningMusic = false;
+    private videoBubbleVisible = false;
     private musicHeadphonesEffect: MusicHeadphonesEffect | undefined;
     private nerfEquipped = false;
     private nerfGunEffect: NerfGunEffect | undefined;
     private torchEquipped = false;
+    private rodEquipped = false;
     /** How bright the bearer set their torch, in percent (see decodeTorchIntensity). */
     private torchIntensity = decodeTorchIntensity(undefined);
     private torchFlameEffect: TorchFlameEffect | undefined;
@@ -124,6 +162,13 @@ export abstract class Character extends Container implements OutlineableInterfac
     private clickable: boolean;
     public companion?: Companion;
     private emote: DOMElement | null = null;
+    /** A speech bubble or a thinking cloud is shown over the avatar (see say). */
+    private bubbleShown = false;
+    /** What this player perceives, from their player variable (see PerceptionProtocol). */
+    private perception: Perception = "none";
+    /** The symbol drawn over this player for the local one, and its tooltip (see PerceptionManager). */
+    private perceptionMark: PerceptionMark | undefined;
+    private perceptionTitle = "";
     private emoteTween: Tween | null = null;
     private texts: Map<string, DOMElement> = new Map();
     private textsToBuild = new Map();
@@ -143,12 +188,23 @@ export abstract class Character extends Container implements OutlineableInterfac
     private vehicleMoving = false;
     private ridingVehicle = false;
     private vehicleEffect: VehicleEffect | undefined;
+    private airplanePoseApplied = false;
+    private displayedFlightAltitude = 0;
+    private previousFlightDisplayTime: number | undefined;
     private avatarAction = AvatarAction.Idle;
     private avatarActionEffect: AvatarActionEffect | undefined;
     private depthCache: { x: number; y: number; depth: number } | undefined;
     /** The current lean of a skater, in radians: towards the foot it glides on. */
     private skateLean = 0;
     private readonly syncDisplayPositionWithPhysics = (): void => {
+        const now = this.scene.time.now;
+        const delta =
+            this.previousFlightDisplayTime === undefined
+                ? 1000
+                : Math.min(100, Math.max(0, now - this.previousFlightDisplayTime));
+        this.previousFlightDisplayTime = now;
+        const difference = this.flightAltitude - this.displayedFlightAltitude;
+        this.displayedFlightAltitude += Math.sign(difference) * Math.min(Math.abs(difference), delta * 1.2);
         this.setDepthIfNeeded(this.computeDepth());
         this.updateUsernameDisplayPosition();
         if (this.avatarActionEffect) {
@@ -178,8 +234,15 @@ export abstract class Character extends Container implements OutlineableInterfac
             this.vehicleMoving,
             this.scene.time.now,
             this.getBody().velocity,
+            {
+                lift: this.flightLift,
+                altitude: Math.min(1, this.displayedFlightAltitude / AIRPLANE_ALTITUDE),
+                scale: this.flightScale,
+                groundDepth: floorDepth(this.floorZ, this.y + 16),
+            },
         );
-        if (this.ridingVehicle && this.vehicleMoving) this.scene.markDirty();
+        this.updateAirplanePilot();
+        if (this.ridingVehicle && (this.vehicleMoving || vehicle === Vehicle.Airplane)) this.scene.markDirty();
         const showHeadphones = this.listeningMusic && !this.invisible && isHumanAvatar(this.sprites.keys());
         if (showHeadphones) this.musicHeadphonesEffect ??= new MusicHeadphonesEffect(this.scene, this);
         this.musicHeadphonesEffect?.update(showHeadphones, this.sprites.values().next().value);
@@ -218,7 +281,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     ) {
         super(scene, x, y /*, texture, frame*/);
         this.scene = scene;
-        this.playerName = name;
+        this.playerName = normalizeUserName(name);
         this.invisible = true;
         this.clickable = false;
 
@@ -304,11 +367,18 @@ export abstract class Character extends Container implements OutlineableInterfac
                 this.y + playerNameY,
                 this.playerName,
                 playerNameOutlineColor,
+                (hovered): void => {
+                    if (!hovered || this.isClickable()) {
+                        this.emit(hovered ? Phaser.Input.Events.POINTER_OVER : Phaser.Input.Events.POINTER_OUT);
+                    }
+                },
             );
             this.usernameDisplay.setAvailabilityStatus(this.availabilityStatus, true);
             this.usernameDisplay.setRaisedHand(this.raisedHand, true);
             this.usernameDisplay.setListeningMusic(this.listeningMusic);
+            this.usernameDisplay.setVideoBubbleVisible(this.videoBubbleVisible);
             this.usernameDisplay.setPlayerDepth(this.depth);
+            this.applyPerceptionMark();
 
             this.outlineColorStoreUnsubscribe = this.outlineColorStore.subscribe((color) => {
                 this.usernameDisplay?.setPlayerNameOutlineColor(color);
@@ -381,8 +451,9 @@ export abstract class Character extends Container implements OutlineableInterfac
         }
         this.swimEffect.update(this.scene.time.now, this.sprites.values());
         const tile = this.scene.getGameMapFrontWrapper()?.getTileDimensions() ?? { width: 32, height: 32 };
+        // The water of the floor the character stands on: the one of another floor is only drawn there.
         const nearby = isWithinOneTileOfWater(
-            getWaterRectangles(this.scene),
+            getWaterRectangles(this.scene, this.floorZ),
             { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y },
             tile,
         );
@@ -392,7 +463,58 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     /** Whether the body of the character is in the water: what the other players see of a swimmer. */
     protected isSwimmingHere(): boolean {
-        return isPointInWater(getWaterRectangles(this.scene), { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y });
+        if (this.isInAirplane()) return false;
+        // The water of its floor only: a character on a raised floor or a stair drawn over a pool of the ground does
+        // not swim, and it swims in a pool of its own floor.
+        const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
+        if (isPointInWater(getWaterRectangles(this.scene, this.floorZ), body)) return true;
+        // A lake of the relief, on the ground only: deep enough, one swims in it as in a pool.
+        // In its canoe, it is on the water, not in it.
+        return !isCanoeAfloat(this.vehicleState) && this.isOverDeepTerrainWater();
+    }
+
+    /** Whether the body of the character is in a pool painted with the relief tool: one swims there, no canoe. */
+    protected isInPool(): boolean {
+        const terrain = this.scene.getGameMap?.()?.getWamFile()?.getWam().terrain;
+        return isPoolAt(terrain, { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y });
+    }
+
+    /** Whether the body of the character is over water of the relief deep enough to swim, on the ground. */
+    protected isOverDeepTerrainWater(): boolean {
+        // Basique hides the water of the relief: here nobody swims nor floats in it (the pools of the map remain).
+        if (this.floorZ >= 2 || isBasicActive()) return false;
+        const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
+        // Frozen, it is skated on, not swum in.
+        if (this.scene.isFrozenWaterAt?.(body.x, body.y)) return false;
+        // By the cell under the body, or as the water is drawn when the relief is shown in 3/4.
+        return isDeepTerrainWater(
+            this.scene.getTerrainWater?.(),
+            body,
+            this.scene.time.now,
+            this.scene.pixelReliefShown?.() === true,
+        );
+    }
+
+    /**
+     * The speed the current of the water of the relief gives the character, in pixels a second: nothing out of the
+     * water, in still or shallow water, on a raised floor, inside a building, or on a map that set its current to
+     * nothing. A water with inertia carries at the speed it runs at; else, at its hardest (and the usual strength),
+     * at a quarter of the speed one walks at (`walkSpeed`).
+     */
+    protected waterCurrentPush(walkSpeed: number): CurrentVector {
+        const water = this.floorZ < 2 && !isBasicActive() ? this.scene?.getTerrainWater?.() : undefined;
+        if (!water) return { x: 0, y: 0 };
+        // A drain of the catastrophes pulls the water, never who is in it.
+        if (this.scene.isDrainCalm?.(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
+        // Inside a building the current carries nobody: one is not swept out of a flooded room.
+        if (this.scene.getOutdoorGrid?.()?.isOutdoorAt(this.x, this.y + BODY_CENTER_OFFSET_Y) === false) {
+            return { x: 0, y: 0 };
+        }
+        // Under the ice, the current carries nobody.
+        if (this.scene.isFrozenWaterAt?.(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
+        const strength =
+            this.scene.getGameMap().getWamFile()?.getWam().settings?.water?.current ?? DEFAULT_WATER_SETTINGS.current;
+        return currentPush(water, this.x, this.y + BODY_CENTER_OFFSET_Y, this.scene.time.now, strength, walkSpeed);
     }
 
     /**
@@ -400,9 +522,16 @@ export abstract class Character extends Container implements OutlineableInterfac
      * The position is enough, as for the water: nothing more is sent over the network.
      */
     protected isOnIceHere(): boolean {
-        if (!this.scene) return false;
+        // The ice is on the ground too.
+        if (!this.scene || this.floorZ > 0) return false;
+        const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
+        // A rink of the map, or the water of the relief frozen by the cold: under a snow that covers it, the frozen
+        // water is walked on, leaving footprints, not skated on.
         return (
-            isOnIce(getIceRectangles(this.scene), { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y }) &&
+            (isOnIce(getIceRectangles(this.scene), body) ||
+                isPointInWater(getFrozenPoolRectangles(this.scene), body) ||
+                (this.scene.isFrozenWaterAt?.(body.x, body.y) === true &&
+                    (this.scene.getSnowCoverAt?.(body.x, body.y) ?? 0) < SNOW_WALKED_ON)) &&
             !this.isSwimmingHere()
         );
     }
@@ -429,6 +558,20 @@ export abstract class Character extends Container implements OutlineableInterfac
         return this.isOnIceHere();
     }
 
+    /**
+     * What its shadow of the sky is drawn from (SkyMovingShadows): its feet and its sprites. Undefined when it throws
+     * none on the ground: hidden, swimming, or standing on a raised floor.
+     */
+    public skyShadowSource(): { x: number; y: number; sprites: Sprite[] } | undefined {
+        if (this.invisible || !this.visible || this.floorZ >= 2 || this.isInWater() || this.isInAirplane())
+            return undefined;
+        return {
+            x: this.x,
+            y: this.y + CHARACTER_BODY_HEIGHT / 2 + CHARACTER_BODY_OFFSET_Y,
+            sprites: [...this.sprites.values()],
+        };
+    }
+
     /** Whether the character is drawn swimming (its body in the water), for everyone. */
     public isInWater(): boolean {
         return this.swimEffect?.isActive ?? false;
@@ -446,6 +589,50 @@ export abstract class Character extends Container implements OutlineableInterfac
     public setSwimwear(value: unknown): void {
         this.swimwearStyle = readSwimwear(value);
         this.scene.markDirty();
+    }
+
+    /** SPIKE (floors study): altitude of the floor the character stands on, in pixels above the ground. */
+    private floorZ = 0;
+    /** How much lower the character is drawn, standing in a hollow of the relief seen in 3/4 (avatarDrop). */
+    private groundDrop = 0;
+    public getGroundDrop(): number {
+        return this.groundDrop;
+    }
+
+    /**
+     * Draws the character this much lower, in a hollow of the relief: its sprites while the image is drawn
+     * (CharacterDrops), its name here. Its place, its body and its depth do not change.
+     */
+    public setGroundDrop(drop: number): void {
+        const rounded = Math.round(drop);
+        if (rounded === this.groundDrop) return;
+        this.groundDrop = rounded;
+        this.updateUsernameDisplayPosition();
+        this.scene.markDirty();
+    }
+    public getFloorZ(): number {
+        return this.isFlying() ? AIRPLANE_AREA_LEVEL : this.floorZ;
+    }
+
+    /**
+     * Whether the things of the ground stop the character: not once it is on a stair or a raised floor, where they are
+     * under it (the stair itself keeps it between its sides).
+     */
+    public isNearGround(): boolean {
+        return !this.isFlying() && this.floorZ < 2;
+    }
+
+    /** Whether the character stands on the floor of this altitude (0: the ground), stairs apart. */
+    public isOnFloor(elevation: number): boolean {
+        return !this.isFlying() && Math.abs(this.floorZ - elevation) < 2;
+    }
+
+    public setFloorZ(z: number): void {
+        if (this.isFlying()) return;
+        if (this.floorZ === z) return;
+        this.floorZ = z;
+        this.depthCache = undefined;
+        this.setDepthIfNeeded(this.computeDepth());
     }
 
     private setDepthIfNeeded(depth: number): void {
@@ -530,6 +717,11 @@ export abstract class Character extends Container implements OutlineableInterfac
         });
     }
 
+    /** Marks the name of a player who is in the discussion of the local player. */
+    public setInDiscussion(inDiscussion: boolean): void {
+        this.usernameDisplay?.setInDiscussion(inDiscussion);
+    }
+
     public toggleTalk(show = true): void {
         this.usernameDisplay?.setTalking(show, this.getAvailabilityStatus() === AvailabilityStatus.SPEAKER);
     }
@@ -596,6 +788,8 @@ export abstract class Character extends Container implements OutlineableInterfac
             this.vehicleMode !== VehicleMode.Off &&
             (moving || this.vehicleMode === VehicleMode.Always) &&
             !this.isSwimmingHere() &&
+            // A canoe is never seen on the ground, whatever its player says for an instant.
+            (this.vehicleState.vehicle !== Vehicle.Canoe || this.isOverDeepTerrainWater()) &&
             isHumanAvatar(this.sprites.keys());
         if (this.invisible) return;
         this._lastDirection = direction;
@@ -639,7 +833,14 @@ export abstract class Character extends Container implements OutlineableInterfac
     }
 
     protected updateUsernameDisplayPosition(x = this.x, y = this.y): void {
-        this.usernameDisplay?.setPosition(x, y + playerNameY);
+        // Over a plane drawn bigger as it climbs: the name keeps above its wings.
+        const wings = Math.round((this.flightScale - 1) * (VEHICLE_FRAME_SIZE / 2));
+        this.usernameDisplay?.setPosition(x, y + playerNameY - this.flightLift - wings + this.groundDrop);
+    }
+
+    public setVideoBubbleVisible(visible: boolean): void {
+        this.videoBubbleVisible = visible;
+        this.usernameDisplay?.setVideoBubbleVisible(visible);
     }
 
     setPosition(x: number, y: number): this {
@@ -659,11 +860,19 @@ export abstract class Character extends Container implements OutlineableInterfac
     private computeDepth(): number {
         if (this.depthCache?.x !== this.x || this.depthCache.y !== this.y) {
             const feetY = this.y + CHARACTER_BODY_HEIGHT / 2 + CHARACTER_BODY_OFFSET_Y;
-            const seat = findSeatUnderFeet(this.scene, { x: this.x, y: feetY });
+            const seat = findSeatUnderFeet(this.scene, { x: this.x, y: feetY }, undefined, this.floorZ);
             const actionObject = takesObjectPlace(this.avatarAction)
                 ? findActionableObject(this.scene, { x: this.x, y: feetY })
                 : undefined;
-            this.depthCache = { x: this.x, y: this.y, depth: actionObject?.depth ?? seat?.depth ?? this.y + 16 };
+            // Floors: everything standing on a raised floor is drawn over everything standing lower.
+            const groundDepth = actionObject?.depth ?? seat?.depth ?? this.y + 16;
+            this.depthCache = {
+                x: this.x,
+                y: this.y,
+                depth: this.isFlying()
+                    ? AIRPLANE_RENDER_DEPTH + groundDepth / GROUND_DEPTH_SCALE
+                    : floorDepth(this.floorZ, groundDepth),
+            };
             // The treadmill under a runner moves its belt (recomputed with the depth: on each move or action change).
             this.scene.treadmillBelts.setRunner(
                 this,
@@ -698,6 +907,7 @@ export abstract class Character extends Container implements OutlineableInterfac
             this.seated,
             this.getNerfHeading(),
         );
+        this.applyPerceptionMark();
         this.scene.markDirty();
     }
 
@@ -707,7 +917,39 @@ export abstract class Character extends Container implements OutlineableInterfac
         if (heartsDropped(previous, this.nerfHearts)) this.flashNerfHit();
         if (this.nerfHearts !== undefined) this.nerfHeartsEffect ??= new NerfHeartsEffect(this.scene, this);
         this.nerfHeartsEffect?.update(this.nerfHearts, this.nerfEquipped && !this.invisible);
+        this.applyPerceptionMark();
         this.scene.markDirty();
+    }
+
+    /** What this player perceives, from their player variable: an unknown value is the shared world. */
+    public setPerception(value: unknown): void {
+        this.perception = decodePerception(value);
+    }
+
+    public getPerception(): Perception {
+        return this.perception;
+    }
+
+    /** The symbol of a changed perception the local player sees over this one (none: no symbol), and its tooltip. */
+    public showPerceptionMark(mark: PerceptionMark | undefined, title: string): void {
+        if (mark === this.perceptionMark && title === this.perceptionTitle) return;
+        this.perceptionMark = mark;
+        this.perceptionTitle = title;
+        this.applyPerceptionMark();
+    }
+
+    /**
+     * Over the name tag, above the Nerf hearts when they show; put away while a bubble or an emote takes its place
+     * over the head.
+     */
+    private applyPerceptionMark(): void {
+        const covered = this.bubbleShown || this.emote !== null;
+        const heartsShown = this.nerfEquipped && this.nerfHearts !== undefined && !this.invisible;
+        this.usernameDisplay?.setPerceptionMark(
+            covered ? undefined : this.perceptionMark,
+            this.perceptionTitle,
+            perceptionMarkLift(heartsShown),
+        );
     }
 
     /** Blinks red and see-through after a Nerf hit (see NerfBlink), for the local player and the others alike. */
@@ -741,6 +983,17 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.scene.markDirty();
     }
 
+    /** From the player variable: the fishing rod itself is drawn with the lines (see FishingView). */
+    public setRodEquipped(value: unknown): void {
+        this.rodEquipped = decodeRodEquipped(value);
+        this.scene.markDirty();
+    }
+
+    /** Holds a fishing rod that can be seen. */
+    public isRodEquipped(): boolean {
+        return this.rodEquipped && !this.invisible;
+    }
+
     /** From the player variable: an older client sets none, its torch is at the full intensity. */
     public setTorchIntensity(value: unknown): void {
         this.torchIntensity = decodeTorchIntensity(value);
@@ -770,17 +1023,86 @@ export abstract class Character extends Container implements OutlineableInterfac
             : cardinalVehicleHeading(this._lastDirection);
     }
 
+    /** How high the plane is drawn above its shadow: its altitude, brought down to a few pixels (whole ones). */
+    private get flightLift(): number {
+        return airplaneLift(this.displayedFlightAltitude);
+    }
+
+    /** How big the plane is drawn: bigger as it climbs, closer to the eye looking from above. */
+    private get flightScale(): number {
+        return airplaneScale(this.displayedFlightAltitude);
+    }
+
+    public get visualY(): number {
+        return this.y - this.flightLift;
+    }
+
+    public isFlying(): boolean {
+        return this.isInAirplane() && this.flightAltitude > 0;
+    }
+
+    public isInAirplane(): boolean {
+        return this.vehicleState?.vehicle === Vehicle.Airplane && this.vehicleMode !== VehicleMode.Off;
+    }
+
+    protected get flightAltitude(): number {
+        return this.isInAirplane() ? (this.vehicleState.altitude ?? AIRPLANE_ALTITUDE) : 0;
+    }
+
+    protected setFlightAltitude(altitude: number): void {
+        if (!this.isInAirplane() || this.vehicleState.altitude === altitude) return;
+        this.vehicleState = { ...this.vehicleState, altitude };
+        this.depthCache = undefined;
+        this.scene.markDirty();
+    }
+
+    private updateAirplanePilot(): void {
+        if (this.isInAirplane() && this.vehicleEffect) {
+            const cockpit = this.vehicleEffect.getPilotAnchor();
+            // The pilot grows with the plane, around its centre (see VehicleEffect).
+            const scale = this.flightScale;
+            const centreY = VEHICLE_FEET_Y - this.flightLift;
+            for (const sprite of this.sprites.values()) {
+                sprite
+                    .setCrop(0, 0, 32, 16)
+                    .setScale(0.75 * scale)
+                    .setPosition(
+                        Math.round((cockpit.x - 32) * scale),
+                        Math.round(centreY + (cockpit.y - 10 - VEHICLE_FEET_Y) * scale),
+                    );
+            }
+            this.airplanePoseApplied = true;
+        } else if (this.airplanePoseApplied) {
+            for (const sprite of this.sprites.values()) sprite.setCrop().setScale(1).setPosition(0, 0);
+            this.airplanePoseApplied = false;
+        }
+    }
+
+    public get vehicle(): Vehicle {
+        return this.vehicleState.vehicle;
+    }
+
+    protected getVehicleState(): VehicleState {
+        return this.vehicleState;
+    }
+
+    public setVehicles(variables: ReadonlyMap<string, unknown> | undefined): void {
+        this.setVehicle(sharedVehicleState(variables));
+    }
+
     public setVehicle(value: unknown): void {
         const state = readVehicleState(value);
         if (
             state.vehicle === this.vehicleState.vehicle &&
             state.mode === this.vehicleState.mode &&
+            state.altitude === this.vehicleState.altitude &&
             state.color === this.vehicleState.color &&
             state.edgeColor === this.vehicleState.edgeColor &&
             state.wheelsColor === this.vehicleState.wheelsColor
         )
             return;
         this.vehicleState = state;
+        this.depthCache = undefined;
         this.playAnimation(this._lastDirection, this.vehicleMoving);
         this.scene.markDirty();
     }
@@ -980,6 +1302,8 @@ export abstract class Character extends Container implements OutlineableInterfac
             this.remove(this.bubble);
             this.bubble.destroy();
         }
+        this.bubbleShown = Boolean(text);
+        this.applyPerceptionMark();
         // If text is empty, let's just remove the previous bubble and say nothing.
         if (!text) {
             return;
@@ -1049,6 +1373,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         // The emote comes from another player: it is plain text (an emoji) and must never be interpreted as HTML.
         span.textContent = emote;
         this.emote = new DOMElement(this.scene, -1, 0, span, "z-index:10;");
+        this.applyPerceptionMark();
         this.emote.setAlpha(0);
         this.add(this.emote);
         this.createStartTransition(emoteY);
@@ -1159,6 +1484,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     private destroyEmote() {
         this.emote?.destroy();
         this.emote = null;
+        this.applyPerceptionMark();
     }
 
     destroyText(id: string) {

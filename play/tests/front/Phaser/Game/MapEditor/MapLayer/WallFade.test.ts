@@ -128,7 +128,7 @@ function setup(height: WallHeight) {
     const { walls, grid: firstGrid } = room(height);
     let grid = firstGrid;
     const listed: FakeWall[] = [...walls];
-    let player = { ...INSIDE };
+    let player: { x: number; y: number } | undefined = { ...INSIDE };
     let editorOpen = false;
     const redraws = { count: 0 };
     const fade = new WallFade(
@@ -146,6 +146,8 @@ function setup(height: WallHeight) {
         /** The outdoor tracker computed the grid again, with the same walls. */
         recomputeGrid: () => (grid = room(height).grid),
         setPlayer: (point: { x: number; y: number }) => (player = { ...point }),
+        /** The player went up a stair: on a raised floor, it is in no room of the ground. */
+        setPlayerUpstairs: () => (player = undefined),
         setEditor: (open: boolean) => (editorOpen = open),
         /** A facade of the south wall of the room: the wall in front of the player, which hides the room. */
         facade: () => {
@@ -169,6 +171,40 @@ describe("WallFade", () => {
         expect(facade().alpha).toBeCloseTo(0.775, 3);
         fade.update(WALL_FADE_MS / 2);
         expect(facade().alpha).toBeCloseTo(WALL_ROOM_ALPHA, 6);
+    });
+
+    it("brings the walls of the room back once the player is upstairs: it is in no room of the ground", () => {
+        const { fade, facade, setPlayerUpstairs } = setup(2);
+        fade.update(WALL_FADE_MS);
+        expect(facade().alpha).toBeCloseTo(WALL_ROOM_ALPHA, 6);
+
+        setPlayerUpstairs();
+        fade.update(WALL_FADE_MS);
+        fade.update(WALL_FADE_MS);
+        expect(facade().alpha).toBe(1);
+    });
+
+    it("tells the see-through walls in front of the room, and none in the editor or once they are opaque again", () => {
+        const { fade, walls, facade, setPlayer, setEditor } = setup(2);
+        const first = fade.version;
+        fade.update(WALL_FADE_MS);
+        expect(fade.version).toBeGreaterThan(first);
+        const faded = fade.fadedFrontWalls();
+        expect(faded).toContainEqual(expect.objectContaining({ x: facade().x, y: facade().y, height: 64 }));
+        // Each one is a see-through piece of the map.
+        for (const rect of faded) {
+            expect(walls.some((wall) => wall.x === rect.x && wall.y === rect.y && wall.alpha < 1)).toBe(true);
+        }
+
+        setEditor(true);
+        fade.update(WALL_FADE_MS);
+        expect(fade.fadedFrontWalls()).toEqual([]);
+
+        setEditor(false);
+        setPlayer(OUTSIDE);
+        fade.update(WALL_FADE_MS);
+        fade.update(WALL_FADE_MS);
+        expect(fade.fadedFrontWalls()).toEqual([]);
     });
 
     it("leaves the back wall and the side walls of the room opaque: they hide nothing of it", () => {

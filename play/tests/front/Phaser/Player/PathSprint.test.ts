@@ -43,6 +43,7 @@ function fixture(
         playAnimation: animation,
         emit,
         getBody: () => ({ offset: { y: 8 }, height: 16 }),
+        getFloorZ: () => 2,
     });
     const prototype = Character.prototype as unknown as {
         moveToPathPosition: (x: number, y: number) => void;
@@ -62,7 +63,8 @@ describe("path sprint", () => {
         player.step(30, 20);
         player.advance(16);
         expect(animation).toHaveBeenCalledWith(0, true, RUN_ANIMATION_SPEED);
-        expect(smoke).toHaveBeenCalledWith(30, 36, 20, 0, 99);
+        // At the floor the player stands on (a bridge, a storey): the smoke is projected there.
+        expect(smoke).toHaveBeenCalledWith(30, 36, 20, 0, 99, 2);
         expect(emit).toHaveBeenCalledWith("hasMoved", expect.objectContaining({ moving: true, running: true }));
     });
     it("uses sprint dust on the skateboard without switching back to running", () => {

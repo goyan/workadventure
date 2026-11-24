@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+    AIRPLANE_DEFAULT_COLORS,
     DEFAULT_VEHICLE_COLOR,
+    defaultVehicleColors,
     Vehicle,
     VehicleMode,
     readVehicleState,
@@ -32,10 +34,12 @@ describe("vehicle state and colors", () => {
     });
 
     it("validates all three paint parts independently", () => {
+        // A wrong value falls back on the default of its own part, for the vehicle it paints.
         expect(readVehicleColors({ color: "#112233", edgeColor: "bad", wheelsColor: "#AA33BB" })).toEqual({
             color: "#112233",
-            edgeColor: DEFAULT_VEHICLE_COLOR,
+            edgeColor: defaultVehicleColors().edgeColor,
             wheelsColor: "#aa33bb",
         });
+        expect(readVehicleColors({ edgeColor: "bad" }, Vehicle.Airplane)).toEqual(AIRPLANE_DEFAULT_COLORS);
     });
 });

@@ -40,6 +40,7 @@ describe("SoundEffectsSettings", () => {
         expect(ids).toEqual([
             "footstep-volume",
             "skateboard-volume",
+            "airplane-volume",
             "weather-volume",
             "door-volume",
             "nerf-volume",
@@ -58,6 +59,7 @@ describe("SoundEffectsSettings", () => {
         expect(listen).toEqual([
             "listen-footsteps",
             "listen-skateboard",
+            "listen-airplane",
             "listen-weather",
             "listen-doors",
             "listen-nerf",
@@ -106,7 +108,7 @@ describe("SoundEffectsSettings", () => {
         const labels = [...target.querySelectorAll("label")].map((label) =>
             label.textContent?.replace(/\s+/g, " ").trim(),
         );
-        expect(labels).toContain("Weather : Muted");
+        expect(labels).toContain("Weather and nature : Muted");
         expect(labels).toContain("Footsteps and swimming : 15 %");
         weatherVolumeStore.set(0.15);
     });

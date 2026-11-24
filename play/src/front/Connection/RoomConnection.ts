@@ -10,6 +10,7 @@ import {
     privateMessageRequestSchema,
 } from "@workadventure/shared-utils";
 import type {
+    HurricaneTrackMessage,
     AddSpaceFilterMessage,
     AnswerMessage,
     ApplicationMessage,
@@ -49,6 +50,18 @@ import type {
     RoomShortDescription,
     TokenExpiredMessage,
     UpdateWAMSettingsMessage,
+    ModifyTerrainMessage,
+    TerrainWaterMessage,
+    MeadowMessage,
+    TreeFireMessage,
+    FireConditionsMessage,
+    SetFireConditionsMessage,
+    AquaticLifeMessage,
+    CatastropheKind,
+    CatastropheMessage,
+    FishingMessage,
+    IceShackAction,
+    IceShacksMessage,
     UploadEntityMessage,
     UserJoinedMessage as UserJoinedMessageTsProto,
     UserLeftMessage as UserLeftMessageTsProto,
@@ -235,6 +248,29 @@ export class RoomConnection implements RoomConnection {
         value: unknown;
     }>();
     public readonly areaPropertyVariableMessageStream = this._areaPropertyVariableMessageStream.asObservable();
+    private readonly _entityStateMessageStream = new Subject<{ entityId: string; key: string; value: string }>();
+    public readonly entityStateMessageStream = this._entityStateMessageStream.asObservable();
+    /** The water of the relief: what changed since the state before, once a second while it moves. */
+    private readonly _terrainWaterMessageStream = new Subject<TerrainWaterMessage>();
+    public readonly terrainWaterMessageStream = this._terrainWaterMessageStream.asObservable();
+    private readonly _meadowMessageStream = new Subject<MeadowMessage>();
+    public readonly meadowMessageStream = this._meadowMessageStream.asObservable();
+    private readonly _treeFireMessageStream = new Subject<TreeFireMessage>();
+    public readonly treeFireMessageStream = this._treeFireMessageStream.asObservable();
+    /** The conditions the fire of the room goes by, whenever they change. */
+    private readonly _fireConditionsMessageStream = new Subject<FireConditionsMessage>();
+    public readonly fireConditionsMessageStream = this._fireConditionsMessageStream.asObservable();
+    private readonly _aquaticLifeMessageStream = new Subject<AquaticLifeMessage>();
+    public readonly aquaticLifeMessageStream = this._aquaticLifeMessageStream.asObservable();
+    /** The catastrophes the room throws, each announced once with the time left before its impact. */
+    private readonly _catastropheMessageStream = new Subject<CatastropheMessage>();
+    public readonly catastropheMessageStream = this._catastropheMessageStream.asObservable();
+    /** The fishing lines of the room, whenever one changes. */
+    private readonly _fishingMessageStream = new Subject<FishingMessage>();
+    public readonly fishingMessageStream = this._fishingMessageStream.asObservable();
+    /** The ice fishing shacks of the room, whenever one changes. */
+    private readonly _iceShacksMessageStream = new Subject<IceShacksMessage>();
+    public readonly iceShacksMessageStream = this._iceShacksMessageStream.asObservable();
     private readonly _entityMessageStream = new Subject<EntityMessageTsProto>();
     public readonly entityMessageStream = this._entityMessageStream.asObservable();
     private readonly _editMapCommandMessageStream = new Subject<EditMapCommandMessage>();
@@ -455,6 +491,42 @@ export class RoomConnection implements RoomConnection {
                                     });
                                     break;
                                 }
+                                case "entityStateMessage": {
+                                    this._entityStateMessageStream.next(subMessage.entityStateMessage);
+                                    break;
+                                }
+                                case "terrainWaterMessage": {
+                                    this._terrainWaterMessageStream.next(subMessage.terrainWaterMessage);
+                                    break;
+                                }
+                                case "treeFireMessage": {
+                                    this._treeFireMessageStream.next(subMessage.treeFireMessage);
+                                    break;
+                                }
+                                case "meadowMessage": {
+                                    this._meadowMessageStream.next(subMessage.meadowMessage);
+                                    break;
+                                }
+                                case "fireConditionsMessage": {
+                                    this._fireConditionsMessageStream.next(subMessage.fireConditionsMessage);
+                                    break;
+                                }
+                                case "aquaticLifeMessage": {
+                                    this._aquaticLifeMessageStream.next(subMessage.aquaticLifeMessage);
+                                    break;
+                                }
+                                case "catastropheMessage": {
+                                    this._catastropheMessageStream.next(subMessage.catastropheMessage);
+                                    break;
+                                }
+                                case "fishingMessage": {
+                                    this._fishingMessageStream.next(subMessage.fishingMessage);
+                                    break;
+                                }
+                                case "iceShacksMessage": {
+                                    this._iceShacksMessageStream.next(subMessage.iceShacksMessage);
+                                    break;
+                                }
                                 case "entityMessage": {
                                     this._entityMessageStream.next(subMessage.entityMessage);
                                     break;
@@ -658,6 +730,14 @@ export class RoomConnection implements RoomConnection {
                         companionTexture: roomJoinedMessage.companionTexture,
                         playerVariables,
                         areaPropertyVariables,
+                        entityStates: roomJoinedMessage.entityState ?? [],
+                        terrainWater: roomJoinedMessage.terrainWater,
+                        aquaticLife: roomJoinedMessage.aquaticLife,
+                        meadow: roomJoinedMessage.meadow,
+                        treeFire: roomJoinedMessage.treeFire,
+                        fireConditions: roomJoinedMessage.fireConditions,
+                        fishing: roomJoinedMessage.fishing,
+                        iceShacks: roomJoinedMessage.iceShacks,
                         applications: applications,
                     } as RoomJoinedMessageInterface);
                     this.isRoomJoined = true;
@@ -775,12 +855,17 @@ export class RoomConnection implements RoomConnection {
                         // The position is where the colleague stands: often on a seat or against a desk, whose hitbox
                         // makes that exact point unreachable. Walk to the nearest free spot instead of not moving, and
                         // stop one tile before them rather than on top of them.
-                        gameManager
-                            .getCurrentGameScene()
-                            .moveTo(message.moveToPositionMessage.position, true, WOKA_SPEED * 2.5, GO_TO_USER_GAP)
-                            .catch((error) => {
-                                console.warn(error);
-                            });
+                        const scene = gameManager.getCurrentGameScene();
+                        // An accepted invitation takes one to the caller at once, as a call would.
+                        if (scene.inviteManager?.takePendingTeleport()) {
+                            scene.teleportNextTo(message.moveToPositionMessage.position, GO_TO_USER_GAP);
+                        } else {
+                            scene
+                                .moveTo(message.moveToPositionMessage.position, true, WOKA_SPEED * 2.5, GO_TO_USER_GAP)
+                                .catch((error) => {
+                                    console.warn(error);
+                                });
+                        }
                     }
                     this._moveToPositionMessageStream.next(message.moveToPositionMessage);
                     break;
@@ -1156,6 +1241,107 @@ export class RoomConnection implements RoomConnection {
         });
     }
 
+    /** The use of a switch of the map: asks the server to set the state `key` of the objects it commands. */
+    emitSetEntityState(switchId: string, entityIds: string[], key: string, value: string): void {
+        this.send({
+            message: {
+                $case: "setEntityStateMessage",
+                setEntityStateMessage: { switchId, entityIds, key, value },
+            },
+        });
+    }
+
+    /** Casts the fishing line of the player: where the float should land, in map pixels. The server decides. */
+    emitCastFishingLine(x: number, y: number): void {
+        this.send({
+            message: {
+                $case: "castFishingLineMessage",
+                castFishingLineMessage: { x: Math.round(x), y: Math.round(y) },
+            },
+        });
+    }
+
+    /** Sets the conditions the fire of the room goes by, by hand or back to the real ones. The server decides. */
+    emitSetFireConditions(conditions: SetFireConditionsMessage): void {
+        this.send({ message: { $case: "setFireConditionsMessage", setFireConditionsMessage: conditions } });
+    }
+
+    /** Launches a catastrophe at a point of the map, in map pixels. The server decides. */
+    emitLaunchCatastrophe(
+        kind: CatastropheKind,
+        x: number,
+        y: number,
+        radiusTiles: number,
+        wholeMap = false,
+        /** A ball: its player lets it go. */
+        release = false,
+        /** A cold snap: the temperature of its air, in °C. */
+        temperature?: number,
+        /** A hurricane: how it crosses the map. */
+        hurricane?: HurricaneTrackMessage,
+    ): void {
+        this.send({
+            message: {
+                $case: "launchCatastropheMessage",
+                launchCatastropheMessage: {
+                    kind,
+                    x: Math.round(x),
+                    y: Math.round(y),
+                    radiusTiles,
+                    wholeMap,
+                    release,
+                    ...(temperature === undefined ? {} : { temperature }),
+                    ...(hurricane === undefined ? {} : { hurricane }),
+                },
+            },
+        });
+    }
+
+    /** Puts up, enters, leaves or takes down an ice fishing shack. The server decides. */
+    emitIceShackAction(action: IceShackAction, shackId = 0): void {
+        this.send({ message: { $case: "iceShackActionMessage", iceShackActionMessage: { action, shackId } } });
+    }
+
+    /** Starts a fishing contest in the room: 3, 5 or 10 minutes. The server refuses it while one runs. */
+    emitStartFishingContest(minutes: number): void {
+        this.send({
+            message: {
+                $case: "startFishingContestMessage",
+                startFishingContestMessage: { minutes },
+            },
+        });
+    }
+
+    /** The key of the fishing rod again: hooks a biting fish, or brings the line back. */
+    emitReelFishingLine(): void {
+        this.send({
+            message: {
+                $case: "reelFishingLineMessage",
+                reelFishingLineMessage: {},
+            },
+        });
+    }
+
+    /** Tells the server which presence sensors one of the wandering animals of this browser stands in. */
+    emitReportSwitchPresence(switchIds: string[]): void {
+        this.send({
+            message: {
+                $case: "reportSwitchPresenceMessage",
+                reportSwitchPresenceMessage: { switchIds },
+            },
+        });
+    }
+
+    /** Asks the server for an animal of the life of the map that is near the player. */
+    emitTameAnimal(animalId: number): void {
+        this.send({ message: { $case: "tameAnimalMessage", tameAnimalMessage: { animalId } } });
+    }
+
+    /** Lets go one of the animals the player tamed, or all of them. */
+    emitReleaseAnimals(animalId?: number): void {
+        this.send({ message: { $case: "releaseAnimalsMessage", releaseAnimalsMessage: { animalId } } });
+    }
+
     emitSetAreaPropertyVariable(areaId: string, propertyId: string, key: string, value: unknown): void {
         this.send({
             message: {
@@ -1421,6 +1607,23 @@ export class RoomConnection implements RoomConnection {
         });
     }
 
+    public emitModifyTerrain(commandId: string, modifyTerrainMessage: ModifyTerrainMessage): void {
+        this.send({
+            message: {
+                $case: "editMapCommandMessage",
+                editMapCommandMessage: {
+                    id: commandId,
+                    editMapMessage: {
+                        message: {
+                            $case: "modifyTerrainMessage",
+                            modifyTerrainMessage,
+                        },
+                    },
+                },
+            },
+        });
+    }
+
     public emitMapEditorDeleteArea(commandId: string, id: string): void {
         this.send({
             message: {
@@ -1521,6 +1724,7 @@ export class RoomConnection implements RoomConnection {
                                 properties: config.properties ?? [],
                                 name: config.name,
                                 depthStep: config.depthStep,
+                                elevation: config.elevation,
                                 width: entityDimensions.width,
                                 height: entityDimensions.height,
                             },
@@ -2328,6 +2532,15 @@ export class RoomConnection implements RoomConnection {
         this._duckRushEventMessageStream.complete();
         this._variableMessageStream.complete();
         this._areaPropertyVariableMessageStream.complete();
+        this._entityStateMessageStream.complete();
+        this._terrainWaterMessageStream.complete();
+        this._meadowMessageStream.complete();
+        this._treeFireMessageStream.complete();
+        this._fireConditionsMessageStream.complete();
+        this._aquaticLifeMessageStream.complete();
+        this._fishingMessageStream.complete();
+        this._iceShacksMessageStream.complete();
+        this._catastropheMessageStream.complete();
         this._entityMessageStream.complete();
         this._editMapCommandMessageStream.complete();
         this._playerDetailsUpdatedMessageStream.complete();

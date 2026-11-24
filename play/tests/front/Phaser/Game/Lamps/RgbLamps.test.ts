@@ -21,7 +21,8 @@ vi.mock("../../../../../src/front/Phaser/Game/Lamps/RgbLampVisual", () => ({
         private readonly fake: FakeVisual;
         public textureKey = "";
         constructor(_scene: unknown, id: string) {
-            this.fake = { id, draws: [], visible: true, destroyed: false };
+            // Like the real one, hidden until its lamp shows it.
+            this.fake = { id, draws: [], visible: false, destroyed: false };
             this.textureKey = `rgb-lamp:${id}`;
             visuals.push(this.fake);
         }
@@ -39,6 +40,8 @@ vi.mock("../../../../../src/front/Phaser/Game/Lamps/RgbLampVisual", () => ({
 
 const { RgbLamps } = await import("../../../../../src/front/Phaser/Game/Lamps/RgbLamps");
 const { rgbLampLightsStore, rgbLampPreviewStore } = await import("../../../../../src/front/Stores/RgbLampStore");
+const { setLightBounceStrength, setLightSecondBounce } =
+    await import("../../../../../src/front/Phaser/Game/Lamps/LightSoftEdge");
 
 const prefab = (overrides: Partial<EntityPrefab>): EntityPrefab => ({
     id: "prefab",
@@ -78,6 +81,7 @@ function entity(id: string, x: number, y: number, model: EntityPrefab): { fake: 
     };
     const object = Object.assign(fake, {
         getPrefab: () => model,
+        getElevation: () => 0,
         getProperties: () => fake.properties,
     });
     return { fake, entity: object as unknown as Entity };
@@ -92,6 +96,10 @@ const freeGrid = (): number[][] => Array.from({ length: 40 }, () => Array.from({
 /** What the lamps are given in place of the clock of the server and of the preference of the system. */
 const clock = { now: 0 };
 let reducedMotion = false;
+/** The lamps a switch put out. */
+const switchedOff = new Set<string>();
+/** The lamps the energy saving puts out (see EnergySaving). */
+const saved = new Set<string>();
 
 function setup(grid = freeGrid()) {
     const scene = mockDeep<GameScene>();
@@ -104,7 +112,13 @@ function setup(grid = freeGrid()) {
     wrapper.getMap.mockReturnValue({ tilewidth: 32, tileheight: 32 } as ReturnType<typeof wrapper.getMap>);
     scene.getGameMapFrontWrapper.mockReturnValue(wrapper);
     scene.isDoorOpen.mockImplementation((id: string) => state.openDoors.has(id));
-    const lamps = new RgbLamps(scene, 5, { now: () => clock.now, reducedMotion });
+    const lamps = new RgbLamps(scene, 5, {
+        now: () => clock.now,
+        reducedMotion,
+        isOn: (id) => !switchedOff.has(id),
+        isSaved: (lamp) => saved.has(lamp.entityId),
+        fadeNow: () => clock.now,
+    });
     return { scene, state, lamps, worldView };
 }
 
@@ -116,15 +130,19 @@ afterEach(() => {
     rgbLampPreviewStore.set(undefined);
     clock.now = 0;
     reducedMotion = false;
+    switchedOff.clear();
+    saved.clear();
+    setLightBounceStrength(0);
+    setLightSecondBounce(false);
 });
 
 function start(entities: Entity[], grid?: number[][]) {
     const context = setup(grid);
     current = context.lamps;
     const map = new Map(entities.map((object) => [object.entityId, object]));
-    const tick = (editorOpen = false): void => {
+    const tick = (editorOpen = false, lightsInEditor = false): void => {
         context.lamps.reconcile(map);
-        context.lamps.update(editorOpen);
+        context.lamps.update(editorOpen, true, lightsInEditor);
     };
     tick();
     return { ...context, map, tick };
@@ -231,6 +249,80 @@ describe("RgbLamps", () => {
         expect(isLit(visuals[0].draws[1].polygon, { x: 640, y: 780 })).toBe(true);
     });
 
+    it("sends light back from the wall it falls on, once the bounce is set: small lights in front of the wall", () => {
+        setLightBounceStrength(0.5);
+        const grid = freeGrid();
+        // A wall two tiles south of the lamp, five tiles wide: its north side is at y = 704.
+        for (let x = 18; x <= 22; x++) grid[22][x] = 1;
+        start([lamp("a", 624, 624).entity], grid);
+
+        const bounces = visuals.filter((visual) => visual.id.startsWith("a:bounce:"));
+        expect(bounces.length).toBeGreaterThan(0);
+        for (const bounce of bounces) {
+            const { light, intensity } = bounce.draws[0];
+            expect(light.y).toBeLessThan(704);
+            expect(light.y).toBeGreaterThan(690);
+            expect(light.angle).toBe(180);
+            expect(intensity).toBeGreaterThan(0);
+            expect(intensity).toBeLessThan(0.5);
+            expect(bounce.visible).toBe(true);
+            // Lit on the side of the lamp, not through the wall.
+            expect(isLit(bounce.draws[0].polygon, { x: light.x, y: light.y - 20 })).toBe(true);
+            expect(isLit(bounce.draws[0].polygon, { x: light.x, y: 760 })).toBe(false);
+        }
+        const published = get(rgbLampLightsStore).map((light) => light.id);
+        expect(published).toContain("a");
+        expect(published).toContain("a:bounce:0");
+    });
+
+    it("sends light back a second time only when asked: a few more lights, fainter than the first", () => {
+        setLightBounceStrength(1);
+        const grid = freeGrid();
+        // A corridor around the lamp: walls north and south of it, and one to the east.
+        for (let x = 14; x <= 23; x++) {
+            grid[17][x] = 1;
+            grid[22][x] = 1;
+        }
+        for (let y = 17; y <= 22; y++) grid[y][23] = 1;
+        start([lamp("a", 624, 624).entity], grid);
+        const once = visuals.filter((visual) => visual.id.startsWith("a:bounce:") && visual.visible).length;
+        expect(once).toBeGreaterThan(0);
+
+        current?.destroy();
+        visuals.length = 0;
+        setLightSecondBounce(true);
+        start([lamp("a", 624, 624).entity], grid);
+        const lit = visuals.filter((visual) => visual.id.startsWith("a:bounce:") && visual.visible);
+
+        expect(lit.length).toBeGreaterThan(once);
+        expect(lit.length).toBeLessThanOrEqual(once + 4);
+        const strengths = lit.map((visual) => visual.draws[visual.draws.length - 1].intensity ?? 0);
+        // A share of a share: no second bounce is stronger than the strongest first one.
+        expect(Math.max(...strengths.slice(once))).toBeLessThan(Math.max(...strengths.slice(0, once)));
+    });
+
+    it("sends nothing back without a wall, nor once a switch put the lamp out", () => {
+        setLightBounceStrength(0.5);
+        start([lamp("open", 624, 624).entity]);
+        expect(visuals.filter((visual) => visual.id.includes(":bounce:"))).toEqual([]);
+
+        const grid = freeGrid();
+        for (let x = 18; x <= 22; x++) grid[22][x] = 1;
+        current?.destroy();
+        visuals.length = 0;
+        const { tick } = start([lamp("a", 624, 624).entity], grid);
+        switchedOff.add("a");
+        // The lamp fades out: put out for good a moment later.
+        tick();
+        clock.now += 1000;
+        tick();
+
+        expect(visuals.filter((visual) => visual.id.startsWith("a:bounce:")).every((visual) => !visual.visible)).toBe(
+            true,
+        );
+        expect(get(rgbLampLightsStore)).toEqual([]);
+    });
+
     it("is not drawn again when the map changes out of its reach", () => {
         const { state, tick } = start([lamp("a", 624, 624).entity]);
         const changed = freeGrid();
@@ -320,6 +412,165 @@ describe("RgbLamps", () => {
         lamps.destroy();
         expect(visuals[0].destroyed).toBe(true);
         expect(get(rgbLampLightsStore)).toEqual([]);
+    });
+});
+
+describe("RgbLamps a switch puts out", () => {
+    it("gives no light at all once out: nothing drawn, nothing through the night veil", () => {
+        switchedOff.add("a");
+        start([lamp("a", 624, 624).entity]);
+        expect(visuals[0].draws).toEqual([]);
+        expect(visuals[0].visible).toBe(false);
+        expect(get(rgbLampLightsStore)).toEqual([]);
+    });
+
+    it("fades out over 200 ms when switched off, then leaves the night veil", () => {
+        const { tick, scene } = start([lamp("a", 624, 624).entity]);
+        expect(visuals[0].draws.at(-1)?.intensity).toBe(1);
+
+        switchedOff.add("a");
+        tick();
+        clock.now = 100;
+        tick();
+        expect(visuals[0].draws.at(-1)?.intensity).toBeCloseTo(0.5);
+        expect(get(rgbLampLightsStore)).toHaveLength(1);
+
+        scene.markDirty.mockClear();
+        clock.now = 200;
+        tick();
+        expect(visuals[0].visible).toBe(false);
+        expect(get(rgbLampLightsStore)).toEqual([]);
+        expect(scene.markDirty.mock.calls.length).toBeGreaterThan(0);
+    });
+
+    it("lights again at full strength when switched back on", () => {
+        switchedOff.add("a");
+        const { tick } = start([lamp("a", 624, 624).entity]);
+
+        switchedOff.delete("a");
+        tick();
+        clock.now = 200;
+        tick();
+
+        expect(visuals[0].visible).toBe(true);
+        expect(visuals[0].draws.at(-1)?.intensity).toBe(1);
+        expect(get(rgbLampLightsStore)).toHaveLength(1);
+    });
+
+    it("costs nothing while it stays out", () => {
+        switchedOff.add("a");
+        const { tick, scene } = start([lamp("a", 624, 624).entity]);
+        scene.markDirty.mockClear();
+        tick();
+        tick();
+        expect(visuals[0].draws).toEqual([]);
+        expect(scene.markDirty.mock.calls.length).toBe(0);
+    });
+
+    it("is out in the map editor, even when on, so that its glow does not hide the map", () => {
+        const { tick } = start([lamp("a", 624, 624).entity]);
+        tick();
+        expect(visuals[0].visible).toBe(true);
+        tick(true);
+        expect(visuals[0].visible).toBe(false);
+        expect(get(rgbLampLightsStore)).toHaveLength(0);
+    });
+
+    it("shines in the map editor, even when out, once the editor shows the lighting of the game", () => {
+        switchedOff.add("a");
+        const { tick } = start([lamp("a", 624, 624).entity]);
+        tick(true, true);
+        expect(visuals[0].visible).toBe(true);
+        expect(visuals[0].draws.at(-1)?.intensity).toBe(1);
+        expect(get(rgbLampLightsStore)).toHaveLength(1);
+    });
+
+    it("does not turn while it is out", () => {
+        switchedOff.add("a");
+        const made = lamp("a", 624, 624);
+        made.fake.properties = [
+            {
+                id: "p",
+                type: "rgbLampPropertyData",
+                color: "#ff0000",
+                radius: 6,
+                direction: 90,
+                angle: 90,
+                rotation: true,
+                rotationSpeed: 30,
+            },
+        ];
+        const { tick } = start([made.entity]);
+        clock.now = 500;
+        tick();
+        expect(visuals[0].draws).toEqual([]);
+    });
+});
+
+describe("RgbLamps the energy saving puts out by day", () => {
+    it("gives no light at all while saved, though its switch left it on: nothing drawn, nothing through the veil", () => {
+        saved.add("a");
+        start([lamp("a", 624, 624).entity]);
+        expect(visuals[0].draws).toEqual([]);
+        expect(visuals[0].visible).toBe(false);
+        expect(get(rgbLampLightsStore)).toEqual([]);
+    });
+
+    it("sends nothing back from the walls while saved", () => {
+        setLightBounceStrength(1);
+        const grid = freeGrid();
+        for (let col = 0; col < 40; col++) grid[22][col] = 1;
+        const { tick } = start([lamp("a", 624, 624).entity], grid);
+        expect(get(rgbLampLightsStore).length).toBeGreaterThan(1);
+        saved.add("a");
+        tick();
+        clock.now = 1500;
+        tick();
+        expect(get(rgbLampLightsStore)).toEqual([]);
+        expect(visuals.every((visual) => !visual.visible)).toBe(true);
+    });
+
+    it("fades out over 1.5 s once saved, then leaves the night veil", () => {
+        const { tick, scene } = start([lamp("a", 624, 624).entity]);
+        saved.add("a");
+        tick();
+        clock.now = 750;
+        tick();
+        expect(visuals[0].draws.at(-1)?.intensity).toBeCloseTo(0.5);
+        expect(get(rgbLampLightsStore)).toHaveLength(1);
+        scene.markDirty.mockClear();
+        clock.now = 1500;
+        tick();
+        expect(visuals[0].visible).toBe(false);
+        expect(get(rgbLampLightsStore)).toEqual([]);
+        expect(scene.markDirty.mock.calls.length).toBeGreaterThan(0);
+    });
+
+    it("comes back as its switch left it once the daylight is gone: on, or still out", () => {
+        saved.add("a");
+        saved.add("b");
+        switchedOff.add("b");
+        const { tick } = start([lamp("a", 624, 624).entity, lamp("b", 224, 224).entity]);
+        saved.clear();
+        tick();
+        clock.now = 1500;
+        tick();
+        const lights = get(rgbLampLightsStore).map((light) => light.id);
+        expect(lights).toEqual(["a"]);
+    });
+
+    it("leaves the other lamps alone", () => {
+        saved.add("a");
+        start([lamp("a", 624, 624).entity, lamp("b", 224, 224).entity]);
+        expect(get(rgbLampLightsStore).map((light) => light.id)).toEqual(["b"]);
+    });
+
+    it("shines in the map editor that shows the lighting of the game, as before, so that it can be set", () => {
+        saved.add("a");
+        const { tick } = start([lamp("a", 624, 624).entity]);
+        tick(true, true);
+        expect(visuals[0].visible).toBe(true);
+        expect(get(rgbLampLightsStore)).toHaveLength(1);
     });
 });
 

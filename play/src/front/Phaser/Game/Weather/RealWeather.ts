@@ -19,8 +19,6 @@ export type RealWeatherState =
           since: number;
           /** End of the run when known, for a fog to fade out. */
           until?: number;
-          /** When a snow just before this weather stopped, for the ground to melt. */
-          snowMeltFrom?: number;
           /** Clouds of a clear sky, 0 to 1, faded in from those of the quarter hour before. */
           cloudiness?: number;
           /** Cloud cover of a rain or a storm, 0 to 1: how dense its grey or dark clouds are. */
@@ -29,6 +27,12 @@ export type RealWeatherState =
           windFrom?: number;
           /** Wind speed (km/h), changed from that of the quarter hour before. */
           windSpeed?: number;
+          /** Since when it has been raining (rain and storm together), for the puddles to fill. */
+          rainSince?: number;
+          /** When the last rain stopped, for the puddles to dry. */
+          rainDryFrom?: number;
+          /** How hard it rains (mm an hour), changed from that of the quarter hour before. */
+          rainRate?: number;
       }
     | { status: "unavailable" };
 
@@ -43,7 +47,10 @@ function turnedWind(before: number | undefined, now: number | undefined, elapsed
     return (before + turn * share + 360) % 360;
 }
 
-/** The wind speed from `before` to `now`, `elapsed` ms into the quarter hour, over the same ten minutes as its turn. */
+/**
+ * A speed or a rate from `before` to `now`, `elapsed` ms into the quarter hour, over the same ten minutes as the turn
+ * of the wind: the wind speed, and how hard it rains.
+ */
 function changedWindSpeed(before: number | undefined, now: number | undefined, elapsed: number): number | undefined {
     if (now === undefined || before === undefined) return now;
     return before + (now - before) * Math.max(0, Math.min(1, elapsed / WIND_TURN_MS));
@@ -58,7 +65,6 @@ export function realWeatherStateAt(forecast: RealForecastState, date: Date | und
     if (!date) return { status: "pending" };
     const now = realWeatherAt(forecast.slots, date.getTime());
     if (!now) return { status: "unavailable" };
-    const snowMeltFrom = now.before === WeatherType.Snow && now.weather !== WeatherType.Snow ? now.since : undefined;
     // White clouds belong to a clear sky: those of the quarter hour before count only if it was clear too.
     const weatherBefore = now.slotAt === now.since ? now.before : now.weather;
     const clearBefore = weatherBefore === WeatherType.Clear ? now.cloudinessBefore : 0;
@@ -67,22 +73,28 @@ export function realWeatherStateAt(forecast: RealForecastState, date: Date | und
     const raining = now.weather === WeatherType.Rain || now.weather === WeatherType.Storm;
     const windFrom = turnedWind(now.windFromBefore, now.windFrom, date.getTime() - now.slotAt);
     const windSpeed = changedWindSpeed(now.windSpeedBefore, now.windSpeed, date.getTime() - now.slotAt);
+    // A rain that starts or stops does so at once, as before: only a rain going on gets harder or lighter slowly.
+    const rainRate = raining
+        ? changedWindSpeed(now.rainRateBefore, now.rainRate, date.getTime() - now.slotAt)
+        : undefined;
     return {
         status: "known",
         weather: now.weather,
         since: now.since,
         until: now.until,
-        snowMeltFrom,
         ...(cloudiness > 0 ? { cloudiness } : {}),
         ...(raining && now.cloudiness > 0 ? { cloudCover: now.cloudiness } : {}),
         ...(windFrom !== undefined ? { windFrom } : {}),
         ...(windSpeed !== undefined ? { windSpeed } : {}),
+        ...(rainRate !== undefined ? { rainRate } : {}),
+        ...(now.rainSince !== undefined ? { rainSince: now.rainSince } : {}),
+        ...(now.rainEndedAt !== undefined ? { rainDryFrom: now.rainEndedAt } : {}),
     };
 }
 
 /**
  * The map weather settings with "real" replaced by what it shows: the weather of the quarter hour under way, begun at
- * the start of its run (so fog and snow fade in); clear until the first answer, so no drawn weather flashes on load; the seasonal
+ * the start of its run (so a fog fades in); clear until the first answer, so no drawn weather flashes on load; the seasonal
  * draw with the map's Auto settings while the weather service is unavailable. Other modes are returned untouched.
  */
 export function withRealWeather(
@@ -97,11 +109,13 @@ export function withRealWeather(
                 weather: real.weather,
                 weatherStartedAt: real.since,
                 weatherEndsAt: real.until,
-                snowMeltFrom: real.snowMeltFrom,
                 cloudiness: real.cloudiness,
                 cloudCover: real.cloudCover,
                 windFrom: real.windFrom,
                 windSpeed: real.windSpeed,
+                rainRate: real.rainRate,
+                rainSince: real.rainSince,
+                rainDryFrom: real.rainDryFrom,
                 weatherAuto,
                 weatherLocation,
             };
@@ -137,4 +151,18 @@ export function withWeatherPreview(
         // A preview may try going back to the default place (weatherLocation present but undefined).
         weatherLocation: "weatherLocation" in preview ? preview.weatherLocation : settings?.weatherLocation,
     };
+}
+
+/**
+ * A weather that is not the real one (a fixed tile, the automatic one), with the real wind of the place of the map
+ * when it is known: the clouds, the trees and the rain then go the way the wind of the banner says. The weather
+ * itself is untouched; without a known wind the usual drift stays. A map in Real already has its wind.
+ */
+export function withRealWind<T extends { weather?: WeatherType; windFrom?: number; windSpeed?: number }>(
+    settings: T | undefined,
+    real: RealWeatherState,
+): T | undefined {
+    if (!settings || settings.weather === WeatherType.Real || real.status !== "known") return settings;
+    if (real.windFrom === undefined && real.windSpeed === undefined) return settings;
+    return { ...settings, windFrom: real.windFrom, windSpeed: real.windSpeed };
 }

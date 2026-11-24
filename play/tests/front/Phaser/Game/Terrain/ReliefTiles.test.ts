@@ -1,0 +1,1418 @@
+import { describe, expect, it, vi } from "vitest";
+import * as Phaser from "phaser";
+import { cellKey, Season, withHeights, withSoils } from "@workadventure/map-editor";
+import type { TerrainData } from "@workadventure/map-editor";
+import { ReliefTiles } from "../../../../../src/front/Phaser/Game/Terrain/ReliefTiles";
+import type { GroundLayout } from "../../../../../src/front/Phaser/Game/Terrain/ReliefTiles";
+import { TerrainWater } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
+import type { WaterState } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
+import { MeadowState } from "../../../../../src/front/Phaser/Game/Terrain/MeadowState";
+import { BlockPainter } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/BlockPainter";
+import type { BlockJob } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/BlockPainter";
+import { RAMPS, rampsFor } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
+import type { Rgb } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
+import type * as GroundPixel from "../../../../../src/front/Phaser/Game/Terrain/Pixel/GroundPixel";
+
+// The rays of the shadows are counted (the same function, counted): the work of a block, not its time.
+const rays = vi.hoisted(() => ({ count: 0 }));
+vi.mock("../../../../../src/front/Phaser/Game/Terrain/Pixel/GroundPixel", async (importOriginal) => {
+    const actual = await importOriginal<typeof GroundPixel>();
+    const shadowHorizon: typeof actual.shadowHorizon = (...args) => {
+        rays.count++;
+        return actual.shadowHorizon(...args);
+    };
+    return { ...actual, shadowHorizon };
+});
+
+/**
+ * The guards measured with the clock of the machine: they depend on its speed and its load, so they are not run with
+ * the suite (they made it fail at random). Run apart with RELIEF_REAL_TIME=1; the suite checks the same with counts.
+ */
+const REAL_TIME = import.meta.env.RELIEF_REAL_TIME === "1";
+
+// Drawing blocks until they all show takes a second or two, many more on a loaded machine: the 5 s of a test by
+// default made the suite fail at random there, a test that times out saying nothing of the relief.
+vi.setConfig({ testTimeout: 30_000 });
+
+/** Runs `run` with a clock that moves `step` ms at each look: the budgets of an image, the same on any machine. */
+function withClock<T>(step: number, run: () => T): T {
+    let clock = 0;
+    const now = vi.spyOn(performance, "now").mockImplementation(() => (clock += step));
+    try {
+        return run();
+    } finally {
+        now.mockRestore();
+    }
+}
+
+/** Hollows dug all over a large part of the map: every block of 256 px holds some. */
+function dugEverywhere(): TerrainData {
+    const changes = new Map<string, number>();
+    for (let x = 0; x < 160; x += 4) for (let y = 0; y < 160; y += 4) changes.set(cellKey(x, y), -64);
+    return withHeights(undefined, changes);
+}
+
+function fixture(
+    terrain: TerrainData | undefined = dugEverywhere(),
+    meadow?: MeadowState,
+    options: {
+        layout?: GroundLayout;
+        season?: () => Season | undefined;
+        snowLineSeason?: Season;
+        snowCoverAt?: (x: number, y: number) => number;
+        groundVersion?: () => number;
+        screenScale?: () => number;
+        mapSize?: { width: number; height: number };
+        /** Drawn with WebGL: the pixels go straight to textures (`painted` holds what each was last sent). */
+        webgl?: boolean;
+        /** With workers (fake ones: `pool.flush()` paints what was posted and answers it). */
+        pool?: boolean;
+    } = {},
+) {
+    const worldView = { x: 300, y: 300, width: 600, height: 400 };
+    const images: { visible: boolean }[] = [];
+    /** The last pixels put in each block, by texture key. */
+    const painted = new Map<string, Uint8ClampedArray>();
+    /** How many times a block was shown (drawn on its canvas). */
+    let shows = 0;
+    const image = () => {
+        const object = {
+            visible: true,
+            setOrigin: () => object,
+            setDisplaySize: () => object,
+            setDepth: () => object,
+            setVisible: (visible: boolean) => {
+                object.visible = visible;
+                return object;
+            },
+            // A destroyed image shows no more.
+            destroy: () => {
+                object.visible = false;
+            },
+        };
+        images.push(object);
+        return object;
+    };
+    const texture = (key: string) => ({
+        key,
+        source: [{ scaleMode: 0 }],
+        setFilter: vi.fn(),
+        refresh: vi.fn(),
+        destroy: vi.fn(),
+        getContext: () => ({
+            createImageData: (width: number, height: number) => ({ data: new Uint8ClampedArray(width * height * 4) }),
+            putImageData: (pixels: { data: Uint8ClampedArray }) => {
+                shows++;
+                painted.set(key, pixels.data);
+            },
+        }),
+    });
+    /** The listeners of the renderer (the WebGL context restored). */
+    const listeners = new Map<string, Set<() => void>>();
+    const renderer = {
+        type: Phaser.WEBGL,
+        on: (event: string, listener: () => void) => {
+            listeners.set(event, (listeners.get(event) ?? new Set()).add(listener));
+        },
+        off: (event: string, listener: () => void) => {
+            listeners.get(event)?.delete(listener);
+        },
+        emit: (event: string) => [...(listeners.get(event) ?? [])].forEach((listener) => listener()),
+        listenerCount: () => [...listeners.values()].reduce((count, set) => count + set.size, 0),
+    };
+    const pixelTexture = (key: string) => ({
+        key,
+        setFilter: vi.fn(),
+        destroy: vi.fn(),
+        source: [
+            {
+                glTexture: {
+                    flipY: true,
+                    wrapS: 0,
+                    wrapT: 0,
+                    minFilter: 0,
+                    magFilter: 0,
+                    format: 0,
+                    update: (pixels: Uint8Array) => painted.set(key, Uint8ClampedArray.from(pixels)),
+                },
+            },
+        ],
+    });
+    const scene = {
+        cameras: { main: { worldView } },
+        textures: {
+            createCanvas: vi.fn((key: string) => texture(key)),
+            addUint8Array: vi.fn((key: string, data: Uint8Array) => {
+                painted.set(key, Uint8ClampedArray.from(data));
+                return pixelTexture(key);
+            }),
+        },
+        add: { image: vi.fn(() => image()) },
+        markDirty: vi.fn(),
+        ...(options.webgl ? { sys: { game: { renderer } } } : {}),
+    };
+    /** Fake workers: two, answered by hand. */
+    const waiting: { job: BlockJob; done: (pixels: Uint8ClampedArray | undefined) => void }[] = [];
+    let broken = false;
+    const pool = {
+        posted: [] as BlockJob[],
+        released: [] as Uint8ClampedArray[],
+        mostInFlight: 0,
+        /** The blocks it takes ahead. */
+        capacity: 2,
+        usable: () => !broken,
+        room: () => (broken ? 0 : pool.capacity - waiting.length),
+        post: (job: BlockJob, done: (pixels: Uint8ClampedArray | undefined) => void) => {
+            pool.posted.push(job);
+            waiting.push({ job, done });
+            pool.mostInFlight = Math.max(pool.mostInFlight, waiting.length);
+        },
+        release: (pixels: Uint8ClampedArray) => {
+            pool.released.push(pixels);
+        },
+        check: vi.fn(),
+        /** The blocks the workers were given and have not answered. */
+        inFlight: () => waiting.map((each) => each.job),
+        /** The workers answer every block they were given, in turn. */
+        flush: () => {
+            const painter = new BlockPainter();
+            const answered = waiting.splice(0);
+            for (const { job, done } of answered) done(painter.paint(job));
+            return answered.length;
+        },
+        /** The workers break down: the blocks in flight come back unpainted. */
+        breakDown: () => {
+            broken = true;
+            for (const { done } of waiting.splice(0)) done(undefined);
+        },
+    };
+    const water = new TerrainWater();
+    water.setTerrain(terrain);
+    let current: TerrainData | undefined = terrain;
+    const setTerrain = (next: TerrainData | undefined) => {
+        current = next;
+        water.setTerrain(next);
+    };
+    const tiles = new ReliefTiles(scene as never, {
+        relief: () => current,
+        meadow,
+        layout: options.layout,
+        water,
+        season: options.season ?? (() => undefined),
+        snowCoverAt: options.snowCoverAt ?? (() => 0),
+        groundVersion: options.groundVersion,
+        snowLineSeason: () => options.snowLineSeason,
+        screenScale: options.screenScale,
+        mapSize: options.mapSize && (() => options.mapSize ?? { width: 0, height: 0 }),
+        painters: options.pool ? pool : undefined,
+    });
+    // Updates until every block around the view is drawn: a block is drawn over several images, as many as the machine
+    // needs (more under the load of the whole suite).
+    let clock = 0;
+    const settle = () => {
+        let quiet = 0;
+        for (let frame = 0; frame < 5000 && quiet < 3; frame++) {
+            const before = tiles.redraws();
+            tiles.update(clock++);
+            const answered = pool.flush();
+            quiet = answered > 0 || tiles.isDrawing() || tiles.redraws() !== before ? 0 : quiet + 1;
+        }
+    };
+    /** Jumps the time of the game: the water has glided to its last state. */
+    const skip = (ms: number) => {
+        clock += ms;
+    };
+    return {
+        tiles,
+        worldView,
+        images,
+        settle,
+        painted,
+        setTerrain,
+        scene,
+        water,
+        clock: () => clock,
+        skip,
+        renderer,
+        pool,
+        shows: () => shows,
+    };
+}
+
+const near = (value: number, expected: number) => expect(Math.abs(value - expected)).toBeLessThanOrEqual(2);
+
+describe("the blocks of the relief seen in 3/4", () => {
+    it("draws no block again while the view scrolls or zooms over drawn blocks", () => {
+        const { tiles, worldView, settle } = fixture();
+        settle();
+        const drawn = tiles.redraws();
+        worldView.x += 40;
+        worldView.y -= 30;
+        tiles.update(200);
+        worldView.width = 560;
+        tiles.update(201);
+        expect(tiles.redraws()).toBe(drawn);
+    });
+
+    it("draws only a few blocks an image when many come into view at once: what fits in the time of an image", () => {
+        const { tiles, worldView, settle } = fixture();
+        settle();
+        // Zoomed far out: many blocks come into view.
+        Object.assign(worldView, { x: 0, y: 0, width: 2400, height: 2400 });
+        for (let frame = 0; frame < 5; frame++) {
+            const before = tiles.redraws();
+            tiles.update(300 + frame);
+            expect(tiles.redraws() - before).toBeLessThanOrEqual(16);
+        }
+    });
+
+    it("hides its blocks while the editor is open, and draws them again once it is closed", () => {
+        const { tiles, images, settle } = fixture();
+        settle();
+        tiles.setHidden(true);
+        expect(images.every((image) => !image.visible)).toBe(true);
+        expect(tiles.isActive()).toBe(false);
+        const drawn = tiles.redraws();
+        tiles.update(400);
+        expect(tiles.redraws()).toBe(drawn);
+        tiles.setHidden(false);
+        expect(tiles.isActive()).toBe(true);
+        tiles.update(401);
+        // Nothing kept from before the editor: what was edited in it is drawn again.
+        expect(tiles.redraws()).toBeGreaterThan(drawn);
+        expect(images.filter((image) => image.visible).length).toBeGreaterThan(0);
+    });
+
+    it("finds the ground drawn under a point while it is drawn in 3/4, and the point itself in the editor", () => {
+        // Dug 64 px deep from the cell 0 on: drawn 32 px lower.
+        const deep = withHeights(
+            undefined,
+            new Map(
+                Array.from({ length: 64 * 64 }, (_, index): [string, number] => [
+                    cellKey(index % 64, Math.floor(index / 64)),
+                    -64,
+                ]),
+            ),
+        );
+        const { tiles } = fixture(deep);
+        expect(tiles.groundPointAt({ x: 300, y: 300 + 32 }).y).toBeCloseTo(300, 0);
+        tiles.setHidden(true);
+        expect(tiles.groundPointAt({ x: 300, y: 332 })).toEqual({ x: 300, y: 332 });
+    });
+
+    it("leaves no seam between two blocks dug as deep as a map allows", () => {
+        // Dug 256 px deep (8 tiles) all over: drawn 128 px lower, every texel of a block is the floor.
+        const deepest = withHeights(
+            undefined,
+            new Map(
+                Array.from({ length: 96 * 96 }, (_, index): [string, number] => [
+                    cellKey(index % 96, Math.floor(index / 96)),
+                    -256,
+                ]),
+            ),
+        );
+        const { settle, painted } = fixture(deepest);
+        settle();
+        const block = painted.get("relief-block:2,2");
+        expect(block).toBeDefined();
+        const firstRow = Array.from({ length: 128 }, (_, column) => block?.[column * 4 + 3]);
+        expect(firstRow.every((alpha) => alpha === 255)).toBe(true);
+    });
+
+    it("draws in a block the top of a mount that rises from the block south of it, without a seam", () => {
+        // A mount 128 px high on the cells 20 to 27 across, 32 to 35 down (x 320 to 447, y 512 to 575): the first rows of
+        // the block 1,2, drawn 64 px higher, in the last rows of the block 1,1.
+        const changes = new Map<string, number>();
+        for (let x = 20; x <= 27; x++) for (let y = 32; y <= 35; y++) changes.set(cellKey(x, y), 128);
+        const { settle, painted } = fixture(withHeights(undefined, changes));
+        settle();
+        const north = painted.get("relief-block:1,1");
+        const south = painted.get("relief-block:1,2");
+        if (!north || !south) throw new Error("no block");
+        const alpha = (block: Uint8ClampedArray, column: number, row: number) => block[(row * 256 + column) * 4 + 3];
+        // The top of the mount (x 356, y 520 to 560) is drawn 64 px higher: y 456 to 496, the rows 200 to 240 of 1,1.
+        for (let row = 200; row <= 240; row++) expect(alpha(north, 100, row)).toBe(255);
+        // Nothing above the mount.
+        expect(alpha(north, 100, 150)).toBe(0);
+        // No seam: drawn on both sides of the edge of the blocks.
+        for (let column = 80; column < 180; column++) {
+            expect(alpha(north, column, 255)).toBe(255);
+            expect(alpha(south, column, 0)).toBe(255);
+        }
+    });
+
+    /**
+     * Sand on the cells 10 to 40, dug 8 px (drawn: without the layout of the map, flat ground is left to its tiles), a
+     * mount `height` px high on the cells 20 to 27 (x and y 320 to 447).
+     */
+    function mountOnSand(height: number): TerrainData {
+        const sand = new Map<string, number>();
+        const changes = new Map<string, number>();
+        for (let x = 10; x <= 40; x++)
+            for (let y = 10; y <= 40; y++) {
+                sand.set(cellKey(x, y), 4);
+                changes.set(cellKey(x, y), -8);
+            }
+        for (let x = 20; x <= 27; x++) for (let y = 20; y <= 27; y++) changes.set(cellKey(x, y), height);
+        return withHeights(withSoils(undefined, sand), changes);
+    }
+    const lightness = (block: Uint8ClampedArray, left: number, top: number): number => {
+        let total = 0;
+        for (let row = top; row < top + 8; row++)
+            for (let column = left; column < left + 8; column++) {
+                const at = (row * 256 + column) * 4;
+                total += block[at] + block[at + 1] + block[at + 2];
+            }
+        return total / 64;
+    };
+
+    it("draws a block whose window holds both the deepest hollow and the highest mount", () => {
+        const changes = new Map<string, number>();
+        for (let x = 20; x <= 23; x++) for (let y = 16; y <= 19; y++) changes.set(cellKey(x, y), -256);
+        for (let x = 24; x <= 27; x++) for (let y = 32; y <= 35; y++) changes.set(cellKey(x, y), 256);
+        const { settle, painted } = fixture(withHeights(undefined, changes));
+        expect(() => settle()).not.toThrow();
+        expect(painted.get("relief-block:1,1")).toBeDefined();
+    });
+
+    it("casts the shadow of a high mount across the edge of a block, not cut along it", () => {
+        // Sand dug 8 px on the cells 10 to 40, a mount 256 px high on the cells 22 to 27, 18 to 21 (x 352 to 447): its
+        // shadow reaches over the edge between the blocks 1,1 and 2,1 (x 512), more than 64 px east of it.
+        const sand = new Map<string, number>();
+        const changes = new Map<string, number>();
+        for (let x = 10; x <= 40; x++)
+            for (let y = 10; y <= 40; y++) {
+                sand.set(cellKey(x, y), 4);
+                changes.set(cellKey(x, y), -8);
+            }
+        for (let x = 22; x <= 27; x++) for (let y = 18; y <= 21; y++) changes.set(cellKey(x, y), 256);
+        const { settle, painted } = fixture(withHeights(withSoils(undefined, sand), changes));
+        settle();
+        const west = painted.get("relief-block:1,1");
+        const east = painted.get("relief-block:2,1");
+        if (!west || !east) throw new Error("no block");
+        // x 504 to 511 and 512 to 519, y 380 to 387 (drawn 4 px lower): both in the shadow.
+        const westLight = lightness(west, 248, 128);
+        const eastLight = lightness(east, 0, 128);
+        expect(Math.abs(westLight - eastLight)).toBeLessThan(westLight * 0.08);
+    });
+
+    it("casts the shadow of a mount on the ground south-east of it", () => {
+        const { settle, painted } = fixture(mountOnSand(128));
+        settle();
+        const block = painted.get("relief-block:1,1");
+        if (!block) throw new Error("no block");
+        // South-east of the mount (x and y 460 to 467) against north-west of it (300 to 307), both flat sand, drawn
+        // 4 px lower.
+        expect(lightness(block, 204, 208)).toBeLessThan(lightness(block, 44, 48) * 0.9);
+    });
+
+    /** A lake at the foot of the mount (or of the hollow): 20 px of water on the cells x 16 to 31, y 28 to 31. */
+    const lakeAtTheFoot = (water: TerrainWater) => {
+        const bytes = new Uint8Array(64 * 64 * 2);
+        for (let y = 28; y < 32; y++) for (let x = 16; x < 32; x++) bytes[(y * 64 + x) * 2] = 160;
+        water.receive({ x: 0, y: 0, width: 64, height: 64, seq: 1, full: true, depths: bytes }, 0);
+    };
+
+    it("draws a block with a mount, its shadow and a lake at its foot with no more work than a block dug as deep", () => {
+        // The work is counted, not timed: the blocks begun, the rows and columns the steps of the painter go through,
+        // and the rays of the shadows followed (from the first row and the first column of a block only).
+        const workOf = (terrain: TerrainData) => {
+            const painter = BlockPainter.prototype;
+            const spies = {
+                blocks: vi.spyOn(painter, "begin"),
+                ground: vi.spyOn(painter, "groundRows"),
+                horizon: vi.spyOn(painter, "horizonRows"),
+                colors: vi.spyOn(painter, "colorRows"),
+                columns: vi.spyOn(painter, "projectColumns"),
+            };
+            rays.count = 0;
+            const { tiles, water } = fixture(terrain);
+            lakeAtTheFoot(water);
+            // Until every block around the view is drawn, coarse then sharp; the clock moves 1 ms at each look.
+            withClock(1, () => {
+                let quiet = 0;
+                for (let frame = 0; frame < 5000 && quiet < 3; frame++) {
+                    const before = tiles.redraws();
+                    tiles.update(frame);
+                    quiet = tiles.isDrawing() || tiles.redraws() !== before ? 0 : quiet + 1;
+                }
+            });
+            const span = (calls: unknown[][]) => calls.reduce((sum, [from, to]) => sum + Number(to) - Number(from), 0);
+            const work = {
+                blocks: spies.blocks.mock.calls.length,
+                ground: span(spies.ground.mock.calls),
+                horizon: span(spies.horizon.mock.calls),
+                colors: span(spies.colors.mock.calls),
+                columns: span(spies.columns.mock.calls),
+                rays: rays.count,
+            };
+            for (const spy of Object.values(spies)) spy.mockRestore();
+            return work;
+        };
+        const dug = workOf(mountOnSand(-128));
+        const raised = workOf(mountOnSand(128));
+        expect(dug.blocks).toBeGreaterThan(0);
+        expect(raised.rays).toBeGreaterThan(0);
+        for (const kind of ["blocks", "ground", "horizon", "colors", "columns", "rays"] as const) {
+            expect(raised[kind], kind).toBeLessThanOrEqual(dug[kind] * 1.5);
+        }
+        // A ray is followed from the first row and the first column of a block only (256 points each at most): the
+        // other points take the horizon of their north-west neighbour.
+        expect(raised.rays).toBeLessThanOrEqual(raised.horizon + 256 * raised.blocks);
+    });
+
+    it.runIf(REAL_TIME)(
+        "draws a block with a mount, its shadow and a lake at its foot about as fast as a block dug as deep (real time)",
+        () => {
+            const timeOf = (terrain: TerrainData): number => {
+                const { tiles, water } = fixture(terrain);
+                // 20 px of water on the cells x 16 to 31, y 28 to 31: at the foot of the mount (or the hollow).
+                const bytes = new Uint8Array(64 * 64 * 2);
+                for (let y = 28; y < 32; y++) for (let x = 16; x < 32; x++) bytes[(y * 64 + x) * 2] = 160;
+                water.receive({ x: 0, y: 0, width: 64, height: 64, seq: 1, full: true, depths: bytes }, 0);
+                // Until every block around the view is drawn, coarse then sharp.
+                let total = 0;
+                let quiet = 0;
+                for (let frame = 0; frame < 5000 && quiet < 3; frame++) {
+                    const before = tiles.redraws();
+                    const start = performance.now();
+                    tiles.update(frame);
+                    total += performance.now() - start;
+                    quiet = tiles.isDrawing() || tiles.redraws() !== before ? 0 : quiet + 1;
+                }
+                return total;
+            };
+            const dug = timeOf(mountOnSand(-128));
+            const raised = timeOf(mountOnSand(128));
+            expect(raised).toBeLessThan(dug * 1.5 + 10);
+        },
+    );
+
+    describe("a mount from end to end", () => {
+        /** mountOnSand, the mount in rock: told apart from the sand around it. */
+        const rockMount = (): TerrainData => {
+            const rock = new Map<string, number>();
+            for (let x = 20; x <= 27; x++) for (let y = 20; y <= 27; y++) rock.set(cellKey(x, y), 5);
+            return withSoils(mountOnSand(128), rock);
+        };
+        const isOf = (ramp: readonly (readonly number[])[], block: Uint8ClampedArray, column: number, row: number) => {
+            const at = (row * 256 + column) * 4;
+            return ramp.some(
+                (shade) => shade[0] === block[at] && shade[1] === block[at + 1] && shade[2] === block[at + 2],
+            );
+        };
+        const RIM: Rgb = [0x2a, 0x24, 0x20];
+
+        it("draws its top higher by half its height, over the ground behind it, cerned at its foot", () => {
+            const { settle, painted } = fixture(rockMount());
+            settle();
+            const block = painted.get("relief-block:1,1");
+            if (!block) throw new Error("no block");
+            // The column x 356. The top of the mount at y 340 is drawn at 276 (row 20), in rock.
+            expect(isOf(RAMPS.rock, block, 100, 20)).toBe(true);
+            // The sand at y 300, north of the mount, is drawn at 304 (row 48) beside it; there the mount hides it.
+            expect(isOf(RAMPS.sand, block, 40, 48)).toBe(true);
+            expect(isOf(RAMPS.sand, block, 100, 48)).toBe(false);
+            // Nothing drawn above the top of the mount but the sand of the ground there.
+            expect(isOf(RAMPS.rock, block, 100, 2)).toBe(false);
+            // The foot of its south flank, cerned (drawn from 376 down to 460, the rows 120 to 204).
+            let rims = 0;
+            for (let row = 190; row <= 210; row++) {
+                const at = (row * 256 + 100) * 4;
+                if (block[at] === RIM[0] && block[at + 1] === RIM[1] && block[at + 2] === RIM[2]) rims++;
+            }
+            expect(rims).toBe(1);
+        });
+
+        it("wears snow on its top over the snow line of the season", () => {
+            const { settle, painted } = fixture(mountOnSand(128), undefined, {
+                season: () => Season.Winter,
+                snowLineSeason: Season.Winter,
+            });
+            settle();
+            const block = painted.get("relief-block:1,1");
+            if (!block) throw new Error("no block");
+            const winter = rampsFor(Season.Winter);
+            expect(isOf(winter.snow, block, 100, 40)).toBe(true);
+            // The sand south of it, below the snow line: no snow.
+            expect(isOf(winter.snow, block, 100, 240)).toBe(false);
+        });
+
+        it("is drawn flat while the map is edited, and found where it is drawn in 3/4", () => {
+            const { settle, painted, tiles } = fixture(rockMount());
+            settle();
+            near(tiles.groundPointAt({ x: 356, y: 340 - 64 }).y, 340);
+            tiles.setProjected(false);
+            settle();
+            const block = painted.get("relief-block:1,1");
+            if (!block) throw new Error("no block");
+            // Flat: the sand at y 276 at its place (row 20), the mount at its place only (row 84).
+            expect(isOf(RAMPS.sand, block, 100, 20)).toBe(true);
+            expect(isOf(RAMPS.rock, block, 100, 84)).toBe(true);
+            expect(tiles.groundPointAt({ x: 356, y: 276 }).y).toBe(276);
+        });
+    });
+
+    /** A flat floor dug 64 px deep over 64 × 64 cells, sand from the cell `sandFrom` on (x = 16 × sandFrom). */
+    function floorWithSand(sandFrom: number): TerrainData {
+        const cells = Array.from({ length: 64 * 64 }, (_, index): [string, number] => [
+            cellKey(index % 64, Math.floor(index / 64)),
+            -64,
+        ]);
+        const sand = cells
+            .filter(([key]) => Number(key.split(",")[0]) >= sandFrom)
+            .map(([key]): [string, number] => [key, 4]);
+        return withSoils(withHeights(undefined, new Map(cells)), new Map(sand));
+    }
+    const GRASS_LINE: Rgb = [0x22, 0x36, 0x1c];
+    const same = (a: readonly number[], b: readonly number[]) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+    const pixelOf = (block: Uint8ClampedArray, column: number, row: number): Rgb => {
+        const at = (row * 256 + column) * 4;
+        return [block[at], block[at + 1], block[at + 2]];
+    };
+    const kindOf = (color: Rgb): "grass" | "sand" | "line" | "other" =>
+        RAMPS.grass.some((shade) => same(shade, color))
+            ? "grass"
+            : RAMPS.sand.some((shade) => same(shade, color))
+              ? "sand"
+              : same(GRASS_LINE, color)
+                ? "line"
+                : "other";
+
+    describe("the blocks painted by workers", () => {
+        const bytes = (pixels: Uint8ClampedArray | undefined) => Buffer.from(pixels ?? new Uint8ClampedArray(0));
+        const VISIBLE = ["1,1", "2,1", "3,1", "1,2", "2,2", "3,2"];
+        const keyOf = (job: BlockJob) => `${job.blockX},${job.blockY}`;
+
+        it("show the same pixels as painted on the thread of the game", () => {
+            for (const terrain of [floorWithSand(24), mountOnSand(128)]) {
+                const alone = fixture(terrain);
+                alone.settle();
+                const withWorkers = fixture(terrain, undefined, { pool: true });
+                withWorkers.settle();
+                expect(withWorkers.pool.posted.length).toBeGreaterThan(0);
+                for (const block of VISIBLE) {
+                    const expected = alone.painted.get(`relief-block:${block}`);
+                    expect(expected?.length, block).toBe(256 * 256 * 4);
+                    expect(bytes(withWorkers.painted.get(`relief-block:${block}`)).equals(bytes(expected)), block).toBe(
+                        true,
+                    );
+                }
+            }
+        });
+
+        it("are given coarse first, from the middle of the view outwards, never more than the workers idle", () => {
+            const { settle, pool } = fixture(floorWithSand(24), undefined, { pool: true });
+            settle();
+            const fromTheMiddle = ["2,1", "2,2", "1,1", "1,2", "3,1", "3,2"];
+            const order = (texel: number) =>
+                pool.posted.filter((job) => job.texel === texel && fromTheMiddle.includes(keyOf(job))).map(keyOf);
+            expect(order(4)).toEqual(fromTheMiddle);
+            expect(order(1)).toEqual(fromTheMiddle);
+            const lastCoarse = pool.posted.findIndex((job) => job.texel === 4 && keyOf(job) === "3,2");
+            const firstSharp = pool.posted.findIndex((job) => job.texel === 1 && VISIBLE.includes(keyOf(job)));
+            expect(firstSharp).toBeGreaterThan(lastCoarse);
+            expect(pool.mostInFlight).toBe(2);
+        });
+
+        it("are not painted on the thread of the game meanwhile, nor given twice while in flight", () => {
+            const begin = vi.spyOn(BlockPainter.prototype, "begin");
+            const { tiles, pool, setTerrain } = fixture(floorWithSand(24), undefined, { pool: true });
+            for (let frame = 0; frame < 6; frame++) tiles.update(frame);
+            expect(pool.posted).toHaveLength(2);
+            expect(begin).not.toHaveBeenCalled();
+            expect(tiles.isDrawing()).toBe(true);
+            // What they are drawn from changes while they are in flight: they are not given again until they land.
+            setTerrain(floorWithSand(20));
+            for (let frame = 6; frame < 12; frame++) tiles.update(frame);
+            expect(pool.posted).toHaveLength(2);
+            pool.flush();
+            // Landed, not shown yet: still at work.
+            expect(tiles.isDrawing()).toBe(true);
+            begin.mockRestore();
+        });
+
+        it("ignore the answer for a block let go meanwhile: no surface for it, its buffer given back", () => {
+            const { tiles, pool, scene } = fixture(floorWithSand(24), undefined, { pool: true });
+            for (let frame = 0; frame < 3; frame++) tiles.update(frame);
+            expect(pool.posted).toHaveLength(2);
+            tiles.destroy();
+            expect(pool.flush()).toBe(2);
+            tiles.update(10);
+            expect(scene.textures.createCanvas).not.toHaveBeenCalled();
+            expect(pool.released).toHaveLength(2);
+        });
+
+        it("stay hidden when they land drawn in 3/4 after the editor opened, and are drawn again flat", () => {
+            const { tiles, pool, images, settle, scene } = fixture(floorWithSand(24), undefined, { pool: true });
+            for (let frame = 0; frame < 3; frame++) tiles.update(frame);
+            expect(pool.posted.every((job) => job.projected)).toBe(true);
+            tiles.setProjected(false);
+            pool.flush();
+            tiles.update(10);
+            // The two blocks landed are shown, the way they were asked: not the way the relief is shown now.
+            expect(scene.textures.createCanvas).toHaveBeenCalledTimes(2);
+            expect(images.some((image) => image.visible)).toBe(false);
+            settle();
+            expect(images.some((image) => image.visible)).toBe(true);
+            expect(pool.posted[pool.posted.length - 1].projected).toBe(false);
+        });
+
+        it("are painted on the thread of the game once the workers break down: no block left empty", () => {
+            const alone = fixture(floorWithSand(24));
+            alone.settle();
+            const { tiles, pool, settle, painted } = fixture(floorWithSand(24), undefined, { pool: true });
+            for (let frame = 0; frame < 3; frame++) tiles.update(frame);
+            pool.flush();
+            for (let frame = 3; frame < 6; frame++) tiles.update(frame);
+            const posted = pool.posted.length;
+            expect(posted).toBeGreaterThan(2);
+            pool.breakDown();
+            settle();
+            expect(pool.posted).toHaveLength(posted);
+            for (const block of VISIBLE) {
+                const expected = alone.painted.get(`relief-block:${block}`);
+                expect(bytes(painted.get(`relief-block:${block}`)).equals(bytes(expected)), block).toBe(true);
+            }
+            expect(tiles.isDrawing()).toBe(false);
+        });
+
+        it("shows the blocks landed within the time of an image: the others at the next images", () => {
+            const { tiles, pool, scene } = fixture(floorWithSand(24), undefined, { pool: true });
+            pool.capacity = 12;
+            // Handed over with a clock that stands still: as many blocks as the workers take, on any machine.
+            withClock(0, () => {
+                for (let frame = 0; frame < 4; frame++) tiles.update(frame);
+            });
+            const posted = pool.posted.length;
+            expect(posted).toBeGreaterThanOrEqual(6);
+            expect(pool.flush()).toBe(posted);
+            // From here on the clock runs 1 ms at each look: showing a block "costs" a millisecond or two.
+            let clock = 1000;
+            const now = vi.spyOn(performance, "now").mockImplementation(() => clock++);
+            tiles.update(10);
+            const shownAtOnce = scene.textures.createCanvas.mock.calls.length;
+            expect(shownAtOnce).toBeGreaterThanOrEqual(1);
+            expect(shownAtOnce).toBeLessThan(posted);
+            expect(tiles.isDrawing()).toBe(true);
+            for (let frame = 11; frame < 40; frame++) tiles.update(frame);
+            expect(scene.textures.createCanvas.mock.calls.length).toBeGreaterThanOrEqual(posted);
+            now.mockRestore();
+        });
+
+        it("spends more of an image on the blocks while the view is not sharp than on what is around it", () => {
+            const { tiles, pool, painted, settle, setTerrain, shows } = fixture(floorWithSand(24), undefined, {
+                pool: true,
+            });
+            pool.capacity = 64;
+            const shownIn = (run: () => void): number => {
+                const before = shows();
+                // The clock runs 1 ms at each look: showing a block "costs" a millisecond.
+                let clock = 5000;
+                const now = vi.spyOn(performance, "now").mockImplementation(() => clock++);
+                run();
+                now.mockRestore();
+                return shows() - before;
+            };
+            // The six blocks of the view, coarse, all landed at once: the view is not sharp yet. Handed over as many
+            // images as the machine needs (3 ms an image: fewer blocks an image under the load of the whole suite).
+            for (let frame = 0; frame < 60 && pool.inFlight().length < 6; frame++) tiles.update(frame);
+            expect(pool.flush()).toBeGreaterThanOrEqual(6);
+            const whileNotSharp = shownIn(() => tiles.update(10));
+            expect(whileNotSharp).toBeGreaterThanOrEqual(5);
+            // Everything drawn; then four cells change in the blocks around the view only (0,0; 4,0; 0,2; 0,3; 4,2; 4,3):
+            // these are painted again and land together, the view staying sharp.
+            settle();
+            expect(VISIBLE.every((block) => painted.has(`relief-block:${block}`))).toBe(true);
+            setTerrain(
+                withHeights(
+                    floorWithSand(24),
+                    new Map([
+                        [cellKey(2, 2), -32],
+                        [cellKey(70, 2), -32],
+                        [cellKey(2, 55), -32],
+                        [cellKey(70, 55), -32],
+                    ]),
+                ),
+            );
+            for (let frame = 1000; frame < 1010; frame++) tiles.update(frame);
+            expect(pool.flush()).toBeGreaterThanOrEqual(4);
+            const onceSharp = shownIn(() => tiles.update(600));
+            expect(onceSharp).toBeGreaterThanOrEqual(1);
+            expect(onceSharp).toBeLessThanOrEqual(3);
+            expect(whileNotSharp).toBeGreaterThan(onceSharp);
+        });
+
+        it("draws ahead again a far block that was with the workers when they broke down", () => {
+            const { tiles, pool, settle, painted } = fixture(dugEverywhere(), undefined, {
+                pool: true,
+                mapSize: { width: 2560, height: 2560 },
+            });
+            // Until a block far from the view (drawn ahead, coarse) is with a worker.
+            const farInFlight = () => pool.inFlight().find((job) => job.blockX >= 6 || job.blockY >= 6);
+            for (let frame = 0; frame < 2000 && !farInFlight(); frame++) {
+                pool.flush();
+                tiles.update(frame);
+            }
+            const far = farInFlight();
+            if (!far) throw new Error("no far block was given to the workers");
+            const key = `relief-block:${far.blockX},${far.blockY}@4`;
+            expect(painted.has(key)).toBe(false);
+            pool.breakDown();
+            settle();
+            // Painted on the thread of the game, like the rest of the map.
+            expect(painted.get(key)?.length).toBe(64 * 64 * 4);
+        });
+
+        it("checks at every image that its workers still answer", () => {
+            const { tiles, pool } = fixture(floorWithSand(24), undefined, { pool: true });
+            tiles.update(0);
+            tiles.update(1);
+            expect(pool.check).toHaveBeenCalledTimes(2);
+            expect(pool.check.mock.calls[0][0]).toEqual(expect.any(Number));
+        });
+    });
+
+    describe("the blocks sent straight to the graphics card", () => {
+        const bytes = (pixels: Uint8ClampedArray | undefined) => Buffer.from(pixels ?? new Uint8ClampedArray(0));
+
+        it("show the same pixels as drawn on a canvas, with no canvas of their own", () => {
+            const canvas = fixture(mountOnSand(128));
+            canvas.settle();
+            const webgl = fixture(mountOnSand(128), undefined, { webgl: true });
+            webgl.settle();
+            expect(webgl.scene.textures.createCanvas).not.toHaveBeenCalled();
+            for (const block of ["1,1", "2,1", "1,2"]) {
+                const expected = canvas.painted.get(`relief-block:${block}`);
+                expect(expected?.length, block).toBe(256 * 256 * 4);
+                expect(bytes(webgl.painted.get(`relief-block:${block}`)).equals(bytes(expected)), block).toBe(true);
+            }
+        });
+
+        it("are all drawn again when the WebGL context comes back: none shows the pixels of another", () => {
+            const { settle, painted, scene, renderer, images, tiles } = fixture(mountOnSand(128), undefined, {
+                webgl: true,
+            });
+            settle();
+            const before = bytes(painted.get("relief-block:1,1"));
+            const made = () =>
+                scene.textures.addUint8Array.mock.calls.filter(([key]) => key === "relief-block:1,1").length;
+            const madeBefore = made();
+            renderer.emit(Phaser.Renderer.Events.RESTORE_WEBGL);
+            // Every block is let go at once: what the textures hold is not theirs any more.
+            expect(images.some((image) => image.visible)).toBe(false);
+            settle();
+            expect(made()).toBeGreaterThan(madeBefore);
+            expect(bytes(painted.get("relief-block:1,1")).equals(before)).toBe(true);
+            expect(images.some((image) => image.visible)).toBe(true);
+            tiles.destroy();
+            expect(renderer.listenerCount()).toBe(0);
+        });
+    });
+
+    describe("the blocks kept, and the map drawn ahead", () => {
+        it("keeps the blocks one zooms out of: zooming out again draws nothing again", () => {
+            // dugEverywhere: 10 × 10 blocks dug. Far out, a pixel of the screen is 5 px of the map.
+            const { tiles, worldView, settle } = fixture(dugEverywhere(), undefined, { screenScale: () => 0.2 });
+            Object.assign(worldView, { x: 0, y: 0, width: 2500, height: 2500 });
+            settle();
+            Object.assign(worldView, { x: 300, y: 300, width: 600, height: 400 });
+            settle();
+            const drawn = tiles.redraws();
+            Object.assign(worldView, { x: 0, y: 0, width: 2500, height: 2500 });
+            settle();
+            expect(tiles.redraws()).toBe(drawn);
+        });
+
+        it("reads the relief of the blocks of a huge view a few an image, not all at once", () => {
+            const { tiles, worldView, settle } = fixture(dugEverywhere(), undefined, { screenScale: () => 0.2 });
+            settle();
+            // Far out at once: 40 × 40 blocks, a hundred of them dug and never seen (the others have no relief: nothing
+            // is read of them).
+            Object.assign(worldView, { x: 0, y: 0, width: 10_000, height: 10_000 });
+            const before = tiles.signatureReads();
+            tiles.update(60_000);
+            expect(tiles.signatureReads() - before).toBeGreaterThan(0);
+            expect(tiles.signatureReads() - before).toBeLessThanOrEqual(48);
+            settle();
+            expect(tiles.signatureReads() - before).toBeGreaterThan(60);
+            expect(tiles.signatureReads() - before).toBeLessThan(200);
+        });
+
+        it("draws the rest of the map coarse once the view is drawn: a far block is there before one goes to it", () => {
+            const { scene, settle, painted, tiles } = fixture(dugEverywhere(), undefined, {
+                mapSize: { width: 2560, height: 2560 },
+            });
+            settle();
+            // The view shows the blocks 1 to 3 across, 1 and 2 down: the block 9,9 is far from it.
+            expect(painted.get("relief-block:9,9@4")?.length).toBe(64 * 64 * 4);
+            const created = scene.textures.createCanvas.mock.calls.map(([key]) => String(key));
+            // The view first, sharp; the rest after it, coarse only; nothing beyond the map.
+            expect(created.indexOf("relief-block:9,9@4")).toBeGreaterThan(created.indexOf("relief-block:2,2"));
+            expect(created).not.toContain("relief-block:9,9");
+            expect(created.some((key) => /:1[0-9],|,1[0-9]/.test(key))).toBe(false);
+            expect(tiles.isDrawing()).toBe(false);
+        });
+
+        it("sharpens a block drawn ahead when one goes to it, showing it coarse meanwhile", () => {
+            const { worldView, settle, painted, images, tiles } = fixture(dugEverywhere(), undefined, {
+                mapSize: { width: 2560, height: 2560 },
+            });
+            settle();
+            const shown = images.filter((image) => image.visible).length;
+            Object.assign(worldView, { x: 2100, y: 2100, width: 300, height: 300 });
+            tiles.update(50_000);
+            // Nothing vanished: the coarse blocks of the new view still show.
+            expect(images.filter((image) => image.visible).length).toBeGreaterThanOrEqual(shown);
+            settle();
+            expect(painted.get("relief-block:8,8")?.length).toBe(256 * 256 * 4);
+        });
+    });
+
+    describe("a view filled at once, then sharpened", () => {
+        // The view (x 300 to 900, y 300 to 700) shows the blocks 1 to 3 across, 1 and 2 down.
+        const VISIBLE = ["1,1", "2,1", "3,1", "1,2", "2,2", "3,2"];
+        const createdIn = (scene: { textures: { createCanvas: { mock: { calls: unknown[][] } } } }) =>
+            scene.textures.createCanvas.mock.calls.map(([key]) => String(key));
+
+        it("draws every block of the view coarse first (a point in four each way), then each of them sharp", () => {
+            const { scene, settle, painted } = fixture(floorWithSand(24));
+            settle();
+            const created = createdIn(scene);
+            const firstSharp = created.findIndex((key) => VISIBLE.some((block) => key === `relief-block:${block}`));
+            expect(firstSharp).toBeGreaterThan(0);
+            for (const block of VISIBLE) {
+                const coarse = created.indexOf(`relief-block:${block}@4`);
+                expect(coarse, block).toBeGreaterThanOrEqual(0);
+                expect(coarse, block).toBeLessThan(firstSharp);
+                expect(painted.get(`relief-block:${block}`)?.length, block).toBe(256 * 256 * 4);
+            }
+            expect(painted.get("relief-block:1,1@4")?.length).toBe(64 * 64 * 4);
+        });
+
+        it("draws and sharpens the blocks of the view from its middle outwards: what one looks at first", () => {
+            const { scene, settle } = fixture(floorWithSand(24));
+            settle();
+            // The middle of the view is (600, 500): in the block 2,1, near the block 2,2; the blocks 3 are the furthest.
+            const fromTheMiddle = ["2,1", "2,2", "1,1", "1,2", "3,1", "3,2"];
+            const created = createdIn(scene);
+            const order = (suffix: string) =>
+                created
+                    .filter((key) => fromTheMiddle.some((block) => key === `relief-block:${block}${suffix}`))
+                    .map((key) => key.replace("relief-block:", "").replace(suffix, ""));
+            expect(order("@4")).toEqual(fromTheMiddle);
+            expect(order("")).toEqual(fromTheMiddle);
+        });
+
+        it("shows the same ground coarse as sharp: its materials at their place, as light", () => {
+            const { settle, painted } = fixture(floorWithSand(24));
+            settle();
+            const coarse = painted.get("relief-block:1,1@4");
+            const sharp = painted.get("relief-block:1,1");
+            if (!coarse || !sharp) throw new Error("no block");
+            const coarseAt = (column: number, row: number): Rgb => {
+                const at = (row * 64 + column) * 4;
+                return [coarse[at], coarse[at + 1], coarse[at + 2]];
+            };
+            // Sand from x 384 on: the column 128 of the sharp block, 32 of the coarse one.
+            for (let row = 20; row < 60; row += 7) {
+                expect(kindOf(coarseAt(10, row)), `row ${row}`).toBe("grass");
+                expect(kindOf(coarseAt(50, row)), `row ${row}`).toBe("sand");
+            }
+            const mean = (pixels: Uint8ClampedArray) => {
+                let total = 0;
+                for (let at = 0; at < pixels.length; at += 4) total += pixels[at] + pixels[at + 1] + pixels[at + 2];
+                return total / (pixels.length / 4);
+            };
+            expect(Math.abs(mean(coarse) - mean(sharp))).toBeLessThan(mean(sharp) * 0.05);
+        });
+
+        it("draws no finer than the screen shows far out, sharpens when one zooms in, never coarsens", () => {
+            let scale = 0.2;
+            const { scene, settle, tiles } = fixture(floorWithSand(24), undefined, { screenScale: () => scale });
+            settle();
+            // A pixel of the screen is 5 px of the map: a point in four each way is all that shows.
+            expect(createdIn(scene).length).toBeGreaterThan(0);
+            expect(createdIn(scene).every((key) => key.endsWith("@4"))).toBe(true);
+            scale = 0.4;
+            settle();
+            for (const block of VISIBLE) expect(createdIn(scene), block).toContain(`relief-block:${block}@2`);
+            expect(createdIn(scene).some((key) => !key.includes("@"))).toBe(false);
+            scale = 1;
+            settle();
+            for (const block of VISIBLE) expect(createdIn(scene), block).toContain(`relief-block:${block}`);
+            // Zoomed out again: the sharp blocks are kept as they are.
+            const drawn = tiles.redraws();
+            scale = 0.2;
+            settle();
+            expect(tiles.redraws()).toBe(drawn);
+        });
+    });
+
+    it("draws the floor in pixel art: shades of its materials, an irregular border, a dark line on the grass side", () => {
+        const { settle, painted } = fixture(floorWithSand(24));
+        settle();
+        const block = painted.get("relief-block:1,1");
+        expect(block).toBeDefined();
+        if (!block) return;
+        const switches = new Set<number>();
+        let lined = 0;
+        // Rows 64 to 95 show the floor (drawn 32 px lower); the border is near x 384, the column 128 of the block.
+        for (let row = 64; row < 96; row++) {
+            let first: number | undefined;
+            for (let column = 100; column < 160; column++) {
+                const kind = kindOf(pixelOf(block, column, row));
+                expect(kind, `column ${column} row ${row}`).not.toBe("other");
+                if (first === undefined && kind === "sand") first = column;
+            }
+            expect(first).toBeDefined();
+            switches.add(first ?? 0);
+            if (kindOf(pixelOf(block, (first ?? 1) - 1, row)) === "line") lined++;
+        }
+        expect(switches.size).toBeGreaterThanOrEqual(3);
+        expect(lined).toBeGreaterThan(16);
+    });
+
+    it("draws the line of a border that falls on the edge of a block on both blocks alike", () => {
+        // Sand from x 512 on: the border runs along the edge between the blocks 1,1 and 2,1.
+        const { settle, painted } = fixture(floorWithSand(32));
+        settle();
+        const west = painted.get("relief-block:1,1");
+        const east = painted.get("relief-block:2,1");
+        expect(west && east).toBeTruthy();
+        if (!west || !east) return;
+        let crossings = 0;
+        for (let row = 40; row < 256; row++) {
+            const last = kindOf(pixelOf(west, 255, row));
+            const first = kindOf(pixelOf(east, 0, row));
+            // Grass right before the edge and sand right after it: the grass pixel carries the line.
+            if (first === "sand" && last !== "sand") {
+                crossings++;
+                expect(last, `row ${row}`).toBe("line");
+            }
+        }
+        expect(crossings).toBeGreaterThan(0);
+    });
+
+    it("draws a block again when the soil painted in it changes", () => {
+        const { tiles, settle, setTerrain } = fixture(floorWithSand(24));
+        settle();
+        const drawn = tiles.redraws();
+        setTerrain(withSoils(floorWithSand(24), new Map([[cellKey(18, 18), 5]])));
+        settle();
+        expect(tiles.redraws()).toBeGreaterThan(drawn);
+    });
+
+    it("draws its first block without freezing: the textures are worked out as they are used", async () => {
+        // A fresh copy of the modules: no texture worked out yet (the watched copy of GroundPixel would be kept).
+        vi.doUnmock("../../../../../src/front/Phaser/Game/Terrain/Pixel/GroundPixel");
+        vi.resetModules();
+        const fresh = await import("../../../../../src/front/Phaser/Game/Terrain/ReliefTiles");
+        const pixel = await import("../../../../../src/front/Phaser/Game/Terrain/Pixel/GroundPixel");
+        const { scene } = fixture(floorWithSand(24));
+        const terrain = floorWithSand(24);
+        const water = new TerrainWater();
+        water.setTerrain(terrain);
+        const tiles = new fresh.ReliefTiles(scene as never, {
+            relief: () => terrain,
+            water,
+            season: () => undefined,
+            snowCoverAt: () => 0,
+        });
+        // The first image, the clock moving 1 ms at each look: a first block drawn in it.
+        withClock(1, () => tiles.update(0));
+        expect(tiles.redraws()).toBeGreaterThanOrEqual(1);
+        // Only the points read are worked out, not the whole table of a material (512 × 512) at its first use.
+        const worked = (["grass", "sand"] as const).map(
+            (material) => pixel.textureTable(material).filter((value) => !Number.isNaN(value)).length,
+        );
+        expect(worked.some((count) => count > 0)).toBe(true);
+        for (const count of worked) expect(count).toBeLessThan(512 * 512);
+    });
+
+    it.runIf(REAL_TIME)("draws its first block without freezing (real time)", async () => {
+        vi.doUnmock("../../../../../src/front/Phaser/Game/Terrain/Pixel/GroundPixel");
+        vi.resetModules();
+        const fresh = await import("../../../../../src/front/Phaser/Game/Terrain/ReliefTiles");
+        const { scene, setTerrain } = fixture(floorWithSand(24));
+        const terrain = floorWithSand(24);
+        setTerrain(terrain);
+        const water = new TerrainWater();
+        water.setTerrain(terrain);
+        const tiles = new fresh.ReliefTiles(scene as never, {
+            relief: () => terrain,
+            water,
+            season: () => undefined,
+            snowCoverAt: () => 0,
+        });
+        const start = performance.now();
+        tiles.update(0);
+        expect(tiles.redraws()).toBeGreaterThanOrEqual(1);
+        expect(performance.now() - start).toBeLessThan(80);
+    });
+
+    it("draws again the block the snow fell on, not the others", () => {
+        // Snow on the tiles of one block (256 px): the block 1,1.
+        const snow = { on: false, version: 0 };
+        const { settle, painted } = fixture(dugEverywhere(), undefined, {
+            snowCoverAt: (x, y) => (snow.on && x >= 256 && x < 512 && y >= 256 && y < 512 ? 1 : 0),
+            groundVersion: () => snow.version,
+        });
+        settle();
+        const before = new Map([...painted].map(([key, pixels]) => [key, Uint8ClampedArray.from(pixels)]));
+        snow.on = true;
+        snow.version++;
+        settle();
+        const changed = [...painted]
+            .filter(([key, pixels]) => {
+                const old = before.get(key);
+                return !old || old.some((value, index) => value !== pixels[index]);
+            })
+            .map(([key]) => key);
+        expect(changed).toContain("relief-block:1,1");
+        // The blocks around it draw its cells in their margins; none further.
+        expect(changed.every((key) => /^relief-block:[0-2],[0-2](@\d)?$/.test(key))).toBe(true);
+        expect(changed.length).toBeLessThan(painted.size);
+    });
+
+    it("draws no block again when the meadow is told again without changing what covers the ground", () => {
+        const meadow = new MeadowState();
+        const told = (grass: number, dryness = 0) => {
+            const tiles = 64 * 64;
+            meadow.receive({
+                width: 64,
+                height: 64,
+                grass: new Uint8Array(tiles).fill(grass),
+                moisture: new Uint8Array(tiles),
+                dryness: new Uint8Array(tiles).fill(dryness),
+            });
+        };
+        told(200);
+        const { tiles, settle } = fixture(dugEverywhere(), meadow);
+        settle();
+        const drawn = tiles.redraws();
+        // Told again every 10 s: the grass grew a little, still grass. What covers the cells is read again over
+        // several images (8 blocks an image at most), not all of it in the image that follows the message.
+        told(210);
+        const read = tiles.coverReads();
+        tiles.update(99_999);
+        expect(tiles.coverReads() - read).toBeLessThanOrEqual(8);
+        settle();
+        expect(tiles.redraws()).toBe(drawn);
+        // The grass dried out to straw: the blocks are drawn again.
+        told(210, 255);
+        settle();
+        expect(tiles.redraws()).toBeGreaterThan(drawn);
+    });
+
+    it("spreads the drawing of a block over several images: an image spends a few ms on it, not a whole block", () => {
+        const deepest = withHeights(
+            undefined,
+            new Map(
+                Array.from({ length: 96 * 96 }, (_, index): [string, number] => [
+                    cellKey(index % 96, Math.floor(index / 96)),
+                    -256,
+                ]),
+            ),
+        );
+        const { tiles, painted } = fixture(deepest);
+        // The steps of the painter, counted, not timed: the rows (or columns) each goes through, and the images that
+        // worked on a block. The clock moves 1 ms at each look.
+        const painter = BlockPainter.prototype;
+        const steps = [
+            vi.spyOn(painter, "groundRows"),
+            vi.spyOn(painter, "horizonRows"),
+            vi.spyOn(painter, "colorRows"),
+            vi.spyOn(painter, "projectColumns"),
+        ];
+        const stepsTaken = () => steps.reduce((sum, spy) => sum + spy.mock.calls.length, 0);
+        let working = 0;
+        withClock(1, () => {
+            for (let frame = 0; frame < 120; frame++) {
+                const before = stepsTaken();
+                tiles.update(frame);
+                if (stepsTaken() > before) working++;
+            }
+        });
+        const spans = steps.flatMap((spy) => spy.mock.calls.map(([from, to]) => Number(to) - Number(from)));
+        for (const spy of steps) spy.mockRestore();
+        // Blocks were drawn, whole, a sixteenth of a block (16 rows or columns of 256) a step at most.
+        expect(painted.size).toBeGreaterThanOrEqual(4);
+        expect(Math.max(...spans)).toBeLessThanOrEqual(16);
+        // Several images for each block, not one.
+        expect(working).toBeGreaterThanOrEqual(2 * painted.size);
+    });
+
+    it.runIf(REAL_TIME)("spreads the drawing of a block over several images (real time)", () => {
+        const deepest = withHeights(
+            undefined,
+            new Map(
+                Array.from({ length: 96 * 96 }, (_, index): [string, number] => [
+                    cellKey(index % 96, Math.floor(index / 96)),
+                    -256,
+                ]),
+            ),
+        );
+        const { tiles, painted } = fixture(deepest);
+        const times: number[] = [];
+        let lastFinished = 0;
+        for (let frame = 0; frame < 120; frame++) {
+            const before = painted.size;
+            const start = performance.now();
+            tiles.update(frame);
+            times.push(performance.now() - start);
+            if (painted.size > before) lastFinished = frame;
+        }
+        // Blocks were drawn, whole; only the images that worked on them are looked at.
+        expect(painted.size).toBeGreaterThanOrEqual(4);
+        const sorted = times.slice(1, lastFinished + 1).sort((a, b) => a - b);
+        expect(sorted[Math.floor(sorted.length / 2)]).toBeLessThan(10);
+    });
+
+    describe("the flat ground, with the layout of the map", () => {
+        // Indoors from x 512 on (cell 32), a floor of the Carte tool on the cell 20,20, grass tiles of the map below
+        // y 448 (cell 28).
+        let layoutVersion = 1;
+        let indoorsFrom = 32;
+        const layout: GroundLayout = {
+            outdoor: (cellX) => cellX < indoorsFrom,
+            paved: (cellX, cellY) => cellX === 20 && cellY === 20,
+            mapGrass: (_cellX, cellY) => cellY >= 28,
+            version: () => layoutVersion,
+        };
+        const sandAt = (cells: [number, number][]) =>
+            withSoils(undefined, new Map(cells.map(([x, y]): [string, number] => [cellKey(x, y), 4])));
+        const sandBlock = (): TerrainData =>
+            sandAt(
+                Array.from({ length: 16 * 16 }, (_, index): [number, number] => [
+                    16 + (index % 16),
+                    16 + Math.floor(index / 16),
+                ]),
+            );
+
+        it("draws the soil painted on flat ground, on a map without relief, opaque", () => {
+            const { settle, painted, tiles } = fixture(sandBlock(), undefined, { layout });
+            settle();
+            const block = painted.get("relief-block:1,1");
+            expect(block).toBeDefined();
+            if (!block) return;
+            // The cell 18,18: pixel (32 + 8, 32 + 8) of the block.
+            expect(kindOf(pixelOf(block, 40, 40))).toBe("sand");
+            expect(block[(40 * 256 + 40) * 4 + 3]).toBe(255);
+            expect(tiles.isActive()).toBe(true);
+            expect(tiles.groundPointAt({ x: 300, y: 300 })).toEqual({ x: 300, y: 300 });
+        });
+
+        it("leaves the rooms and the floors of the Carte tool to the map: transparent", () => {
+            const { settle, painted } = fixture(sandBlock(), undefined, { layout });
+            settle();
+            const block = painted.get("relief-block:1,1");
+            if (!block) throw new Error("no block");
+            // The cell 20,20 (floor of the Carte tool): pixel (64 + 8, 64 + 8).
+            expect(block[(72 * 256 + 72) * 4 + 3]).toBe(0);
+            const indoors = sandAt(Array.from({ length: 16 }, (_, index): [number, number] => [33 + index, 18]));
+            const inside = fixture(indoors, undefined, { layout });
+            inside.settle();
+            const room = inside.painted.get("relief-block:2,1");
+            if (room) expect(room[(40 * 256 + 40) * 4 + 3]).toBe(0);
+        });
+
+        it("draws the grass tiles of the map in the grass of the season, again when the season changes", () => {
+            let season: Season | undefined = Season.Spring;
+            const { settle, painted, tiles } = fixture(undefined, undefined, { layout, season: () => season });
+            settle();
+            const block = painted.get("relief-block:1,1");
+            if (!block) throw new Error("no block");
+            // Row 230 of the block 1,1 is y 486: a grass tile of the map.
+            const color = pixelOf(block, 100, 230);
+            expect([...rampsFor(Season.Spring).grass, GRASS_LINE].some((shade) => same(shade, color))).toBe(true);
+            const drawn = tiles.redraws();
+            season = Season.Autumn;
+            settle();
+            expect(tiles.redraws()).toBeGreaterThan(drawn);
+        });
+
+        it("draws a block of flat ground again when a soil is painted on it or a mount is raised", () => {
+            const { settle, tiles, setTerrain } = fixture(sandBlock(), undefined, { layout });
+            settle();
+            const drawn = tiles.redraws();
+            // Gravel painted on the flat cell 20,17 (nothing dug in the block).
+            setTerrain(withSoils(sandBlock(), new Map([[cellKey(20, 17), 6]])));
+            settle();
+            expect(tiles.redraws()).toBeGreaterThan(drawn);
+            const painted = tiles.redraws();
+            // A mount raised on the cell 22,22.
+            setTerrain(
+                withHeights(withSoils(sandBlock(), new Map([[cellKey(20, 17), 6]])), new Map([[cellKey(22, 22), 64]])),
+            );
+            settle();
+            expect(tiles.redraws()).toBeGreaterThan(painted);
+        });
+
+        it("hides the blocks drawn in 3/4 as soon as the editor opens, until they are drawn flat", () => {
+            const { settle, tiles, images } = fixture(sandBlock(), undefined, { layout });
+            settle();
+            expect(images.some((image) => image.visible)).toBe(true);
+            tiles.setProjected(false);
+            const before = tiles.redraws();
+            tiles.update(10_000);
+            // Not one block left in the old way (they would not match the clicks nor the avatars): only the ones drawn
+            // again since show.
+            expect(images.filter((image) => image.visible).length).toBeLessThanOrEqual(tiles.redraws() - before);
+            settle();
+            expect(images.some((image) => image.visible)).toBe(true);
+        });
+
+        it("draws a block again when a room is built over it", () => {
+            const { settle, tiles } = fixture(sandBlock(), undefined, { layout });
+            settle();
+            const drawn = tiles.redraws();
+            // Walls built: the room now starts at x 256, over the block 1,1.
+            indoorsFrom = 16;
+            layoutVersion++;
+            settle();
+            expect(tiles.redraws()).toBeGreaterThan(drawn);
+            indoorsFrom = 32;
+            layoutVersion++;
+        });
+
+        it("draws a hollow at its place while the map is edited, and in 3/4 again once it is closed", () => {
+            const deep = withHeights(
+                undefined,
+                new Map(
+                    Array.from({ length: 64 * 64 }, (_, index): [string, number] => [
+                        cellKey(index % 64, Math.floor(index / 64)),
+                        -64,
+                    ]),
+                ),
+            );
+            const { settle, painted, tiles } = fixture(deep, undefined, { layout });
+            tiles.setProjected(false);
+            settle();
+            expect(tiles.isActive()).toBe(false);
+            const flat = painted.get("relief-block:1,1");
+            if (!flat) throw new Error("no block");
+            // Flat: the first row of the block is the ground at its place, opaque (in 3/4 it would be the floor of a
+            // ground 32 px north, the same; the drop shows on the faces only).
+            const drawn = tiles.redraws();
+            tiles.setProjected(true);
+            settle();
+            expect(tiles.redraws()).toBeGreaterThan(drawn);
+            expect(tiles.isActive()).toBe(true);
+        });
+    });
+
+    describe("the water in pixel art", () => {
+        /** A state of the water: `depth` px over the cells x 16 to 31, y 16 to 31 (the block 1,1), dry elsewhere. */
+        const lake = (seq: number, depth: number): WaterState => {
+            const bytes = new Uint8Array(64 * 64 * 2);
+            for (let y = 16; y < 32; y++) {
+                for (let x = 16; x < 32; x++) {
+                    const eighths = Math.round(depth * 8);
+                    bytes[(y * 64 + x) * 2] = eighths & 255;
+                    bytes[(y * 64 + x) * 2 + 1] = eighths >> 8;
+                }
+            }
+            return { x: 0, y: 0, width: 64, height: 64, seq, full: true, depths: bytes };
+        };
+        const hollow = () =>
+            withHeights(
+                undefined,
+                new Map(
+                    Array.from({ length: 64 * 64 }, (_, index): [string, number] => [
+                        cellKey(index % 64, Math.floor(index / 64)),
+                        -64,
+                    ]),
+                ),
+            );
+        const count = (block: Uint8ClampedArray, colors: readonly (readonly number[])[]) => {
+            let found = 0;
+            for (let index = 0; index < 256 * 256; index++) {
+                const color = [block[index * 4], block[index * 4 + 1], block[index * 4 + 2]];
+                if (colors.some((shade) => same(shade, color))) found++;
+            }
+            return found;
+        };
+
+        it("paints a lake with the shades of the water", () => {
+            const { settle, painted, water, skip } = fixture(hollow());
+            water.receive(lake(1, 20), 0);
+            skip(10_000);
+            settle();
+            const block = painted.get("relief-block:1,1");
+            if (!block) throw new Error("no block");
+            expect(count(block, RAMPS.water)).toBeGreaterThan(20_000);
+        });
+
+        it("draws a lake 15.7 px deep as water one wades in (clear), as the walk sees it, not rounded up to 16", () => {
+            const { settle, painted, water, skip } = fixture(hollow());
+            water.receive(lake(1, 15.7), 0);
+            skip(10_000);
+            settle();
+            const block = painted.get("relief-block:1,1");
+            if (!block) throw new Error("no block");
+            expect(count(block, [RAMPS.water[3]])).toBeGreaterThan(20_000);
+            expect(count(block, RAMPS.water.slice(0, 3))).toBe(0);
+        });
+
+        it("draws a block again only when its water changes in a way that shows", () => {
+            const { settle, tiles, water, clock, skip } = fixture(hollow());
+            water.receive(lake(1, 20), 0);
+            skip(10_000);
+            settle();
+            const drawn = tiles.redraws();
+            water.receive(lake(2, 21), clock());
+            skip(10_000);
+            settle();
+            expect(tiles.redraws()).toBe(drawn);
+            water.receive(lake(3, 33), clock());
+            skip(10_000);
+            settle();
+            expect(tiles.redraws()).toBeGreaterThan(drawn);
+        });
+
+        it("draws a thin flood on flat ground as clear water edged with foam, not as deep water", () => {
+            const flat = withSoils(
+                undefined,
+                new Map(
+                    Array.from({ length: 64 * 64 }, (_, index): [string, number] => [
+                        cellKey(index % 64, Math.floor(index / 64)),
+                        4,
+                    ]),
+                ),
+            );
+            const layout: GroundLayout = {
+                outdoor: () => true,
+                paved: () => false,
+                mapGrass: () => false,
+                version: () => 1,
+            };
+            const { settle, painted, water, skip } = fixture(flat, undefined, { layout });
+            water.receive(lake(1, 1), 0);
+            skip(10_000);
+            settle();
+            const block = painted.get("relief-block:1,1");
+            if (!block) throw new Error("no block");
+            // Clear water, with a line of foam 1 px wide where it ends (the edges of the block here).
+            expect(count(block, [RAMPS.water[3]])).toBeGreaterThan(20_000);
+            expect(count(block, [[0xd6, 0xec, 0xf6]])).toBeLessThan(2_000);
+        });
+
+        it("lets the bottom show through the water while the relief is edited", () => {
+            const { settle, painted, water, tiles, skip } = fixture(hollow());
+            water.receive(lake(1, 20), 0);
+            skip(10_000);
+            settle();
+            const before = painted.get("relief-block:1,1");
+            if (!before) throw new Error("no block");
+            const plain = count(before, RAMPS.grass);
+            tiles.setSeeThrough(true);
+            settle();
+            const through = painted.get("relief-block:1,1");
+            if (!through) throw new Error("no block");
+            // One pixel of the lake in two shows the grass of its bottom.
+            expect(count(through, RAMPS.grass)).toBeGreaterThan(plain + 10_000);
+        });
+    });
+});

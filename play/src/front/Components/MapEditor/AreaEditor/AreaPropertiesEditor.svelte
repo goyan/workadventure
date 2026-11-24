@@ -12,6 +12,8 @@
     import { KlaxoonService } from "@workadventure/shared-utils";
     import type { ApplicationDefinitionInterface } from "@workadventure/messages";
     import { v4 as uuid } from "uuid";
+    import { mapLayerBuiltLevelsStore } from "../../../Stores/MapLayerStore";
+    import FloorLevelPicker from "../FloorLevelPicker.svelte";
     import { LL } from "../../../../i18n/i18n-svelte";
     import { mapEditorAreaModeStore, mapEditorSelectedAreaPreviewStore } from "../../../Stores/MapEditorStore";
     import { MATRIX_PUBLIC_URI, PUSHER_URL } from "../../../Enum/EnvironmentVariable";
@@ -48,6 +50,14 @@
 
     let properties: AreaDataProperties = $state([]);
     let areaName = $state("");
+    // The floor the selected area belongs to (0: the ground), for the level picker.
+    let selectedElevation = $state(0);
+
+    function moveToLevel(level: number): void {
+        if (!$mapEditorSelectedAreaPreviewStore) return;
+        $mapEditorSelectedAreaPreviewStore.setElevation(level);
+        selectedElevation = level;
+    }
     let areaDescription = $state("");
     let areaSearchable = $state(false);
     let hasJitsiRoomProperty: boolean = $state(false);
@@ -78,6 +88,7 @@
         if (currentAreaPreview) {
             properties = structuredClone(currentAreaPreview.getProperties());
             areaName = currentAreaPreview.getAreaData().name;
+            selectedElevation = currentAreaPreview.getAreaData().elevation ?? 0;
             const descriptionProperty = $mapEditorSelectedAreaPreviewStore
                 ?.getProperties()
                 .find((property) => property.type === "areaDescriptionProperties");
@@ -868,6 +879,12 @@
             {/each}
         </div>
 
+        {#if $mapLayerBuiltLevelsStore.length > 0 || selectedElevation > 0}
+            <!-- The floor the area belongs to: choosing another one moves it there, over the same place. -->
+            <div class="my-2">
+                <FloorLevelPicker objectLevel={selectedElevation} onObjectLevel={moveToLevel} forArea />
+            </div>
+        {/if}
         <Input
             id="objectName"
             label={$LL.mapEditor.areaEditor.nameLabel()}

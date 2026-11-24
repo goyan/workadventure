@@ -26,7 +26,19 @@ export enum UserInputEvent {
     Interact,
     Follow,
     VehicleSprint,
+    /** In the airplane: climb (space, see GameSceneUserInputHandler.isClimbPressed) or come down (control). */
+    Climb,
+    Descend,
 }
+
+/** In flight the control key comes down: the moves held with it still steer (see getEventListForGameTick). */
+const EVENTS_HELD_WITH_CONTROL_IN_FLIGHT = new Set([
+    UserInputEvent.MoveUp,
+    UserInputEvent.MoveDown,
+    UserInputEvent.MoveLeft,
+    UserInputEvent.MoveRight,
+    UserInputEvent.Descend,
+]);
 
 // The reason why the controls are disabled
 // The MessageEventSource type means the controls where disabled by the scripting API in the related iframe
@@ -149,6 +161,10 @@ export class UserInputManager {
                 event: UserInputEvent.Follow,
                 keyInstance: this.scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.F, false),
             },
+            {
+                event: UserInputEvent.Descend,
+                keyInstance: this.scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL, false),
+            },
         ];
     }
 
@@ -211,6 +227,8 @@ export class UserInputManager {
             this.tripleTapVehicle.reset();
             return eventsMap;
         }
+        // In flight, the control key is the one to come down: it does not stop the moves held with it.
+        const flying = this.userInputHandler.isAltitudeKeysActive?.() ?? false;
         this.keysCode.forEach((d) => {
             if (d.keyInstance?.isDown) {
                 // Fix mac keyboard issue
@@ -220,7 +238,8 @@ export class UserInputManager {
                     d.keyInstance.originalEvent.target instanceof HTMLTextAreaElement ||
                     d.keyInstance.originalEvent.target instanceof HTMLSelectElement ||
                     d.keyInstance.originalEvent.metaKey ||
-                    d.keyInstance.originalEvent.ctrlKey
+                    (d.keyInstance.originalEvent.ctrlKey &&
+                        !(flying && EVENTS_HELD_WITH_CONTROL_IN_FLIGHT.has(d.event)))
                 ) {
                     d.keyInstance.reset();
                     return;
@@ -229,6 +248,10 @@ export class UserInputManager {
                 eventsMap.set(d.event, true);
             }
         });
+        // The space key climbs only for a press the handler gave to the airplane (a prompt or a tool may have it).
+        if (eventsMap.get(UserInputEvent.Interact) && this.userInputHandler.isClimbPressed?.()) {
+            eventsMap.set(UserInputEvent.Climb, true);
+        }
         if (this.doubleTapSprint.update((event) => eventsMap.get(event), performance.now())) {
             eventsMap.set(UserInputEvent.SpeedUp, true);
         }
@@ -274,6 +297,10 @@ export class UserInputManager {
         this.scene.input.on(
             Phaser.Input.Events.POINTER_WHEEL,
             (pointer: Pointer, gameObjects: GameObject[], deltaX: number, deltaY: number, deltaZ: number) => {
+                // A slider or a checkbox of a panel keeps the focus once used, and a focused field suspends the game
+                // inputs: scrolling over the map then did nothing until a click on it (which, in the relief editor,
+                // digs). The wheel over the map leaves such a control; a field being typed in keeps its focus.
+                releaseFocusedControl();
                 if (this.isInputDisabled) {
                     return;
                 }
@@ -317,5 +344,21 @@ export class UserInputManager {
             }
             this.userInputHandler.handleKeyDownEvent(event);
         });
+    }
+}
+
+/** The inputs one types text in: the wheel over the map never takes their focus away. */
+const TYPING_INPUT_TYPES = new Set(["text", "search", "email", "password", "number", "tel", "url", "date", "time"]);
+
+/**
+ * Takes the focus away from a control that is used without typing (a slider, a checkbox, a colour, a list), so that
+ * the game inputs it suspended while focused come back. A field being typed in is left alone.
+ */
+function releaseFocusedControl(): void {
+    const focused = document.activeElement;
+    if (focused instanceof HTMLInputElement) {
+        if (!TYPING_INPUT_TYPES.has(focused.type)) focused.blur();
+    } else if (focused instanceof HTMLSelectElement) {
+        focused.blur();
     }
 }

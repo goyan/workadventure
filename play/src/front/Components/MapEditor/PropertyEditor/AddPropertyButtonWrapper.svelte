@@ -37,6 +37,8 @@
         IconHeadphones,
         IconCalendar,
         IconLamp,
+        IconSwitch,
+        IconDroplet,
     } from "@wa-icons";
 
     interface Props {
@@ -411,6 +413,36 @@
         }}
         testId="addTooltipProperty"
         img={IconTooltip}
+    />
+{/if}
+{#if property === "switchPropertyData"}
+    <AddPropertyButton
+        headerText={$LL.mapEditor.properties.switchPropertyData.label()}
+        descriptionText={$LL.mapEditor.properties.switchPropertyData.description()}
+        style={`z-index: 204;${isActive ? "background-color: #4156f6;" : ""}`}
+        testId="switchPropertyData"
+        {disabled}
+        onclick={(event) => {
+            onclick?.(event);
+        }}
+        img={IconSwitch}
+    />
+{/if}
+{#if property === "waterSourcePropertyData" || property === "waterSinkPropertyData"}
+    <AddPropertyButton
+        headerText={property === "waterSourcePropertyData"
+            ? $LL.mapEditor.properties.waterSource.label()
+            : $LL.mapEditor.properties.waterSink.label()}
+        descriptionText={property === "waterSourcePropertyData"
+            ? $LL.mapEditor.properties.waterSource.description()
+            : $LL.mapEditor.properties.waterSink.description()}
+        style={`z-index: 203;${isActive ? "background-color: #4156f6;" : ""}`}
+        testId={property}
+        {disabled}
+        onclick={(event) => {
+            onclick?.(event);
+        }}
+        img={IconDroplet}
     />
 {/if}
 {#if property === "lampPropertyData"}

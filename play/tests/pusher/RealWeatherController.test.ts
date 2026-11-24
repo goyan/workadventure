@@ -7,6 +7,7 @@ import type { WeatherLocation } from "@workadventure/map-editor";
 import type { ResponseWithUserIdentifier } from "../../src/pusher/middlewares/Authenticated";
 import { RealWeatherController } from "../../src/pusher/controllers/RealWeatherController";
 import type { RealWeatherForecast } from "../../src/common/RealWeather";
+import type { WorldWeatherReport } from "../../src/common/WorldWeather";
 
 vi.mock("../../src/pusher/middlewares/Authenticated", () => ({
     authenticated: (req: Request, res: ResponseWithUserIdentifier, next: NextFunction): void => {
@@ -23,12 +24,14 @@ let server: Server;
 let base: string;
 const weather = vi.fn<(place?: Pick<WeatherLocation, "latitude" | "longitude">) => Promise<RealWeatherForecast>>();
 const search = vi.fn<(query: string) => Promise<WeatherLocation[] | undefined>>();
+const world = vi.fn<() => Promise<WorldWeatherReport | undefined>>();
 
 beforeEach(async () => {
     weather.mockResolvedValue({ slots: [{ at: 0, weather: WeatherType.Clear, temperature: 7 }] });
     search.mockResolvedValue([]);
+    world.mockResolvedValue({ at: 0, places: [] });
     const app = express();
-    new RealWeatherController(app, { get: weather }, { search });
+    new RealWeatherController(app, { get: weather }, { search }, { get: world });
     server = await new Promise<Server>((resolve) => {
         const running = app.listen(0, "127.0.0.1", () => resolve(running));
     });
@@ -90,5 +93,18 @@ describe("RealWeatherController", () => {
         expect(limited.status).toBe(429);
         expect(limited.headers.get("Retry-After")).toBe("60");
         expect((await fetch(`${base}/real-weather`, as("grace"))).status).toBe(200);
+    });
+
+    it("serves the weather now of the cities of the world to players only, 502 when it is unavailable", async () => {
+        expect((await fetch(`${base}/real-weather/world`)).status).toBe(401);
+        expect(world).not.toHaveBeenCalled();
+        const response = await fetch(`${base}/real-weather/world`, as("ada"));
+        expect(response.status).toBe(200);
+        expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+        expect(await response.json()).toEqual({ at: 0, places: [] });
+        world.mockResolvedValueOnce(undefined);
+        const failing = await fetch(`${base}/real-weather/world`, as("ada"));
+        expect(failing.status).toBe(502);
+        expect(await failing.json()).toEqual({ error: "unavailable" });
     });
 });

@@ -23,6 +23,23 @@ describe("KickedLeafTrail", () => {
         expect(walk(new KickedLeafTrail(() => true), 0, 48)).toHaveLength(7);
     });
 
+    it("has a wheel push the leaves aside of its track: one track for a unicycle, two for a skateboard", () => {
+        const ride = (wheels: 1 | 2): KickedLeaf[] => {
+            const trail = new KickedLeafTrail(() => true);
+            const leaves: KickedLeaf[] = [];
+            for (let x = 0, time = 0; x <= 32; x += 8, time += 50) {
+                leaves.push(...trail.update([{ id: "a", x, y: 100, running: false, wheels }], time));
+            }
+            return leaves;
+        };
+        const unicycle = ride(1);
+        expect(unicycle).toHaveLength(4);
+        expect(unicycle.every((leaf) => leaf.y === 100 && Math.abs(leaf.dy) >= 3 && leaf.dx <= 0)).toBe(true);
+        const skateboard = ride(2);
+        expect(skateboard).toHaveLength(8);
+        expect(new Set(skateboard.map((leaf) => leaf.y))).toEqual(new Set([98, 102]));
+    });
+
     it("kicks 5 or 6 every 16 px running", () => {
         expect(walk(new KickedLeafTrail(() => true), 0, 32, true)).toHaveLength(11);
     });

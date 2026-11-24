@@ -50,6 +50,7 @@
         openUserList: $LL.menu.shortcuts.openUserList(),
         rotatePlayer: $LL.menu.shortcuts.rotatePlayer(),
         toggleMapEditor: $LL.menu.shortcuts.toggleMapEditor(),
+        toggleAirVehicle: $LL.menu.shortcuts.toggleAirVehicle(),
     });
 
     let fixedLabels: Record<FixedShortcut, string> = $derived({
@@ -81,6 +82,7 @@
                     },
                     { label: t.speedUp(), hint: t.hints.speedUp(), combos: [single(t.keyNames.shift())] },
                     editable("walkMyDesk"),
+                    editable("toggleAirVehicle"),
                     editable("follow", t.hints.follow()),
                 ],
             },

@@ -12,6 +12,7 @@ import {
     AreaDataProperties,
     EntityPermissions,
     UpdateWAMMetadataCommand,
+    UpdateTerrainCommand,
     UpdateWAMSettingCommand,
 } from "@workadventure/map-editor";
 import type {
@@ -140,8 +141,12 @@ const mapStorageServer: MapStorageServer = {
                 // Rights on an entity are checked at its top-left corner: it is the only point of the entity
                 // map-storage knows. The WAM does not store entity sizes and the size sent by the client cannot
                 // be trusted (a fake size would move the "center" into the user's zone).
-                const assertCanEditEntityAt = (position: EntityCoordinates, action: string) => {
-                    if (!entityPermissions.canEdit(position)) {
+                // With the floor the entity stands on: only the areas of that floor give rights on it.
+                const assertCanEditEntityAt = (
+                    position: EntityCoordinates & { elevation?: number },
+                    action: string,
+                ) => {
+                    if (!entityPermissions.canEdit({ x: position.x, y: position.y, z: position.elevation ?? 0 })) {
                         throw new Error(
                             `User ${userUUID} is not allowed to ${action} at (${position.x}, ${position.y}) on map ${mapUrl}`,
                         );
@@ -249,6 +254,7 @@ const mapStorageServer: MapStorageServer = {
                         const { id, x, y, width, height, name } = message;
                         const properties = message.properties as AreaDataProperties;
                         const areaObjectConfig: AreaData = { id, x, y, width, height, name, properties, visible: true };
+                        if (message.elevation) areaObjectConfig.elevation = message.elevation;
                         const command = new CreateAreaMapStorageCommand(
                             wamFile,
                             areaObjectConfig,
@@ -294,7 +300,10 @@ const mapStorageServer: MapStorageServer = {
                         const entity = wamFile.getGameMapEntities().getEntity(message.id);
                         if (entity) {
                             assertCanEditEntityAt(entity, `modify the entity ${message.id}`);
-                            assertCanEditEntityAt(message, `move the entity ${message.id}`);
+                            assertCanEditEntityAt(
+                                { x: message.x, y: message.y, elevation: message.elevation ?? entity.elevation },
+                                `move the entity ${message.id}`,
+                            );
                             await mapsManager.executeCommand(
                                 mapKey,
                                 mapUrl.host,
@@ -329,6 +338,7 @@ const mapStorageServer: MapStorageServer = {
                                 properties: message.properties as EntityDataProperties,
                                 name: message.name,
                                 depthStep: message.depthStep,
+                                elevation: message.elevation,
                             },
                             commandId,
                             hookManager,
@@ -418,14 +428,25 @@ const mapStorageServer: MapStorageServer = {
                     }
                     case "updateWAMSettingsMessage": {
                         const message = editMapMessage.updateWAMSettingsMessage;
+                        const wam = wamFile.getWam();
                         if (message.message?.$case === "updateWeatherSettingMessage") {
+                            // The server stamps when the weather changed: the same date for everyone.
                             message.message.updateWeatherSettingMessage.startedAt = Date.now();
                         }
-                        const wam = wamFile.getWam();
                         await mapsManager.executeCommand(
                             mapKey,
                             mapUrl.host,
                             new UpdateWAMSettingCommand(wam, message, commandId),
+                        );
+                        break;
+                    }
+                    case "modifyTerrainMessage": {
+                        // The relief belongs to the whole map: editors of the map only (checked above), never the
+                        // editors of a single zone. The command bounds its own size and heights.
+                        await mapsManager.executeCommand(
+                            mapKey,
+                            mapUrl.host,
+                            new UpdateTerrainCommand(wamFile.getWam(), editMapMessage.modifyTerrainMessage, commandId),
                         );
                         break;
                     }

@@ -20,6 +20,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Night/NightOverlay", () => ({
 vi.mock("../../../../../src/front/Phaser/Game/Night/NightLights", () => ({
     lightableAreas: () => [],
     isInLightableArea: () => false,
+    roomsThatLightUp: <Room>(rooms: readonly Room[]) => rooms,
     NightLights: class {
         update(): never[] {
             return [];
@@ -40,11 +41,16 @@ vi.mock("../../../../../src/front/Phaser/Game/Night/NightHalos", () => ({
             return false;
         }
     },
+    halosWhereDrawn: (halos: unknown[]) => halos,
 }));
 const { NightMode, nightModeStore, nightDateStore } = await import("../../../../../src/front/Stores/NightStore");
 const { NightManager } = await import("../../../../../src/front/Phaser/Game/Night/NightManager");
 const { rgbLampLightsStore } = await import("../../../../../src/front/Stores/RgbLampStore");
 const { torchLightsStore } = await import("../../../../../src/front/Stores/TorchStore");
+const { moonLightLimits, moonLightShownStore } = await import("../../../../../src/front/Stores/SkyLightStore");
+const { skyWindowLightsStore } = await import("../../../../../src/front/Stores/SkyWindowLightStore");
+const { fastDayOnStore, fastDaySkyStore, fastDaySpeedStore } =
+    await import("../../../../../src/front/Stores/FastDayStore");
 
 let manager: InstanceType<typeof NightManager> | undefined;
 afterEach(() => {
@@ -53,6 +59,10 @@ afterEach(() => {
     nightModeStore.set(NightMode.Server);
     rgbLampLightsStore.set([]);
     torchLightsStore.set([]);
+    moonLightShownStore.set(true);
+    moonLightLimits.intensityMax.set(1);
+    skyWindowLightsStore.set([]);
+    fastDayOnStore.set(false);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.useRealTimers();
@@ -142,6 +152,101 @@ describe("personal night clock choice", () => {
         expect(manager.isNight()).toBe(true);
     });
 
+    it("speeds the sky up for this player alone, the time of the server staying real, and gives it back once off", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(performance, "now").mockReturnValue(0);
+        // 15:00 in Paris (CET), in daylight; the civil dusk is at 17:48.
+        const afternoon = Date.parse("2026-11-12T14:00:00Z");
+        vi.setSystemTime(afternoon);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ now: afternoon }))));
+        manager = new NightManager(createScene());
+        await vi.advanceTimersByTimeAsync(0);
+        manager.update(0);
+        expect(manager.isNight()).toBe(false);
+        const noonSun = manager.sunPosition();
+
+        fastDayOnStore.set(true);
+        fastDaySpeedStore.set(10);
+        manager.update(16);
+        // Eighteen seconds of the game at ten minutes of sky a second: three hours of sky, 18:00 in Paris, night.
+        manager.update(18_016);
+        expect(manager.isNight()).toBe(true);
+        expect(manager.sunPosition()?.elevation).toBeLessThan(noonSun?.elevation ?? 0);
+        expect(manager.serverDate()?.getTime()).toBe(afternoon);
+        expect((manager.skyDate()?.getTime() ?? 0) - afternoon).toBeGreaterThan(170 * 60_000);
+        expect(get(fastDaySkyStore)).toBeDefined();
+
+        fastDayOnStore.set(false);
+        manager.update(18_032);
+        expect(manager.isNight()).toBe(false);
+        expect(manager.skyDate()?.getTime()).toBe(afternoon);
+        expect(get(fastDaySkyStore)).toBeUndefined();
+    });
+
+    it("lights the night a little under the full moon, and gives the moon as the light of the sky", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(performance, "now").mockReturnValue(0);
+        // Full moon of 2026-11-24 (15:53 in Paris), risen at 16:22: at 23:00 it stands high in the south-east.
+        const fullMoonNight = Date.parse("2026-11-24T22:00:00Z");
+        vi.setSystemTime(fullMoonNight);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ now: fullMoonNight }))));
+        manager = new NightManager(createScene());
+        await vi.advanceTimersByTimeAsync(0);
+        manager.update(0);
+        const light = manager.skyLight();
+        expect(light?.body).toBe("moon");
+        expect(light?.elevation).toBeGreaterThan(40);
+        const opacity = (draw.mock.calls[0]?.[0] as { opacity: number } | undefined)?.opacity ?? 0;
+        expect(opacity).toBeLessThan(0.6);
+        expect(opacity).toBeGreaterThanOrEqual(0.48);
+        expect(manager.isNight()).toBe(true);
+    });
+
+    it("dims the light of the sky with the weather, and gives no moon with the night turned off", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(performance, "now").mockReturnValue(0);
+        const fullMoonNight = Date.parse("2026-11-24T22:00:00Z");
+        vi.setSystemTime(fullMoonNight);
+        // A response for each clock: a body is read once.
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ now: fullMoonNight })))),
+        );
+        manager = new NightManager(createScene(), () => 0.5);
+        await vi.advanceTimersByTimeAsync(0);
+        manager.update(0);
+        const clear = manager.skyLight()?.intensity ?? 0;
+        expect(clear).toBeGreaterThan(0);
+        manager.destroy();
+        manager = new NightManager(createScene());
+        await vi.advanceTimersByTimeAsync(0);
+        manager.update(0);
+        expect(manager.skyLight()?.intensity).toBeCloseTo(clear * 2, 6);
+        nightModeStore.set(NightMode.Disabled);
+        manager.update(2000);
+        expect(manager.skyLight()).toBeUndefined();
+    });
+
+    it("follows the personal settings of the moon at once, without waiting for the next second", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(performance, "now").mockReturnValue(0);
+        const fullMoonNight = Date.parse("2026-11-24T22:00:00Z");
+        vi.setSystemTime(fullMoonNight);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ now: fullMoonNight }))));
+        manager = new NightManager(createScene());
+        await vi.advanceTimersByTimeAsync(0);
+        manager.update(0);
+        const usual = manager.skyLight()?.intensity ?? 0;
+        moonLightLimits.intensityMax.set(0.5);
+        manager.update(16);
+        expect(manager.skyLight()?.intensity).toBeCloseTo(usual / 2, 6);
+        moonLightShownStore.set(false);
+        manager.update(32);
+        expect(manager.skyLight()).toBeUndefined();
+        // Without the moon, the veil is the full night again.
+        expect(draw).toHaveBeenLastCalledWith(expect.objectContaining({ opacity: 0.6 }));
+    });
+
     it("reads the computer's own date and time as Paris time for the sun", async () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date("2026-06-21T12:00:00Z"));
@@ -159,11 +264,15 @@ describe("personal night clock choice", () => {
         await vi.advanceTimersByTimeAsync(0);
         manager.update(0);
         expect(manager.isNight()).toBe(false);
-        // At 23:00, past the civil dusk of 22:40: night.
+        // At 23:00, past the civil dusk of 22:40: night, a little lighter under the half moon then standing in the
+        // south-west (moonlitNightOpacity).
         vi.spyOn(Date.prototype, "getHours").mockReturnValue(23);
         vi.spyOn(Date.prototype, "getMinutes").mockReturnValue(0);
         manager.update(2000);
-        expect(draw).toHaveBeenCalledWith(expect.objectContaining({ opacity: 0.6 }));
+        const opacity = (draw.mock.calls[0]?.[0] as { opacity: number } | undefined)?.opacity ?? 0;
+        expect(opacity).toBeLessThan(0.6);
+        expect(opacity).toBeGreaterThanOrEqual(0.48);
+        expect(manager.isNight()).toBe(true);
     });
 
     it("pierces the veil with the lights of the RGB lamps, and draws it again when one changes shape", async () => {
@@ -216,6 +325,22 @@ describe("personal night clock choice", () => {
                     { ...torch, x: 101 },
                 ],
             }),
+        );
+    });
+    it("pierces the veil with the moonlight that comes in through the windows", async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2026-01-15T20:00:00Z"));
+        vi.spyOn(performance, "now").mockReturnValue(0);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ now: Date.now() }))));
+        manager = new NightManager(createScene());
+        await vi.advanceTimersByTimeAsync(0);
+        const torch = { id: "torch:2", x: 100, y: 200, size: 352, textureKey: "rgb-lamp:torch:2:88", revision: 1 };
+        const windows = { id: "sky-windows", x: 0, y: 0, size: 1200, textureKey: "sky-windows:0", revision: 3 };
+        torchLightsStore.set([torch]);
+        skyWindowLightsStore.set([{ ...windows, intensity: 0.2 }]);
+        manager.update(0);
+        expect(draw).toHaveBeenLastCalledWith(
+            expect.objectContaining({ lamps: [torch, { ...windows, intensity: 0.2 }] }),
         );
     });
 });

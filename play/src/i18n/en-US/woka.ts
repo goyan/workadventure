@@ -2,6 +2,14 @@ import type { BaseTranslation } from "../i18n-types";
 
 const woka: BaseTranslation = {
     vehicle: {
+        myVehicle: "My vehicles",
+        airHint:
+            "Air: press {key} to activate or deactivate your airplane. In flight, hold Space to climb and Ctrl to descend.",
+        landingBlocked: "Cannot land here. Move to a clear spot.",
+        airplane: "Airplane",
+        media: { air: "Air", land: "Land", water: "Water" },
+        quickHint:
+            "Your canoe boards automatically in deep terrain water. Equip your land vehicle from the action wheel.",
         centerColor: "Center",
         edgeColor: "Edge",
         wheelsColor: "Wheels",
@@ -16,6 +24,20 @@ const woka: BaseTranslation = {
         sideColor: "Sides",
         pedalsColor: "Pedals",
         dismount: "Dismount",
+        canoe: "Canoe",
+        hullColor: "Hull",
+        fuselageColor: "Fuselage",
+        wingsColor: "Wings",
+        canopyColor: "Canopy",
+        rimColor: "Rim",
+        paddleColor: "Paddle",
+        canoeHint:
+            "The canoe takes to the water by itself: where you would swim in the water of the relief, you paddle, at walking speed, and the current carries you half as much. On the ground, your land vehicle choice applies.",
+    },
+    perception: {
+        basic: "Basic mode: sees neither the night nor the weather",
+        place: "Follows the weather of another city",
+        water: "Sees the water of the relief run 60 times faster (fast water)",
     },
     customWoka: {
         color: "Color",

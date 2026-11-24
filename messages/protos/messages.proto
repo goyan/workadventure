@@ -360,7 +360,32 @@ message EditMapMessage {
     DeleteCustomEntityMessage deleteCustomEntityMessage = 11;
     ModifiyWAMMetadataMessage modifiyWAMMetadataMessage = 12;
     UploadFileMessage uploadFileMessage = 13;
+    ModifyTerrainMessage modifyTerrainMessage = 14;
   }
+}
+
+// The relief of the ground (TerrainData in libs/map-editor): the new heights of the cells one stroke of the brush
+// changed, bounded in number, and the maximum depth of the map when it is changed.
+message ModifyTerrainMessage {
+  repeated TerrainCellMessage cells = 1;
+  optional int32 maxDepthTiles = 2;
+  // The soils painted on cells (absent from an older client: no soil is changed).
+  repeated TerrainSoilMessage soils = 3;
+}
+
+// A cell of the relief and the soil painted on it (see Terrain/Soils.ts in libs/map-editor): 0 wipes it.
+message TerrainSoilMessage {
+  sint32 x = 1;
+  sint32 y = 2;
+  uint32 soil = 3;
+}
+
+// A cell of the relief (16 map pixels wide) and its height in pixels of altitude: 0 on the ground, negative when dug,
+// positive when raised.
+message TerrainCellMessage {
+  sint32 x = 1;
+  sint32 y = 2;
+  sint32 height = 3;
 }
 
 message ErrorCommandMessage {
@@ -374,7 +399,112 @@ message UpdateWAMSettingsMessage {
     UpdatePrefabOverrideSettingMessage updatePrefabOverrideSettingMessage = 3;
     UpdateCategorySettingMessage updateCategorySettingMessage = 4;
     UpdateWeatherSettingMessage updateWeatherSettingMessage = 5;
+    UpdateWaterSettingMessage updateWaterSettingMessage = 6;
+    UpdateLifeSettingMessage updateLifeSettingMessage = 7;
+    UpdateMeadowSettingMessage updateMeadowSettingMessage = 8;
+    UpdatePoolSettingMessage updatePoolSettingMessage = 9;
+    UpdateLightingSettingMessage updateLightingSettingMessage = 10;
+    UpdatePoolLaddersSettingMessage updatePoolLaddersSettingMessage = 11;
   }
+}
+
+// The styles of the pools painted on the map (PoolStyle in libs/map-editor), by their number: the whole list.
+message UpdatePoolSettingMessage {
+  repeated PoolStyleMessage pools = 1;
+}
+
+message PoolStyleMessage {
+  // Colours, "#rrggbb".
+  string water = 1;
+  string coping = 2;
+  // How deep the pool is, in map pixels.
+  double depthPx = 3;
+  // Whether its water is hot: it never freezes, and steams in the cold.
+  bool hot = 4;
+  // Ladders along its top edge: 0, 1 or 2. Absent from older clients: 2.
+  optional uint32 ladders = 5;
+}
+
+// The ladders put by hand on the pools of the map: the cells ("x,y") of the top edges they stand on, the whole list.
+message UpdatePoolLaddersSettingMessage {
+  repeated string cells = 1;
+}
+
+// The lighting of the map (LightingSettings in libs/map-editor). energySaving: the lamps standing outdoors go out by
+// day, while the sky gives light enough.
+message UpdateLightingSettingMessage {
+  bool energySaving = 1;
+}
+
+// The meadow of the map (MeadowSettings in libs/map-editor): the grass that grows by itself on its fertile soils.
+message UpdateMeadowSettingMessage {
+  bool enabled = 1;
+  double growMinutes = 2;
+  double thirstMinutes = 3;
+  double moistureHold = 4;
+}
+
+// The life in the water of the relief and the drinks of the land animals (LifeSettings in libs/map-editor).
+// Durations in real seconds.
+message UpdateLifeSettingMessage {
+  bool enabled = 1;
+  double reproductionDelay = 2;
+  double maxLifespan = 3;
+  // Tiles (32 map pixels) a second.
+  double maxSpeed = 4;
+  double huntInterval = 5;
+  // The dolphins. Absent from older clients: those of the map are kept.
+  optional double dolphinReproductionDelay = 6;
+  optional double dolphinMaxLifespan = 7;
+  // How long a land animal waits between two drinks. Absent from a browser that does not know it: kept as it is.
+  optional double drinkInterval = 8;
+  // The life of the land (antelopes, lions, tigers). Absent from a browser that does not know it: kept as it is.
+  optional bool landEnabled = 9;
+  optional double antelopeReproductionDelay = 10;
+  optional double antelopeMaxLifespan = 11;
+  optional double landHuntInterval = 12;
+  optional double landPredatorReproductionDelay = 13;
+  optional double landPredatorMaxLifespan = 14;
+  // The gulls: absent from an older client, the map keeps what it has.
+  optional bool gullsEnabled = 15;
+  optional double gullHuntInterval = 16;
+  optional double gullReproductionDelay = 17;
+  optional double gullMaxLifespan = 18;
+}
+
+// How fast the water of the relief comes and goes (WaterSettings in libs/map-editor).
+message UpdateWaterSettingMessage {
+  double runoff = 1;
+  double evaporation = 2;
+  // How many times faster than in reality the water goes. Absent from older clients: the one of the map is kept.
+  optional double speed = 3;
+  // Water the flat ground drinks from a flood, in mm an hour. Absent from older clients: the one of the map is kept.
+  optional double absorption = 4;
+  // How hard the current of the water carries the avatars (0: not at all). Absent from older clients: kept.
+  optional double current = 5;
+  // How high the water may stand over the level it spills at, in pixels. Absent from older clients: kept.
+  optional double maxSurface = 6;
+  // Water the floors of the rooms drain, in mm an hour. Absent from older clients: kept.
+  optional double indoorDrain = 7;
+  // Whether the water has inertia (flows kept from a step to the next). Absent from older clients: kept.
+  optional bool inertia = 8;
+  // How the water with inertia makes its waves (WaterSettings.waves). Absent from older clients: kept.
+  optional double waveRoughness = 9;
+  optional double waveDamping = 10;
+  optional double waveBreaking = 11;
+  optional double waveMomentum = 12;
+  // The most moves of the water with inertia in a step, and how many times a second the room is told the water
+  // while it moves (WaterSettings.precision, .updates). Absent from older clients: kept.
+  optional int32 precision = 13;
+  optional int32 updates = 14;
+  // How fast the water with inertia flows next to reality (WaterSettings.flowPace). Absent from older clients: kept.
+  optional double flowPace = 15;
+  // How far the blast of a meteor fallen in the water drives it away, in times the radius of its crater
+  // (WaterSettings.impactReach). Absent from older clients: kept.
+  optional double impactReach = 16;
+  // How many times faster than its water the cold of the map does its work: ice, snow melt, frost
+  // (WaterSettings.freezeThawSpeed). Absent from older clients: kept.
+  optional double freezeThawSpeed = 17;
 }
 
 // Map-wide weather, validated against WeatherType before it is stored.
@@ -397,6 +527,9 @@ message MapLocationMessage {
   string name = 1;
   double latitude = 2;
   double longitude = 3;
+  // Time zone of the place (IANA name), for the clock and the timers of the map. Absent from older clients and for
+  // a place chosen before it was kept: the time of Paris.
+  optional string timezone = 4;
 }
 
 // Sets the interaction and default level of a category of objects on this map (CategorySettings in
@@ -460,6 +593,8 @@ message ModifyAreaMessage {
   // every property" would arrive identically. Leave it unset to keep the area's current properties.
   optional bool modifyProperties = 8;
   optional bool modifyServerData = 9;
+  // Optional so that a move or a property edit leaves the floor of the area untouched. See AreaData.elevation.
+  optional uint32 elevation = 10;
 }
 
 message DeleteAreaMessage {
@@ -479,6 +614,8 @@ message CreateAreaMessage {
   // Set by the map-storage when its property hooks changed `properties` (a new chat room, the copy of
   // an uploaded file...): the client that created the area must then apply them too.
   optional bool modifyServerData = 8;
+  // See AreaData.elevation (libs/map-editor).
+  optional uint32 elevation = 9;
 }
 
 message CreateEntityMessage {
@@ -497,6 +634,8 @@ message CreateEntityMessage {
   optional bool modifyServerData = 10;
   // See EntityData.depthStep (libs/map-editor). 11: upstream took 10 for modifyServerData.
   optional sint32 depthStep = 11;
+  // See EntityData.elevation (libs/map-editor).
+  optional uint32 elevation = 12;
 }
 
 message DeleteEntityMessage {
@@ -602,6 +741,8 @@ message ModifyEntityMessage {
   uint32 height = 8;
   // Optional so that a move or a property edit leaves the manual stacking untouched. See EntityData.depthStep.
   optional sint32 depthStep = 9;
+  // Optional so that a move or a property edit leaves the floor of the entity untouched. See EntityData.elevation.
+  optional uint32 elevation = 10;
 }
 
 // Transport envelope for websocket frames sent from front to pusher.
@@ -650,6 +791,16 @@ message ClientToServerMessage {
     MeetingInvitationRequestMessage meetingInvitationRequestMessage = 48;
     MeetingInvitationResponseMessage meetingInvitationResponseMessage = 49;
     SetAreaPropertyVariableMessage setAreaPropertyVariableMessage = 46;
+    SetEntityStateMessage setEntityStateMessage = 55;
+    ReportSwitchPresenceMessage reportSwitchPresenceMessage = 56;
+    TameAnimalMessage tameAnimalMessage = 62;
+    ReleaseAnimalsMessage releaseAnimalsMessage = 63;
+    CastFishingLineMessage castFishingLineMessage = 60;
+    ReelFishingLineMessage reelFishingLineMessage = 61;
+    StartFishingContestMessage startFishingContestMessage = 64;
+    LaunchCatastropheMessage launchCatastropheMessage = 65;
+    SetFireConditionsMessage setFireConditionsMessage = 70;
+    IceShackActionMessage iceShackActionMessage = 81;
     VideoQualityReportMessage videoQualityReportMessage = 50;
     AnalyticsEventReportMessage analyticsEventReportMessage = 52;
     EntityMessage entityMessage = 53;
@@ -705,6 +856,500 @@ message AreaPropertyVariableMessage {
   string propertyId = 2;
   string key = 3;
   string value = 4;
+}
+
+// A switch of the map was used: sets the state `key` of the entities it commands. The state of an entity (a lamp that
+// is on or off) is kept by the back, never in the WAM.
+message SetEntityStateMessage {
+  string switchId = 1;
+  repeated string entityIds = 2;
+  string key = 3;
+  string value = 4;
+}
+
+// A browser tells which presence sensors of the map sense something only it can tell: one of its wandering animals in
+// a sensor, or its own player anywhere in the building of a sensor "of its building" (the server has neither the
+// animals nor the walls of the map). All of them at each report, none once nothing is sensed any more.
+message ReportSwitchPresenceMessage {
+  repeated string switchIds = 1;
+}
+
+enum CatastropheKind {
+  CATASTROPHE_METEOR = 0;
+  // A downpour: it rains hard under the pointer of a player (or on the whole map) for as long as they keep telling.
+  CATASTROPHE_DOWNPOUR = 1;
+  // A patch of fire set on the grass under the pointer of a player: what follows is the fire of the meadow.
+  CATASTROPHE_FIRE = 2;
+  // A drain: the water is taken hard from a disc under the pointer of a player, for as long as they keep telling.
+  CATASTROPHE_DRAIN = 3;
+  // A burning meteor: it sets its crater on fire, throws embers around and boils away the water it falls into.
+  CATASTROPHE_FIREBALL = 4;
+  // A ball: a solid sphere held under the pointer of a player, its centre at the altitude 0 of the map, for as long
+  // as they keep telling. It takes the place of the water, which the server alone moves.
+  CATASTROPHE_BALL = 5;
+  // Ice that gives way under a player: too thin to bear them over deep water, it cracks, then breaks around the
+  // point. The server breaks the ice it keeps there (as a meteor does) and tells the room, which sees the hole.
+  CATASTROPHE_ICE_BREAK = 6;
+  // A cold snap: a mass of very cold air laid on a disc under the pointer of a player, for as long as they keep
+  // telling. The server freezes what its meadow keeps there (water, snow, soil) by the rules of any frost; let go,
+  // the mass stays where it was and comes back to the air of the map.
+  CATASTROPHE_COLD = 7;
+  // A hurricane crosses the map, for the length a player chose: its wind, its rain and its sky take the place of the
+  // weather of the map. The server tells the room what it is once a second, every player computes the same weather
+  // from it and the time of the server. One a room; anyone stops it.
+  CATASTROPHE_HURRICANE = 8;
+}
+
+// How a hurricane crosses the map, as a player asks for it (the server keeps each value within bounds) and as the
+// server tells it. The hurricane is reduced to the size of the map: its eye crosses it.
+message HurricaneTrackMessage {
+  // Saffir-Simpson, 1 to 5.
+  int32 category = 1;
+  // How long the eye takes to cross the map, minutes.
+  int32 minutes = 2;
+  reserved 3;
+  // Where the storm goes, degrees (0 north, 90 east).
+  double heading = 4;
+  // Told by the server only: it turns clockwise (a map in the southern hemisphere), when it began (ms, the time of
+  // the server), where its eye comes in and goes out (map pixels), and the point it was sent over.
+  bool southern = 5;
+  double startedAt = 6;
+  double fromX = 7;
+  double fromY = 8;
+  double toX = 9;
+  double toY = 10;
+  double anchorX = 11;
+  double anchorY = 12;
+  // Told by the server only: how long the crossing lasts now (ms) and how many times faster than asked it goes (the
+  // speed of the map); `startedAt` is moved with them so that the eye goes on from where it is.
+  double durationMs = 13;
+  double times = 14;
+  // How many times stronger than in reality its low and its wind act on the water, to see it better: 1 (or absent:
+  // the real effect), 5, 10 or 20 (Hurricane.HURRICANE_WATER_EFFECTS). Asked by the player, kept by the server.
+  int32 waterEffect = 15;
+}
+
+// Browser to server: a player sets the conditions the fire of the room goes by (heat, humidity of the air, wind) by
+// hand, or goes back to the real ones; and from where they light a fire. The server keeps every value within bounds.
+message SetFireConditionsMessage {
+  bool manual = 1;
+  // Degrees Celsius, % of relative humidity, km/h, and where the wind comes from in degrees (0 north, 90 east).
+  double temperature = 2;
+  double humidity = 3;
+  double windSpeed = 4;
+  double windFrom = 5;
+  // Hotter than, drier than, windier than: 30, 30 and 30 by default.
+  double thresholdTemperature = 6;
+  double thresholdHumidity = 7;
+  double thresholdWindSpeed = 8;
+}
+
+// Server to room, and to a player who joins: the conditions the fire of the room goes by, set by hand or real.
+message FireConditionsMessage {
+  bool manual = 1;
+  double temperature = 2;
+  double humidity = 3;
+  double windSpeed = 4;
+  double windFrom = 5;
+  double thresholdTemperature = 6;
+  double thresholdHumidity = 7;
+  double thresholdWindSpeed = 8;
+}
+
+// Browser to server: a player launches a catastrophe at a point of the map, in map pixels. The server decides.
+message LaunchCatastropheMessage {
+  CatastropheKind kind = 1;
+  int32 x = 2;
+  int32 y = 3;
+  // A meteor: the radius of its crater, in tiles. A downpour, a drain: the radius of its disc. A ball: its
+  // diameter. The server keeps it within what each may be.
+  int32 radiusTiles = 4;
+  // A downpour: it falls on the whole map instead of a disc.
+  bool wholeMap = 5;
+  // A ball: its player lets it go. It is gone at once. A cold snap: the cold air of the room is dispelled, whoever
+  // laid it; what it froze stays, and thaws.
+  bool release = 6;
+  // A cold snap: the temperature of its air, in °C. The server keeps it within what a cold snap may be.
+  optional double temperature = 7;
+  // A hurricane: how it crosses the map, its eye over `x`, `y` (the middle of the map when outside it). `release`
+  // stops it.
+  optional HurricaneTrackMessage hurricane = 8;
+}
+
+// Server to room: a catastrophe is on its way.
+message CatastropheMessage {
+  int32 id = 1;
+  CatastropheKind kind = 2;
+  int32 x = 3;
+  int32 y = 4;
+  int32 impactInMs = 5;
+  // A meteor: the radius of its crater, in tiles, as the server kept it. A downpour: the radius of its disc.
+  int32 radiusTiles = 6;
+  // A downpour: it falls on the whole map. Its `id` stays the same from a message to the next while it goes on, and
+  // `impactInMs` is how long it still rains when no other message comes.
+  bool wholeMap = 7;
+  // A ball: it is at `x`, `y`, `radiusTiles` across (its diameter), under the pointer of the player `userId`, and
+  // stands `impactInMs` more when no other message comes: 0 when its player let it go.
+  reserved 8, 9, 10;
+  optional int32 userId = 11;
+  // A ball: the altitude of its centre, in pixels: the level of the water it stands in, where it is half in the
+  // water, or the ground under it where there is no water. The server alone decides it.
+  optional double ballLevel = 12;
+  // A cold snap: the temperature of its air, in °C, as the server kept it. `impactInMs` is how long it is still
+  // held when no other message comes; it then warms where it lies. 0: the cold air of the room was dispelled.
+  optional double temperature = 13;
+  // A hurricane: how it crosses the map, told once a second while it goes on; `impactInMs` is how long it still
+  // lasts, 0 when it was stopped or ended.
+  optional HurricaneTrackMessage hurricane = 14;
+}
+
+// A player casts their fishing line: where the float lands, in map pixels. The server decides whether it does
+// (reach, water where fish live, one cast a second, lines of the room), and everything that follows.
+message CastFishingLineMessage {
+  int32 x = 1;
+  int32 y = 2;
+}
+
+// The key of the fishing rod again: hooks a biting fish, brings back a line that has none.
+message ReelFishingLineMessage {
+}
+
+// A fishing line in the water.
+message FishingLineMessage {
+  int32 userId = 1;
+  // Where the float is, in map pixels.
+  int32 x = 2;
+  int32 y = 3;
+  // 0 waiting, 1 a fish bites (to hook within two seconds), 2 the fish is brought in.
+  int32 state = 4;
+  // The animal (see AquaticAnimalMessage.id) that comes to the float, bites or is brought in; 0 when none.
+  int32 fishId = 5;
+}
+
+// What just happened to the line of a player.
+message FishingEventMessage {
+  int32 userId = 1;
+  // 0 a bite, 1 the fish got away (hooked too late), 2 the fish was eaten or died on its way in, 3 the line came
+  // back, 4 the cast was refused, 5 a catch (let go at once).
+  int32 type = 2;
+  // A catch: its weight in grams, and its kind as in AquaticAnimalMessage.
+  int32 grams = 3;
+  int32 kind = 4;
+}
+
+// All the fishing lines of the room, sent whenever one changes, with what just happened.
+message FishingMessage {
+  repeated FishingLineMessage lines = 1;
+  repeated FishingEventMessage events = 2;
+  // How many fish were caught (and let go) since the life of the map began.
+  int32 caughtTotal = 3;
+  // The fishing contest of the room: while one runs, and once more when it ends (finished).
+  optional FishingContestMessage contest = 4;
+  // The heaviest fish ever caught on the map.
+  optional FishingRecordMessage record = 5;
+}
+
+// A player starts a fishing contest in the room: 3, 5 or 10 minutes. Refused while one runs. Every catch made
+// meanwhile counts for the player who makes it; the server keeps the scores and ends the contest on time.
+message StartFishingContestMessage {
+  uint32 minutes = 1;
+}
+
+// What a player does with an ice fishing shack. The server checks everything from where it knows the player stands,
+// on the ice it keeps: a shack is an object of the room, never an edit of the map.
+enum IceShackAction {
+  // Drills a hole in the ice under the player and puts a shack up around it (shackId unused).
+  ICE_SHACK_BUILD = 0;
+  // Sits on the stool of the shack, in front of its hole: one player at a time.
+  ICE_SHACK_ENTER = 1;
+  // Gets up from the stool: the shack stays.
+  ICE_SHACK_LEAVE = 2;
+  // Takes the shack down: who put it up only.
+  ICE_SHACK_DISMANTLE = 3;
+}
+
+message IceShackActionMessage {
+  IceShackAction action = 1;
+  int32 shackId = 2;
+}
+
+// An ice fishing shack standing on the ice of the room.
+message IceShackMessage {
+  int32 id = 1;
+  // The centre of its hole in the ice, in map pixels.
+  int32 x = 2;
+  int32 y = 3;
+  // The name of who put it up, and their user id while they are in the room (0 otherwise).
+  string ownerName = 4;
+  int32 ownerUserId = 5;
+  // Who sits in it; 0 when nobody.
+  int32 occupantUserId = 6;
+  // How long ago it was put up when this is sent (the hole is drilled, then the shack goes up): no clock of a browser
+  // is trusted.
+  uint32 ageMs = 7;
+  // The ice under it is too thin for it now: it cracks, and is taken down in this many ms (0: it does not crack).
+  uint32 crackingMs = 8;
+}
+
+// Something that just happened to a shack or to the action of a player.
+message IceShackEventMessage {
+  int32 userId = 1;
+  int32 shackId = 2;
+  // See IceShackEvent in libs/map-editor (Life/IceShack): a refusal and its reason, a crack, a shack gone.
+  int32 type = 3;
+}
+
+// All the ice fishing shacks of the room, sent whenever one changes, with what just happened.
+message IceShacksMessage {
+  repeated IceShackMessage shacks = 1;
+  repeated IceShackEventMessage events = 2;
+}
+
+// A player of a fishing contest, in the order of the ranking.
+message FishingContestEntryMessage {
+  string name = 1;
+  uint32 totalGrams = 2;
+  // The heaviest catch of the player.
+  uint32 bestGrams = 3;
+  uint32 catches = 4;
+  // The player in the room when they last caught a fish (their id changes when they reconnect); 0 when unknown.
+  int32 userId = 5;
+}
+
+message FishingContestMessage {
+  // The name of the player who started the contest.
+  string hostName = 1;
+  uint32 minutes = 2;
+  // How long the contest still lasts when this is sent: no clock of a browser is trusted.
+  uint32 remainingMs = 3;
+  // The contest just ended: this is its final ranking.
+  bool finished = 4;
+  repeated FishingContestEntryMessage entries = 5;
+}
+
+message FishingRecordMessage {
+  // The name of the player who caught it.
+  string name = 1;
+  uint32 grams = 2;
+  // The kind of the fish, as in AquaticAnimalMessage.
+  uint32 kind = 3;
+  // When, in seconds since 1970.
+  uint32 atSeconds = 4;
+}
+
+// The state of an entity changed (or its initial state, on joining the room). An entity without message has the
+// default state of the key.
+message EntityStateMessage {
+  string entityId = 1;
+  string key = 2;
+  string value = 3;
+}
+
+// The fire of the trees of the map (TreeFire in libs/map-editor), as the server alone computes it. Sent with the
+// step of the meadow, only when it has something to say.
+message TreeFireMessage {
+  // The trees whose state changed; every tree that burns or is charred when `whole`.
+  repeated TreeFireStateMessage trees = 1;
+  // True for a player who joins the room and after a reset: the trees not named are green.
+  bool whole = 2;
+  // The embers that left at this step: each starts a fire where it falls.
+  repeated FireEmberMessage embers = 3;
+}
+
+message TreeFireStateMessage {
+  // The id of the object of the map.
+  string id = 1;
+  // Its fire, from 0 (none) to 255 (at its height).
+  uint32 fire = 2;
+  // What burnt of it, from 0 (green) to 16 (charred); for a tree laid down by the wind, what is still to grow back.
+  uint32 damage = 3;
+  // Laid down by the wind: where that wind came from, in degrees (0 north, 90 east), plus 1; 0: standing.
+  uint32 fallen = 4;
+}
+
+// An ember on its way, in map pixels: where it left, where it falls, and how long it flies.
+message FireEmberMessage {
+  sint32 fromX = 1;
+  sint32 fromY = 2;
+  sint32 toX = 3;
+  sint32 toY = 4;
+  uint32 flightMs = 5;
+}
+
+// The meadow of the map (Meadow in libs/map-editor): the grass and the moisture of the soil of each tile, as the
+// server alone computes them, so that every player sees the same meadow. The whole state, sent when it changed.
+message MeadowMessage {
+  // The size of the map, in tiles (32 map pixels).
+  uint32 width = 1;
+  uint32 height = 2;
+  // A byte a tile (0: bare, 255: a full meadow), row by row, gzipped.
+  bytes grass = 3;
+  // A byte a tile (0: dry, 255: sodden), row by row, gzipped.
+  bytes moisture = 4;
+  // A byte a tile (0: green grass, 255: straw, ready to burn), row by row, gzipped. Empty from an older server.
+  bytes dryness = 5;
+  // A byte a tile (0: no fire, 255: a fire at its height), row by row, gzipped. Empty from an older server.
+  bytes fire = 6;
+  // A byte a tile (0: none, 255: burnt through), the ash a fire left, row by row, gzipped. Empty from an older server.
+  bytes ash = 7;
+  // A byte a tile, the snow lying on it (snowByte in libs/map-editor: 0 none, 255 the most a tile holds), row by row,
+  // gzipped. Empty when no snow lies on the map, and from an older server.
+  bytes snow = 8;
+  // A byte a tile, the ice over the water lying on it (iceByte in libs/map-editor: 0 none, 255 the thickest), row by
+  // row, gzipped. Empty when no water of the map is frozen, and from an older server.
+  bytes ice = 9;
+  // Whether the server is still living the time the room missed while it was empty (MeadowSimulation.catchingUp): the
+  // snow and the ice then change by the weather of that time, not by the air of now. False from an older server.
+  bool catchingUp = 10;
+}
+
+// The water of the relief of the map (WaterGrid in libs/map-editor): the depth of the water over each cell of a
+// rectangle of the map. The server alone computes it, so that every player sees the same water.
+message TerrainWaterMessage {
+  // The rectangle, in cells of the relief (16 map pixels).
+  sint32 x = 1;
+  sint32 y = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  // Counts the messages of a room: a browser that missed one waits for the next full state.
+  uint32 seq = 5;
+  // Whether `depths` is the whole state, or what changed since the message before (bytes to XOR with it).
+  bool full = 6;
+  // Two bytes a cell (eighths of a pixel of water, low byte first), row by row, gzipped.
+  bytes depths = 7;
+  optional TerrainWaterStatsMessage stats = 8;
+  // The speed of the water, on a map whose water has inertia: two signed bytes a block of 4 x 4 cells (towards
+  // the east, towards the south, in quarters of a cell a second), row by row, gzipped. Absent: none is known.
+  optional bytes speeds = 9;
+  // The slow speeds apart, in the same layout: where `speeds` says 0, in 250ths of a cell a second (a water slower
+  // than about a centimetre a second is still). Absent: no slow speed is known.
+  optional bytes slowSpeeds = 10;
+}
+
+// The animals living in the water of the relief of a room (fish, dolphins), told by the server once a second: all
+// of them each time (a few bytes each, 300 at most). A new id is a birth, a missing one a death.
+message AquaticLifeMessage {
+  repeated AquaticAnimalMessage animals = 1;
+  // What happened since the life of the map began, and its waters: for the dashboard of the life tool.
+  optional AquaticLifeStatsMessage stats = 2;
+  // The figures species by species: those that live in the room, have room to, or ever did.
+  repeated AquaticSpeciesStatsMessage species = 3;
+}
+
+// Totals since `since` (milliseconds, the clock of the server), and the waters of the room as the life sees them.
+message AquaticLifeStatsMessage {
+  double since = 1;
+  // Animals that came by themselves into an empty water.
+  uint32 arrivals = 2;
+  uint32 births = 3;
+  uint32 diedOfAge = 4;
+  uint32 eaten = 5;
+  // Left without water.
+  uint32 diedDry = 6;
+  // Bodies of water big enough for fish, those where fish live, and how many fish they can hold together.
+  uint32 habitableBodies = 7;
+  uint32 populatedBodies = 8;
+  uint32 capacity = 9;
+  // The prey and the predators over the whole life of the map, oldest first: only for a player who joins the room
+  // (each browser then adds what it is told). Empty in the messages of every second.
+  // The dolphins: calves born, and deaths (of age or of hunger).
+  uint32 predatorBirths = 12;
+  uint32 predatorDeaths = 13;
+  repeated AquaticLifeSampleMessage history = 10;
+  // How far apart the samples of the history are now, in milliseconds.
+  double historyStepMs = 11;
+  // The prey and the predators over the last five minutes, hour, four hours and day, each with its own samples: as
+  // the history, only for a player who joins the room.
+  repeated AquaticLifeRangeMessage ranges = 14;
+}
+
+// A species of the life of a map: how many live now, how many its places can hold, and what happened to it since
+// the life of the map began.
+message AquaticSpeciesStatsMessage {
+  // 0: fish, 1: dolphin, 2: antelope, 3: lion, 4: tiger, 5: gull.
+  uint32 species = 1;
+  uint32 males = 2;
+  uint32 females = 3;
+  uint32 cap = 4;
+  // Those that came by themselves into an empty place.
+  uint32 arrivals = 5;
+  uint32 births = 6;
+  uint32 diedOfAge = 7;
+  uint32 eaten = 8;
+  // Dead of hunger.
+  uint32 starved = 9;
+  // Left without water.
+  uint32 diedDry = 10;
+  // What it ate, by species of prey.
+  repeated AquaticSpeciesCountMessage meals = 11;
+}
+
+message AquaticSpeciesCountMessage {
+  uint32 species = 1;
+  uint32 count = 2;
+}
+
+message AquaticLifeRangeMessage {
+  // "5min", "1h", "4h" or "1d".
+  string name = 1;
+  repeated AquaticLifeSampleMessage samples = 2;
+}
+
+message AquaticLifeSampleMessage {
+  double at = 1;
+  uint32 prey = 2;
+  uint32 predators = 3;
+  // How many of each species lived then.
+  repeated AquaticSpeciesCountMessage counts = 4;
+}
+
+message AquaticAnimalMessage {
+  uint32 id = 1;
+  // Twice the species (see AquaticSpeciesStatsMessage), plus one for a female: 0 male fish, 1 female fish,
+  // 2 male dolphin, 3 female dolphin…
+  uint32 kind = 2;
+  // Map pixels.
+  sint32 x = 3;
+  sint32 y = 4;
+  // 0 or absent: as usual, 1: flying, 2: resting, 3: drinking.
+  optional uint32 state = 5;
+  // The user id of the player who tamed it and whom it follows; absent for a free animal.
+  optional uint32 owner = 6;
+}
+
+// A player asks to tame an animal of the life of the map (a lion, a tiger) that is near them. The server decides
+// (species, distance, an animal not taken, five at most) and says so in the next AquaticLifeMessage (`owner`).
+message TameAnimalMessage {
+  uint32 animalId = 1;
+}
+
+// A player lets go one of the animals they tamed, or all of them when none is named.
+message ReleaseAnimalsMessage {
+  optional uint32 animalId = 1;
+}
+
+// What came into the water of the map and went out of it over the last second, in cubic metres an hour of the time
+// of the map, and what it holds: for the dashboard of the relief tool.
+message TerrainWaterStatsMessage {
+  double rain = 1;
+  double sources = 2;
+  double sinks = 3;
+  double evaporation = 4;
+  double absorption = 5;
+  double lost = 6;
+  // Cubic metres of water on the map, and square metres under water.
+  double stock = 7;
+  double wetArea = 8;
+  // How hard it rains now, in mm an hour.
+  double rainRate = 9;
+  // The fineness the water is computed with, when the server lowered it under what the map asks: its steps took
+  // too long. Absent: the fineness of the map.
+  optional uint32 easedPrecision = 10;
+  // How often the players are told a second, when the server lowered it for the same reason.
+  optional uint32 easedUpdates = 11;
+  // A map whose water goes faster than reality: how many times faster it really goes now, what the server holds
+  // (WaterPace), at most its speed. Absent on a map at the pace of reality.
+  optional uint32 reachedSpeed = 12;
 }
 
 // A sound attached to an entity was activated and must be played by every player of the map.
@@ -1316,6 +1961,15 @@ message SubMessage {
     EntityMessage entityMessage = 31;
     SpaceStatePatchMessage spaceStatePatchMessage = 32;
     DuckRushEventMessage duckRushEventMessage = 33;
+    EntityStateMessage entityStateMessage = 34;
+    TerrainWaterMessage terrainWaterMessage = 35;
+    AquaticLifeMessage aquaticLifeMessage = 36;
+    FishingMessage fishingMessage = 40;
+    MeadowMessage meadowMessage = 41;
+    CatastropheMessage catastropheMessage = 42;
+    FireConditionsMessage fireConditionsMessage = 47;
+    TreeFireMessage treeFireMessage = 48;
+    IceShacksMessage iceShacksMessage = 59;
   }
 }
 
@@ -1413,6 +2067,21 @@ message RoomJoinedMessage {
   bool canEdit = 16;
   CompanionTextureMessage companionTexture = 18;
   repeated AreaPropertyVariableMessage areaPropertyVariable = 19;
+  repeated EntityStateMessage entityState = 20;
+  // The water of the relief (its whole state), for a player who joins the room. Absent on a map without water.
+  optional TerrainWaterMessage terrainWater = 22;
+  // The animals of the water of the relief, for a player who joins the room. Absent on a map without any.
+  optional AquaticLifeMessage aquaticLife = 23;
+  // The fishing lines in the water of the relief, for a player who joins the room. Absent when there is none.
+  optional FishingMessage fishing = 30;
+  // The meadow of the map (its whole state), for a player who joins the room. Absent where nothing ever grew.
+  optional MeadowMessage meadow = 31;
+  // The conditions the fire of the room goes by, for a player who joins it.
+  optional FireConditionsMessage fireConditions = 35;
+  // The trees that burn or are charred (all of them), for a player who joins the room. Absent when every tree is green.
+  optional TreeFireMessage treeFire = 36;
+  // The ice fishing shacks standing on the ice of the room, for a player who joins it. Absent when there is none.
+  optional IceShacksMessage iceShacks = 47;
 }
 
 message WebRtcStartMessage {
@@ -1949,6 +2618,16 @@ message PusherToBackMessage {
     SetAreaPropertyVariableMessage setAreaPropertyVariableMessage = 34;
     EntityMessage entityMessage = 35;
     DuckRushPromptMessage duckRushPromptMessage = 36;
+    SetEntityStateMessage setEntityStateMessage = 37;
+    ReportSwitchPresenceMessage reportSwitchPresenceMessage = 38;
+    TameAnimalMessage tameAnimalMessage = 46;
+    ReleaseAnimalsMessage releaseAnimalsMessage = 47;
+    CastFishingLineMessage castFishingLineMessage = 44;
+    ReelFishingLineMessage reelFishingLineMessage = 45;
+    StartFishingContestMessage startFishingContestMessage = 48;
+    LaunchCatastropheMessage launchCatastropheMessage = 49;
+    SetFireConditionsMessage setFireConditionsMessage = 54;
+    IceShackActionMessage iceShackActionMessage = 65;
   }
 }
 
@@ -1968,6 +2647,15 @@ message SubToPusherRoomMessage {
     // Zone-specific messages (all grouped in ZoneMessage)
     ZoneMessage zoneMessage = 7;
     AreaPropertyVariableMessage areaPropertyVariableMessage = 8;
+    EntityStateMessage entityStateMessage = 10;
+    TerrainWaterMessage terrainWaterMessage = 11;
+    AquaticLifeMessage aquaticLifeMessage = 12;
+    FishingMessage fishingMessage = 20;
+    MeadowMessage meadowMessage = 21;
+    CatastropheMessage catastropheMessage = 22;
+    FireConditionsMessage fireConditionsMessage = 27;
+    TreeFireMessage treeFireMessage = 28;
+    IceShacksMessage iceShacksMessage = 39;
   }
 }
 

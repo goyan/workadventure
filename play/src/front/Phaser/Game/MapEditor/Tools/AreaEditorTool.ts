@@ -1,14 +1,17 @@
+import { areaElevation } from "@workadventure/map-editor";
 import * as Phaser from "phaser";
 import type { AreaData, AtLeast } from "@workadventure/map-editor";
 import type { EditMapCommandMessage } from "@workadventure/messages";
 import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import { v4 as uuid } from "uuid";
+import { mapLayerPickLevelStore } from "../../../../Stores/MapLayerStore";
 import type { MapEditorAreaToolMode } from "../../../../Stores/MapEditorStore";
 import {
     mapEditorAreaEraserStore,
     mapEditorAreaModeStore,
     mapEditorSelectedAreaPreviewStore,
+    mapEditorPlacementLevelStore,
 } from "../../../../Stores/MapEditorStore";
 import { AreaPreview, AreaPreviewEvent } from "../../../Components/MapEditor/AreaPreview";
 import { SizeAlteringSquare } from "../../../Components/MapEditor/SizeAlteringSquare";
@@ -28,6 +31,7 @@ import { LL } from "../../../../../i18n/i18n-svelte";
 import { MAP_LAYER_TILE_SIZE } from "../MapLayer/MapLayerCatalog";
 import { modelFromPlacedPrefabs } from "../MapLayer/MapLayerOperations";
 import { snapRectToFloors } from "../MapLayer/MapLayerAreaSnap";
+import { clampAreaCorner } from "../../../Components/MapEditor/AreaMapBounds";
 import { MapEditorTool } from "./MapEditorTool";
 import { modals } from "@wa-modals";
 
@@ -35,6 +39,9 @@ import Graphics = Phaser.GameObjects.Graphics;
 import Key = Phaser.Input.Keyboard.Key;
 import Pointer = Phaser.Input.Pointer;
 import GameObject = Phaser.GameObjects.GameObject;
+
+/** Opacity of the areas of the floors that are not the one being edited. */
+const OTHER_LEVEL_ALPHA = 0.3;
 
 export class AreaEditorTool extends MapEditorTool {
     private scene: GameScene;
@@ -64,6 +71,9 @@ export class AreaEditorTool extends MapEditorTool {
     private toolTipAlreadyPlayed: boolean = false;
 
     private selectedAreaPreviewStoreSubscriber!: Unsubscriber;
+    private levelUnsubscriber: Unsubscriber | undefined;
+    /** The floor of the map the area being drawn goes on (0: the ground). */
+    private drawingLevel = 0;
 
     private pointerMoveEventHandler!: (pointer: Pointer, gameObjects: GameObject[]) => void;
     private pointerUpEventHandler!: (pointer: Pointer, gameObjects: GameObject[]) => void;
@@ -107,6 +117,8 @@ export class AreaEditorTool extends MapEditorTool {
         mapEditorAreaEraserStore.set(false);
         this.setAreaPreviewsVisibility(false);
         this.scene.input.setDefaultCursor("auto");
+        this.levelUnsubscriber?.();
+        this.levelUnsubscriber = undefined;
         this.unbindEventHandlers();
         this.scene.markDirty();
     }
@@ -120,6 +132,9 @@ export class AreaEditorTool extends MapEditorTool {
         this.bindEventHandlers();
         this.changeAreaMode("ADD");
         this.makeAllEntitiesInteractive();
+        // The level chosen in the panel (shared with the map tool and the objects): its areas, the others faded.
+        this.levelUnsubscriber?.();
+        this.levelUnsubscriber = mapEditorPlacementLevelStore.subscribe(() => this.showEditedLevel());
         this.scene.markDirty();
     }
 
@@ -250,13 +265,13 @@ export class AreaEditorTool extends MapEditorTool {
 
     private bindEventHandlers(): void {
         this.pointerMoveEventHandler = (pointer: Pointer, gameObjects: GameObject[]) => {
-            this.handlePointerMoveEvent(pointer, gameObjects);
+            this.handlePointerMoveEvent(pointer, this.ofEditedLevel(pointer, gameObjects));
         };
         this.pointerUpEventHandler = (pointer: Pointer, gameObjects: GameObject[]) => {
-            this.handlePointerUpEvent(pointer, gameObjects);
+            this.handlePointerUpEvent(pointer, this.ofEditedLevel(pointer, gameObjects));
         };
         this.pointerDownEventHandler = (pointer: Pointer, gameObjects: GameObject[]) => {
-            this.handlePointerDownEvent(pointer, gameObjects);
+            this.handlePointerDownEvent(pointer, this.ofEditedLevel(pointer, gameObjects));
         };
 
         this.scene.input.on(Phaser.Input.Events.POINTER_UP, this.pointerUpEventHandler);
@@ -340,6 +355,12 @@ export class AreaEditorTool extends MapEditorTool {
         if (pointer.rightButtonDown()) {
             return;
         }
+        if (get(mapLayerPickLevelStore)) {
+            // The pipette of the level picker: the floor drawn under the click becomes the level being edited.
+            mapLayerPickLevelStore.set(false);
+            mapEditorPlacementLevelStore.set(this.scene.floorLevelAt({ x: pointer.worldX, y: pointer.worldY }));
+            return;
+        }
         const mode = get(mapEditorAreaModeStore);
 
         if (get(mapEditorAreaEraserStore)) {
@@ -361,12 +382,14 @@ export class AreaEditorTool extends MapEditorTool {
             if (mode === "ADD") {
                 this.clearHoverMarker();
                 this.drawingNewArea = true;
+                this.drawingLevel = this.levelToDrawOn(pointer.worldX, pointer.worldY);
                 this.drawinNewAreaStartPos = this.snapToCorner(pointer.worldX, pointer.worldY);
                 return;
             }
             if (mode === "EDIT") {
                 this.changeAreaMode("ADD");
                 this.drawingNewArea = true;
+                this.drawingLevel = this.levelToDrawOn(pointer.worldX, pointer.worldY);
                 this.drawinNewAreaStartPos = this.snapToCorner(pointer.worldX, pointer.worldY);
                 return;
             }
@@ -490,15 +513,34 @@ export class AreaEditorTool extends MapEditorTool {
             return;
         }
         this.scene.input.setDefaultCursor("crosshair");
-        const corner = this.snapToCorner(pointer.worldX, pointer.worldY);
+        const corner = this.snapToCorner(
+            pointer.worldX,
+            pointer.worldY,
+            this.levelToDrawOn(pointer.worldX, pointer.worldY),
+        );
         this.hoverMarker.clear().fillStyle(0xffffff, 0.8).fillCircle(corner.x, corner.y, 4);
         this.scene.markDirty();
     }
 
     // The corners of the tiles are the only places where an area can start or end.
-    private snapToCorner(worldX: number, worldY: number): { x: number; y: number } {
+    /**
+     * The corner of a tile nearest to a point, on the grid of a floor of the map: the tiles of a raised floor are
+     * drawn its altitude further north.
+     */
+    private snapToCorner(worldX: number, worldY: number, level = this.drawingLevel): { x: number; y: number } {
         const size = MAP_LAYER_TILE_SIZE;
-        return { x: Math.round(worldX / size) * size, y: Math.round(worldY / size) * size };
+        // Never past the edges of the map: no avatar walks there.
+        return clampAreaCorner(
+            { x: Math.round(worldX / size) * size, y: Math.round((worldY + level) / size) * size - level },
+            level,
+            { width: this.scene.Map.widthInPixels, height: this.scene.Map.heightInPixels },
+        );
+    }
+
+    /** The floor an area drawn from this point goes on: the level chosen in the panel, on "auto" the one drawn there. */
+    private levelToDrawOn(worldX: number, worldY: number): number {
+        const choice = get(mapEditorPlacementLevelStore);
+        return choice === "auto" ? this.scene.floorLevelAt({ x: worldX, y: worldY }) : choice;
     }
 
     private clearHoverMarker(): void {
@@ -535,6 +577,8 @@ export class AreaEditorTool extends MapEditorTool {
         const height = Math.abs(end.y - this.drawinNewAreaStartPos.y);
         const x = Math.min(this.drawinNewAreaStartPos.x, end.x);
         const y = Math.min(this.drawinNewAreaStartPos.y, end.y);
+        // On a raised floor, the grid of its slabs is enough.
+        if (this.drawingLevel > 0) return { x, y, width, height };
         // Areas always snap to the floors of the map layer (the size of a room), or to the grid without any floor.
         return this.snapToFloors({ x, y, width, height });
     }
@@ -551,6 +595,37 @@ export class AreaEditorTool extends MapEditorTool {
             items.push({ x: entity.x, y: entity.y, collectionName: prefab.collectionName, prefabId: prefab.id });
         }
         return snapRectToFloors(modelFromPlacedPrefabs(items), rect);
+    }
+
+    /**
+     * What is under the pointer, without the areas of the other floors of the map: with a level chosen in the panel,
+     * only the areas of that level are edited; on "auto", where areas of several floors are drawn over each other,
+     * the ones of the floor drawn under the pointer.
+     */
+    private ofEditedLevel(pointer: Pointer, gameObjects: GameObject[]): GameObject[] {
+        const choice = get(mapEditorPlacementLevelStore);
+        const previews = gameObjects.filter((obj): obj is AreaPreview => this.isAreaPreview(obj));
+        let level: number | undefined;
+        if (choice !== "auto") {
+            level = choice;
+        } else if (new Set(previews.map((preview) => areaElevation(preview.getAreaData()))).size > 1) {
+            const under = this.scene.floorLevelAt({ x: pointer.worldX, y: pointer.worldY });
+            if (previews.some((preview) => areaElevation(preview.getAreaData()) === under)) level = under;
+        }
+        if (level === undefined) return gameObjects;
+        const kept = level;
+        return gameObjects.filter((obj) => !this.isAreaPreview(obj) || areaElevation(obj.getAreaData()) === kept);
+    }
+
+    /** With a level chosen in the panel, the areas of the other floors let it show through. */
+    private showEditedLevel(): void {
+        const choice = get(mapEditorPlacementLevelStore);
+        for (const preview of this.areaPreviews) {
+            preview.setAlpha(
+                choice === "auto" || areaElevation(preview.getAreaData()) === choice ? 1 : OTHER_LEVEL_ALPHA,
+            );
+        }
+        this.scene.markDirty();
     }
 
     private getAreaEditorToolObjectsFromGameObjects(gameObjects: GameObject[]): (AreaPreview | SizeAlteringSquare)[] {
@@ -635,6 +710,7 @@ export class AreaEditorTool extends MapEditorTool {
         const areaPreview = new AreaPreview(this.scene, structuredClone(areaConfig), true, this.shiftKey, this.ctrlKey);
         this.bindAreaPreviewEventHandlers(areaPreview);
         this.areaPreviews.push(areaPreview);
+        if (this.levelUnsubscriber) this.showEditedLevel();
         return areaPreview;
     }
 
@@ -665,6 +741,8 @@ export class AreaEditorTool extends MapEditorTool {
 
     private createNewArea(x: number, y: number, width: number, height: number): void {
         const id = uuid();
+        // The floor the drawing started on (see `levelToDrawOn`).
+        const elevation = this.drawingLevel;
         this.mapEditorModeManager
             .executeCommand(
                 new CreateAreaFrontCommand(
@@ -678,6 +756,8 @@ export class AreaEditorTool extends MapEditorTool {
                         height,
                         x,
                         y,
+                        // On the level chosen in the panel; on "auto", the raised floor drawn under it.
+                        ...(elevation > 0 ? { elevation } : {}),
                     },
                     undefined,
                     this,

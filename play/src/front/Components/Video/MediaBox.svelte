@@ -8,6 +8,7 @@
         videoBox: VideoBox;
         fullScreen?: boolean;
         activeUserName?: boolean;
+        avatarBubble?: boolean;
         // This context is used to know if the VideoMediaBox is part of the highlight fullscreen participant list.
         inHighlightFullscreenParticipantList?: boolean;
     }
@@ -16,9 +17,11 @@
         videoBox,
         fullScreen = false,
         activeUserName = true,
+        avatarBubble = false,
         inHighlightFullscreenParticipantList = false,
     }: Props = $props();
     setContext("inHighlightFullscreenParticipantList", (() => inHighlightFullscreenParticipantList)());
+    setContext("inAvatarBubble", (() => avatarBubble)());
 </script>
 
 <!-- Bug with transition : transition:fly={{ y: 50, duration: 150 }} -->

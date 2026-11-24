@@ -1,3 +1,5 @@
+import { isAtAreaLevel } from "@workadventure/map-editor";
+import type { AreaPosition } from "@workadventure/map-editor";
 import * as Phaser from "phaser";
 import type {
     AreaChangeCallback,
@@ -27,19 +29,22 @@ import { wallBarriers } from "../MapEditor/MapLayer/MapLayerBarriers";
 import { getAreaMapEditors, hasMeetingProperty } from "../../../Rules/MeetingRules";
 import { extensionModuleStore } from "../../../Stores/GameSceneStore";
 import type { Entity } from "../../ECS/Entity";
+import { AIRPLANE_AREA_LEVEL } from "../../Vehicle/Vehicle";
 import { DEPTH_OVERLAY_INDEX } from "../DepthIndexes";
 import type { ITiledPlace } from "../GameMapPropertiesListener";
 import type { GameScene } from "../GameScene";
 import type { Player } from "../../Player/Player";
 import { RectangleObstacles } from "../../../Utils/RectangleObstacles";
 import { sameGrids } from "../Wander/WanderCollisions";
-import { getTileCollisionGrid } from "../../../Utils/EntityHitbox";
+import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
+import { getSolidRectangles, getTileCollisionGrid } from "../../../Utils/EntityHitbox";
 import { EntitiesManager } from "./EntitiesManager";
 import { AreasManager } from "./AreasManager";
 import { EntityCollisionRectangles } from "./EntityCollisionRectangles";
 import { TiledTileCollisions } from "./TiledTileCollisions";
 import { getTileLayerStats, isWorthRenderingOnGpu } from "./TilemapGpuLayerEligibility";
 
+import { keepCulledTiles } from "./TileCullCache";
 import TilemapLayer = Phaser.Tilemaps.TilemapLayer;
 import TilemapGPULayer = Phaser.Tilemaps.TilemapGPULayer;
 import Tilemap = Phaser.Tilemaps.Tilemap;
@@ -86,6 +91,14 @@ export type PropertyChangeCallback = (
 /** Why an object cannot be placed somewhere (see getPlacementBlocker). */
 export type PlacementBlocker = "outOfMap" | "obstacle" | "player" | "permission";
 
+/** The tile key of a player in the sky (see AIRPLANE_AREA_LEVEL): no tile of the map. */
+const AIRBORNE_KEY = -1;
+
+/** A flying player is above every floor of the map: no ground area, tile or dynamic area applies to it. */
+function isAirborne(position: AreaPosition | undefined): boolean {
+    return (position?.z ?? 0) >= AIRPLANE_AREA_LEVEL;
+}
+
 export class GameMapFrontWrapper {
     private scene: GameScene;
     private gameMap: GameMap;
@@ -98,11 +111,11 @@ export class GameMapFrontWrapper {
     /**
      * oldPosition is the previous position of the player.
      */
-    private oldPosition: { x: number; y: number } | undefined;
+    private oldPosition: AreaPosition | undefined;
     /**
      * position is the current position of the player.
      */
-    private position: { x: number; y: number } | undefined;
+    private position: AreaPosition | undefined;
 
     /**
      * Manager for renderable, interactive objects that players can work with.
@@ -272,13 +285,16 @@ export class GameMapFrontWrapper {
     private createRenderableLayer(layer: ITiledMapTileLayer, terrains: Array<Tileset>): RenderableTilemapLayer | null {
         const gpuTileset = this.getGpuTilesetForLayer(layer, terrains);
 
-        return this.phaserMap.createLayer(
+        const created = this.phaserMap.createLayer(
             layer.name,
             gpuTileset ?? terrains,
             (layer.x || 0) * 32,
             (layer.y || 0) * 32,
             gpuTileset !== undefined,
         );
+        // A classic layer walks every cell of the view at every image: its tiles are kept while nothing changes.
+        if (created instanceof Phaser.Tilemaps.TilemapLayer) keepCulledTiles(created);
+        return created;
     }
 
     private getGpuTilesetForLayer(layer: ITiledMapTileLayer, terrains: Array<Tileset>): Tileset | undefined {
@@ -813,13 +829,14 @@ export class GameMapFrontWrapper {
      * Sets the position of the current player (in pixels)
      * This will trigger events if properties are changing.
      */
-    public setPosition(x: number, y: number) {
+    public setPosition(x: number, y: number, z = 0) {
         const map = this.getMap();
         if (!map.width || !map.height) {
             return;
         }
         this.oldPosition = this.position;
-        this.position = { x, y };
+        // With the altitude of the floor the player is on: an area only applies to its floor.
+        this.position = { x, y, z };
         const areasChanged = this.gameMap
             .getWamFile()
             ?.getGameMapAreas()
@@ -854,7 +871,8 @@ export class GameMapFrontWrapper {
 
         const xMap = Math.floor(x / (map.tilewidth ?? this.gameMap.getDefaultTileSize()));
         const yMap = Math.floor(y / (map.tileheight ?? this.gameMap.getDefaultTileSize()));
-        const key = xMap + yMap * map.width;
+        // In the sky, the player is on no tile: leaving the ground drops every tile property (focus, zoom, sounds…).
+        const key = isAirborne(this.position) ? AIRBORNE_KEY : xMap + yMap * map.width;
 
         if (key === this.key) {
             return;
@@ -1022,10 +1040,18 @@ export class GameMapFrontWrapper {
         collisionGrid?: number[][],
         oldTopLeftPos?: { x: number; y: number },
         ignoreCollisionGrid?: boolean,
+        elevation = 0,
     ): boolean {
         return (
-            this.getPlacementBlocker(topLeftPos, width, height, collisionGrid, oldTopLeftPos, ignoreCollisionGrid) ===
-            undefined
+            this.getPlacementBlocker(
+                topLeftPos,
+                width,
+                height,
+                collisionGrid,
+                oldTopLeftPos,
+                ignoreCollisionGrid,
+                elevation,
+            ) === undefined
         );
     }
 
@@ -1037,6 +1063,8 @@ export class GameMapFrontWrapper {
         collisionGrid?: number[][],
         oldTopLeftPos?: { x: number; y: number },
         ignoreCollisionGrid?: boolean,
+        /** Altitude of the floor the object goes on: the areas of that floor give the right to place it. */
+        elevation = 0,
     ): PlacementBlocker | undefined {
         this.lastPlacementBlocker = undefined;
         const canEntityBePlaced = this.canEntityBePlaced(
@@ -1053,6 +1081,7 @@ export class GameMapFrontWrapper {
         const entityCenterCoordinates = {
             x: Math.ceil(topLeftPos.x + width / 2),
             y: Math.ceil(topLeftPos.y + height / 2),
+            z: elevation,
         };
         if (!this.scene.getEntityPermissions().canEdit(entityCenterCoordinates, width, height, !collisionGrid)) {
             return "permission";
@@ -1331,10 +1360,13 @@ export class GameMapFrontWrapper {
     }
 
     private isPlayerInsideAreaByCoordinates(
-        areaCoordinates: { x: number; y: number; width: number; height: number },
-        playerPosition: { x: number; y: number },
+        areaCoordinates: { x: number; y: number; width: number; height: number; elevation?: number },
+        playerPosition: AreaPosition,
     ): boolean {
-        return this.isInsideAreaByCoordinates(areaCoordinates, playerPosition);
+        return (
+            isAtAreaLevel(areaCoordinates, playerPosition.z ?? 0) &&
+            this.isInsideAreaByCoordinates(areaCoordinates, playerPosition)
+        );
     }
 
     public listenAreaCreation(areaData: AreaData): void {
@@ -1674,6 +1706,7 @@ export class GameMapFrontWrapper {
      */
     private getProperties(key: number): Map<string, string | boolean | number> {
         const properties = new Map<string, string | boolean | number>();
+        if (key === AIRBORNE_KEY) return properties;
         // NOTE: WE DO NOT WANT AREAS TO BE THE PART OF THE OLD PROPERTIES CHANGE SYSTEM
         // CHECK FOR AREAS PROPERTIES
         //if (this.position) {
@@ -1755,8 +1788,8 @@ export class GameMapFrontWrapper {
     }
 
     private triggerLayersChange(): void {
-        const layersByOldKey = this.oldKey === undefined ? [] : this.gameMap.getLayersByKey(this.oldKey);
-        const layersByNewKey = this.key === undefined ? [] : this.gameMap.getLayersByKey(this.key);
+        const layersByOldKey = this.layersAt(this.oldKey);
+        const layersByNewKey = this.layersAt(this.key);
 
         const enterLayers = new Set(layersByNewKey);
         const leaveLayers = new Set(layersByOldKey);
@@ -1784,11 +1817,12 @@ export class GameMapFrontWrapper {
     }
 
     private triggerDynamicAreasChange(
-        oldPosition: { x: number; y: number } | undefined,
-        position: { x: number; y: number } | undefined,
+        oldPosition: AreaPosition | undefined,
+        position: AreaPosition | undefined,
     ): boolean {
-        const areasByOldPosition = oldPosition ? this.getDynamicAreasOnPosition(oldPosition) : [];
-        const areasByNewPosition = position ? this.getDynamicAreasOnPosition(position) : [];
+        const areasByOldPosition =
+            oldPosition && !isAirborne(oldPosition) ? this.getDynamicAreasOnPosition(oldPosition) : [];
+        const areasByNewPosition = position && !isAirborne(position) ? this.getDynamicAreasOnPosition(position) : [];
 
         const enterAreas = new Set(areasByNewPosition);
         const leaveAreas = new Set(areasByOldPosition);
@@ -1862,10 +1896,12 @@ export class GameMapFrontWrapper {
     }
 
     public getCurrentLayers(): Array<ITiledMapLayer> {
-        if (this.key === undefined) {
-            return [];
-        }
-        return this.gameMap.getLayersByKey(this.key);
+        return this.layersAt(this.key);
+    }
+
+    /** The tile layers drawn on a tile: none out of the map, nor in the sky (getLayersByKey would read data[-1]). */
+    private layersAt(key: number | undefined): Array<ITiledMapLayer> {
+        return key === undefined || key === AIRBORNE_KEY ? [] : this.gameMap.getLayersByKey(key);
     }
 
     public getStartPositionNames(): string[] {
@@ -1939,6 +1975,23 @@ export class GameMapFrontWrapper {
      * The pixel hitboxes a computed walk of the player must go around: objects, water (unless it swims) and partial
      * Tiled collisions. The walls of the map layer are left to the barriers (see getWallBarriers).
      */
+    /** Landing checks all ground rectangles, including obstacles already below the aircraft. */
+    public getLandingObstacles(): RectangleObstacles {
+        const tile = this.getTileDimensions().width;
+        const rectangles = Array.from(this.entitiesManager.getEntities().values())
+            .filter((entity) => entity.getElevation() < 2)
+            .flatMap((entity) => {
+                const position = { x: entity.x, y: entity.y };
+                return getPrefabCollisionRectangles(position, getSolidRectangles(position, entity.getPrefab(), tile));
+            });
+        return new RectangleObstacles([...(this.tiledTileCollisions?.getPathObstacles() ?? []), ...rectangles], {
+            offsetX: -32,
+            offsetY: -32,
+            width: 64,
+            height: 64,
+        });
+    }
+
     public getPathObstacles(player: Player): RectangleObstacles {
         const body = player.body;
         if (!(body instanceof Phaser.Physics.Arcade.Body)) {

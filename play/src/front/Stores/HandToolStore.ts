@@ -1,14 +1,19 @@
 import { get, type Writable } from "svelte/store";
+import { rodEquippedStore } from "./FishingStore";
 import { nerfEquippedStore } from "./NerfStore";
 import { torchEquippedStore } from "./TorchStore";
 
 /** What the avatar can hold in its hand: one at a time. */
-export type HandTool = "nerf" | "torch";
+export type HandTool = "nerf" | "torch" | "rod";
 
-const stores: Record<HandTool, Writable<boolean>> = { nerf: nerfEquippedStore, torch: torchEquippedStore };
+const stores: Record<HandTool, Writable<boolean>> = {
+    nerf: nerfEquippedStore,
+    torch: torchEquippedStore,
+    rod: rodEquippedStore,
+};
 
 /**
- * Equips a tool, putting the other one away (the avatar has one hand for them), or puts it away. Done here rather
+ * Equips a tool, putting the others away (the avatar has one hand for them), or puts it away. Done here rather
  * than in subscribers of the stores: each store is set once, and published once.
  */
 export function toggleHandTool(tool: HandTool, options: { refuseEquip?: boolean } = {}): void {

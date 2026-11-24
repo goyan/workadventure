@@ -8,7 +8,7 @@
         {
             [SeasonalThemeMode.Auto]: $LL.menu.settings.seasonal.hintAuto(),
             [SeasonalThemeMode.Autumn]: $LL.menu.settings.seasonal.hintAutumn(),
-            [SeasonalThemeMode.Christmas]: $LL.menu.settings.seasonal.hintChristmas(),
+            [SeasonalThemeMode.Winter]: $LL.menu.settings.seasonal.hintWinter(),
             [SeasonalThemeMode.None]: $LL.menu.settings.seasonal.hintNone(),
         }[$seasonalThemeModeStore],
     );
@@ -21,7 +21,7 @@
     options={[
         { value: SeasonalThemeMode.Auto, label: $LL.menu.settings.seasonal.auto() },
         { value: SeasonalThemeMode.Autumn, label: $LL.menu.settings.seasonal.autumn() },
-        { value: SeasonalThemeMode.Christmas, label: $LL.menu.settings.seasonal.christmas() },
+        { value: SeasonalThemeMode.Winter, label: $LL.menu.settings.seasonal.winter() },
         { value: SeasonalThemeMode.None, label: $LL.menu.settings.seasonal.none() },
     ]}
 />

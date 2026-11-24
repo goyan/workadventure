@@ -1,4 +1,4 @@
-import { MAP_LAYER_FLOOR_COLLECTION } from "../MapEditor/MapLayer/MapLayerCatalog";
+import { MAP_LAYER_FLOOR_COLLECTION, isRaisedFloorCollection } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { OUTDOOR_WALL_COLLECTIONS, type OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { paintSnowCap } from "./SnowCapShape";
 
@@ -14,6 +14,8 @@ export interface SnowEntity {
     texture: { key: string };
     frame: { name: string | number; width: number; height: number };
     getPrefab(): { collectionName: string; id: string; seasonal?: unknown };
+    /** How much lower than its place it is drawn, on a relief seen in 3/4 (Entity.getGroundDrop): its snow with it. */
+    getGroundDrop?(): number;
 }
 
 /** One byte of alpha per pixel of an entity's frame. */
@@ -23,6 +25,10 @@ export interface AlphaMask {
     alpha: Uint8ClampedArray;
 }
 
+/**
+ * What lies flat on the ground: the snow frosts all of its surface instead of capping its top edge, and no leaves
+ * pile at its foot.
+ */
 export const FLOOR_COLLECTIONS: readonly string[] = [MAP_LAYER_FLOOR_COLLECTION, "Infogène Sols"];
 const FROST_COLOR = 0xeef1fb;
 export const MISSING_TEXTURE = "__MISSING";
@@ -49,7 +55,7 @@ export class SnowCaps {
             // Not loaded yet: Phaser shows its placeholder texture, which must not get snow.
             if (!entity.visible || entity.texture.key === MISSING_TEXTURE) continue;
             const { collectionName, seasonal } = entity.getPrefab();
-            if (OUTDOOR_WALL_COLLECTIONS.includes(collectionName)) continue;
+            if (OUTDOOR_WALL_COLLECTIONS.includes(collectionName) || isRaisedFloorCollection(collectionName)) continue;
             // Seasonal objects (trees) carry their own snow in their winter image.
             if (seasonal) continue;
             // An object stands where its feet are: the middle of its bottom edge.
@@ -73,7 +79,7 @@ export class SnowCaps {
             }
             const key = this.capTexture(entity);
             if (!key) continue;
-            const cap = this.scene.add.image(entity.x, entity.y, key);
+            const cap = this.scene.add.image(entity.x, entity.y + (entity.getGroundDrop?.() ?? 0), key);
             cap.setOrigin(0);
             cap.setScale(entity.displayWidth / entity.frame.width, entity.displayHeight / entity.frame.height);
             cap.setDepth(entity.depth + 0.1);

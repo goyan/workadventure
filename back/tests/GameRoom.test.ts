@@ -8,11 +8,18 @@ import {
     PositionMessage_Direction,
     RoomJoinedMessage,
     SetPlayerDetailsMessage,
+    SetPlayerVariableMessage_Scope,
 } from "@workadventure/messages";
 import { LocalUrlError } from "@workadventure/map-editor/src/LocalUrlError";
 import { mapFetcher } from "@workadventure/map-editor/src/MapFetcher";
 import { parseSessionReplacedDetails, privateMessageEventName } from "@workadventure/shared-utils";
 import { mock } from "vitest-mock-extended";
+import {
+    KARAOKE_STAGE_STATE_EVENT,
+    KARAOKE_SCORE_EVENT,
+    KaraokeReferenceSource,
+    LISTENING_ZONE_JAM_VARIABLE,
+} from "@workadventure/map-editor";
 import type { ConnectCallback, DisconnectCallback } from "../src/Model/GameRoom";
 import { GameRoom } from "../src/Model/GameRoom";
 import { Point } from "../src/Model/Websocket/MessageUserPosition";
@@ -119,6 +126,105 @@ function createWorld(): Promise<GameRoom> {
 }
 
 describe("GameRoom", () => {
+    it("broadcasts scores only for the current authorized singer, melody and active Jam", async () => {
+        const world = await createWorld();
+        const host = await world.join(createMockUserSocket().socket, createJoinRoomMessage("host", 100, 100));
+        const guest = await world.join(createMockUserSocket().socket, createJoinRoomMessage("guest", 300, 300));
+        const reference = {
+            id: "00000000-0000-4000-8000-000000000003",
+            recordingKey: "song",
+            title: "Song",
+            artist: "Artist",
+            source: KaraokeReferenceSource.UltraStar,
+            notes: [{ startMs: 0, endMs: 1000, midi: 69, golden: false }],
+        };
+        const stage = {
+            areaId: "zone",
+            propertyId: "prop",
+            hostUuid: "host",
+            enabled: true,
+            singerUuid: "guest",
+            turnId: "00000000-0000-4000-8000-000000000001",
+            queue: [],
+            applause: 0,
+            reference,
+        };
+        const score = {
+            hostUuid: "host",
+            singerUuid: "guest",
+            turnId: stage.turnId,
+            referenceId: reference.id,
+            score: 9000,
+            accuracy: 90,
+            coverage: 100,
+            combo: 1,
+            finished: false,
+        };
+        try {
+            world.setAreaPropertyVariable(
+                "zone",
+                "prop",
+                LISTENING_ZONE_JAM_VARIABLE,
+                JSON.stringify([{ home: true, hostUuid: "host", hostName: "Host" }]),
+            );
+            world.dispatchEvent(KARAOKE_STAGE_STATE_EVENT, stage, host.id, []);
+            const broadcast = vi.spyOn(world, "sendSubMessageToRoom");
+            broadcast.mockClear();
+            world.dispatchEvent(KARAOKE_SCORE_EVENT, score, host.id, []);
+            world.dispatchEvent(KARAOKE_SCORE_EVENT, score, "RoomApi", []);
+            world.dispatchEvent(KARAOKE_SCORE_EVENT, { ...score, score: 10001 }, guest.id, []);
+            world.dispatchEvent(KARAOKE_SCORE_EVENT, { ...score, referenceId: crypto.randomUUID() }, guest.id, []);
+            world.dispatchEvent(KARAOKE_SCORE_EVENT, { ...score, turnId: crypto.randomUUID() }, guest.id, []);
+            expect(broadcast).not.toHaveBeenCalled();
+            world.dispatchEvent(KARAOKE_SCORE_EVENT, score, guest.id, []);
+            expect(broadcast).toHaveBeenCalledOnce();
+            world.dispatchEvent(KARAOKE_SCORE_EVENT, score, guest.id, []);
+            expect(broadcast).toHaveBeenCalledOnce();
+            world.setAreaPropertyVariable("zone", "prop", LISTENING_ZONE_JAM_VARIABLE, "[]");
+            broadcast.mockClear();
+            world.dispatchEvent(KARAOKE_SCORE_EVENT, { ...score, finished: true }, guest.id, []);
+            expect(broadcast).not.toHaveBeenCalled();
+        } finally {
+            world.destroy();
+        }
+    });
+    it("accepts a stage only from its active Jam host and only with a connected singer", async () => {
+        const world = await createWorld();
+        const host = await world.join(createMockUserSocket().socket, createJoinRoomMessage("host", 100, 100));
+        const guest = await world.join(createMockUserSocket().socket, createJoinRoomMessage("guest", 300, 300));
+        const stage = {
+            areaId: "zone",
+            propertyId: "prop",
+            hostUuid: "host",
+            enabled: true,
+            singerUuid: "guest",
+            turnId: "00000000-0000-4000-8000-000000000001",
+            queue: [],
+            applause: 0,
+        };
+        try {
+            world.dispatchEvent(KARAOKE_STAGE_STATE_EVENT, stage, host.id, []);
+            expect(world.getKaraokeStage("host")).toBeUndefined();
+            world.setAreaPropertyVariable(
+                "zone",
+                "prop",
+                LISTENING_ZONE_JAM_VARIABLE,
+                JSON.stringify([{ home: true, hostUuid: "host", hostName: "Host" }]),
+            );
+            world.dispatchEvent(KARAOKE_STAGE_STATE_EVENT, stage, guest.id, []);
+            world.dispatchEvent(KARAOKE_STAGE_STATE_EVENT, stage, "RoomApi", []);
+            world.dispatchEvent(KARAOKE_STAGE_STATE_EVENT, { ...stage, singerUuid: "absent" }, host.id, []);
+            expect(world.getKaraokeStage("host")).toBeUndefined();
+            world.dispatchEvent(KARAOKE_STAGE_STATE_EVENT, stage, host.id, []);
+            expect(world.getKaraokeStage("host")).toEqual(stage);
+            world.leave(guest);
+            expect(world.getKaraokeStage("host")).toBeUndefined();
+            world.leave(host);
+            expect(world.getKaraokeStage("host")).toBeUndefined();
+        } finally {
+            world.destroy();
+        }
+    });
     it("expires invitation histories of departed senders while retaining current anti-spam limits", async () => {
         const world = await createWorld();
         vi.useFakeTimers();
@@ -284,6 +390,79 @@ describe("GameRoom", () => {
             SetPlayerDetailsMessage.fromPartial({ availabilityStatus: AvailabilityStatus.ONLINE }),
         );
         expect(connectCalledNumber).toBe(2);
+    });
+
+    describe("raised floors", () => {
+        /** What the browser of a player sends when its avatar changes of altitude. */
+        const floorZ = (z: number | string) =>
+            SetPlayerDetailsMessage.fromPartial({
+                setVariable: {
+                    name: "_floorZ",
+                    value: typeof z === "number" ? JSON.stringify(z) : z,
+                    public: true,
+                    persist: false,
+                    scope: SetPlayerVariableMessage_Scope.ROOM,
+                },
+            });
+        async function roomWithTwo(): Promise<{ world: GameRoom; user1: User; user2: User; connected: () => number }> {
+            let connectCalledNumber = 0;
+            const world = await GameRoom.create(
+                ROOM_URL,
+                () => {
+                    connectCalledNumber++;
+                },
+                () => {},
+                160,
+                160,
+                () => {},
+                () => {},
+                () => {},
+                emote,
+                () => {},
+                () => {},
+                () => {},
+                () => {},
+            );
+            const user1 = await world.join(createMockUserSocket().socket, createJoinRoomMessage("1", 100, 100));
+            const user2 = await world.join(createMockUserSocket().socket, createJoinRoomMessage("2", 500, 100));
+            return { world, user1, user2, connected: () => connectCalledNumber };
+        }
+
+        it("does not connect two users drawn at the same place on two floors", async () => {
+            const { world, user1, user2, connected } = await roomWithTwo();
+            world.updatePlayerDetails(user2, floorZ(52));
+            world.updatePosition(user2, new Point(101, 100));
+            expect(connected()).toBe(0);
+            expect(user1.group).toBeUndefined();
+        });
+
+        it("connects two users of the same raised floor, and not of two floors 12 px apart", async () => {
+            const { world, user1, user2, connected } = await roomWithTwo();
+            world.updatePlayerDetails(user1, floorZ(104));
+            world.updatePlayerDetails(user2, floorZ(116));
+            world.updatePosition(user2, new Point(101, 100));
+            expect(connected()).toBe(0);
+
+            world.updatePlayerDetails(user2, floorZ(104));
+            expect(connected()).toBe(2);
+        });
+
+        it("takes out of its bubble a user who goes up to another floor", async () => {
+            const { world, user1, user2, connected } = await roomWithTwo();
+            world.updatePosition(user2, new Point(101, 100));
+            expect(connected()).toBe(2);
+
+            world.updatePlayerDetails(user2, floorZ(52));
+            expect(user2.group).toBeUndefined();
+            expect(user1.group).toBeUndefined();
+        });
+
+        it("reads a value that is not an altitude as the ground", async () => {
+            const { world, user2, connected } = await roomWithTwo();
+            world.updatePlayerDetails(user2, floorZ("abc"));
+            world.updatePosition(user2, new Point(101, 100));
+            expect(connected()).toBe(2);
+        });
     });
 
     it("should connect 3 users", async () => {

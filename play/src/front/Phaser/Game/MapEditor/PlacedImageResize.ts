@@ -84,14 +84,16 @@ function canResizeImage(
     const wrapper = scene.getGameMapFrontWrapper();
     if (
         !entity.canEdit ||
-        !scene
-            .getEntityPermissions()
-            .canEdit(
-                { x: Math.ceil(position.x + size.width / 2), y: Math.ceil(position.y + size.height / 2) },
-                size.width,
-                size.height,
-                !collisionGrid,
-            ) ||
+        !scene.getEntityPermissions().canEdit(
+            {
+                x: Math.ceil(position.x + size.width / 2),
+                y: Math.ceil(position.y + size.height / 2),
+                z: entity.getElevation(),
+            },
+            size.width,
+            size.height,
+            !collisionGrid,
+        ) ||
         wrapper.isOutOfMapBounds(position.x, position.y, size.width, size.height)
     ) {
         return false;

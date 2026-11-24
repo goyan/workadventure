@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/svelte";
 import { PropertyUtils } from "@wa/front/Phaser/Map/PropertyUtils";
+import { DEPTH_SEASONAL_GROUND_INDEX } from "../DepthIndexes";
 import { FootstepSurfaces } from "../FootstepSurfaces";
 import type { GameScene } from "../GameScene";
 
@@ -24,7 +25,11 @@ export class SnowGround {
     constructor(private readonly scene: GameScene) {
         const exterior = PropertyUtils.findStringProperty("exteriorTexture", scene.getGameMap().getMap().properties);
         this.exteriorIsGrass = /(?:^|[/_.-])(grass|herbe)(?:[/_.-]|$)/i.test(exterior ?? "");
-        this.canvas = scene.add.renderTexture(0, 0, 1, 1).setOrigin(0).setDepth(0.6).setVisible(false);
+        this.canvas = scene.add
+            .renderTexture(0, 0, 1, 1)
+            .setOrigin(0)
+            .setDepth(DEPTH_SEASONAL_GROUND_INDEX)
+            .setVisible(false);
         this.surfaces = new FootstepSurfaces(
             () =>
                 Array.from(scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().values(), (entity) => ({
@@ -78,8 +83,10 @@ export class SnowGround {
         const tileHeight = this.scene.Map.tileHeight;
         // The autumn theme colours the grass; the calendar is the theme's business.
         const groundTexture = autumnGround ? AUTUMN_TEXTURE : GREEN_TEXTURE;
-        // Drawn again only when what it shows changed: the ground, the surfaces of the map or the zoom.
-        const drawKey = `${groundTexture}:${this.surfaces.layoutVersion()}:${this.scene.cameras.main.zoom}`;
+        // Drawn again only when what it shows changed: the ground, the surfaces of the map or the zoom, by steps of half
+        // an octave: the exact zoom drew the whole texture again at each image of a zoom animation.
+        const zoomStep = Math.round(Math.log2(this.scene.cameras.main.zoom) * 2);
+        const drawKey = `${groundTexture}:${this.surfaces.layoutVersion()}:${zoomStep}`;
         const previous = this.drawnView;
         if (
             drawKey === this.lastDrawKey &&
@@ -102,8 +109,16 @@ export class SnowGround {
         const width = Math.max(1, (right - left) * tileWidth);
         const height = Math.max(1, (bottom - top) * tileHeight);
         const scale = Math.min(1, 2048 / width, 2048 / height);
-        if (this.canvas.width !== Math.ceil(width * scale) || this.canvas.height !== Math.ceil(height * scale)) {
-            this.canvas.resize(Math.ceil(width * scale), Math.ceil(height * scale));
+        // Kept while it is large enough and not twice too large, by steps: each new size makes its framebuffer again.
+        const needWidth = Math.ceil(width * scale);
+        const needHeight = Math.ceil(height * scale);
+        if (
+            this.canvas.width < needWidth ||
+            this.canvas.height < needHeight ||
+            this.canvas.width > 2 * needWidth ||
+            this.canvas.height > 2 * needHeight
+        ) {
+            this.canvas.resize(Math.ceil(needWidth / 256) * 256, Math.ceil(needHeight / 256) * 256);
         }
         this.canvas
             .setPosition(left * tileWidth, top * tileHeight)

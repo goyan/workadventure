@@ -1,0 +1,266 @@
+/* Music components inherit WA's global palette, typography and radii. */
+.jam-surface {
+    --jam-accent: hsl(var(--success));
+    --jam-onaccent: #fff;
+    --jam-background: hsl(var(--contrast));
+    --jam-line: color-mix(in srgb, var(--ui-foreground) 15%, transparent);
+    color: var(--ui-foreground);
+    scrollbar-width: thin;
+    scrollbar-color: var(--jam-line) transparent;
+}
+
+/* Explicit music palettes only override local colors; fonts and sizing stay shared with WA. */
+.jam-surface[data-jam-theme="dark"] {
+    --ui-foreground: #fff;
+    --ui-overlay: #000;
+    --contrast: 223 30% 16%;
+    --contrast-600: 223 29% 26%;
+    --contrast-900: 223 34% 12%;
+    --success: 141 55% 45%;
+    --secondary: 233 76% 60%;
+    color-scheme: dark;
+}
+
+.jam-surface[data-jam-theme="light"] {
+    --ui-foreground: #263044;
+    --ui-overlay: #fff;
+    --contrast: 220 35% 94%;
+    --contrast-600: 220 28% 85%;
+    --contrast-900: 220 45% 98%;
+    --success: 140 55% 30%;
+    --secondary: 233 76% 48%;
+    color-scheme: light;
+}
+
+.jam-surface[data-jam-style="apple-music"] {
+    --success: 347 72% 48%;
+    --secondary: 347 72% 48%;
+}
+.jam-surface[data-jam-style="apple-music"][data-jam-theme="dark"] {
+    --success: 347 90% 68%;
+    --secondary: 347 90% 68%;
+}
+.jam-surface[data-jam-style="apple-music"][data-jam-theme="light"] {
+    --ui-foreground: #29232b;
+    --ui-overlay: #eee9ed;
+    --contrast: 330 30% 99%;
+    --contrast-600: 330 15% 91%;
+    --contrast-900: 330 30% 98%;
+}
+.jam-surface .btn-light .btn-label {
+    color: var(--ui-foreground);
+}
+.jam-surface .btn-success:not(.btn-border):not(.btn-ghost) .btn-label {
+    color: var(--jam-onaccent);
+}
+.jam-library {
+    width: min(320px, 90vw);
+    overflow: hidden;
+    border: 1px solid var(--jam-line);
+    border-radius: var(--radius-lg);
+    background: var(--jam-background);
+    box-shadow: 0 24px 64px rgb(0 0 0 / 0.35);
+}
+
+.jam-library-header {
+    padding: 12px;
+    background: radial-gradient(
+        ellipse at top left,
+        color-mix(in srgb, var(--jam-accent) 18%, transparent),
+        transparent 75%
+    );
+    border-bottom: 1px solid var(--jam-line);
+}
+
+.jam-library-heading {
+    font-family: var(--font-main);
+    text-transform: none;
+    margin: 0 28px 8px 0;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: normal;
+    line-height: 1.1;
+}
+
+.jam-surface.karaoke-panel {
+    border-radius: var(--radius-lg);
+    background: var(--jam-background);
+}
+
+.jam-theme-picker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+}
+.jam-theme-segments {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--jam-line);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ui-foreground) 5%, transparent);
+}
+.jam-theme-segments button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 28px;
+    border-radius: 999px;
+    color: color-mix(in srgb, var(--ui-foreground) 65%, transparent);
+    cursor: pointer;
+}
+.jam-theme-segments button:hover {
+    background: color-mix(in srgb, var(--ui-foreground) 8%, transparent);
+}
+.jam-theme-segments button[aria-pressed="true"] {
+    color: var(--jam-accent);
+    background: var(--jam-background);
+    box-shadow: 0 1px 5px rgb(0 0 0 / 0.18);
+}
+.jam-surface :focus-visible {
+    outline: 2px solid var(--jam-accent);
+    outline-offset: 3px;
+}
+
+.jam-surface .btn {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.jam-surface .input-label {
+    color: var(--ui-foreground);
+}
+.jam-surface .input-text {
+    color: var(--ui-foreground);
+    background-color: hsl(var(--contrast-900));
+    border-color: var(--jam-line);
+}
+.jam-surface .input-text:hover {
+    color: var(--ui-foreground);
+    background-color: color-mix(in srgb, var(--ui-foreground) 4%, hsl(var(--contrast-900)));
+    border-color: color-mix(in srgb, var(--ui-foreground) 30%, transparent);
+}
+.jam-surface .input-text:focus {
+    color: var(--ui-foreground);
+    background-color: hsl(var(--contrast-900));
+    border-color: var(--jam-accent);
+    outline: 2px solid var(--jam-accent);
+    outline-offset: 2px;
+    box-shadow: none;
+}
+.jam-surface .input-text::placeholder {
+    color: color-mix(in srgb, var(--ui-foreground) 60%, transparent);
+}
+.jam-room {
+    border-radius: var(--radius-lg);
+    transition: background 150ms;
+}
+.jam-room[data-expanded="true"] {
+    background: color-mix(in srgb, var(--ui-foreground) 3%, var(--jam-background));
+}
+.jam-room-hero {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: linear-gradient(145deg, color-mix(in srgb, var(--jam-accent) 16%, transparent), transparent);
+}
+.jam-room-art {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 64px;
+    height: 64px;
+    overflow: hidden;
+    border-radius: var(--radius-md);
+    color: var(--jam-accent);
+    background: linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--jam-accent) 25%, var(--jam-background)),
+        var(--jam-background)
+    );
+    box-shadow: 0 10px 24px rgb(0 0 0 / 0.2);
+}
+.jam-room-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.jam-room-track {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.2;
+    font-weight: 800;
+    letter-spacing: normal;
+    overflow-wrap: anywhere;
+}
+.jam-room-eyebrow {
+    margin: 0 0 8px;
+    color: var(--jam-accent);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .jam-room {
+        transition: none;
+    }
+}
+
+.jam-style-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--jam-line);
+    border-radius: 999px;
+    color: var(--jam-accent);
+    background: color-mix(in srgb, var(--jam-accent) 10%, transparent);
+    cursor: pointer;
+}
+
+.jam-room-tabs {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    padding: 2px 0 6px;
+    scrollbar-width: thin;
+}
+.jam-room-tabs button {
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+    padding: 8px 6px;
+    border: 1px solid var(--jam-line);
+    border-radius: var(--radius-md);
+    font: inherit;
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--ui-foreground);
+    background: color-mix(in srgb, var(--ui-foreground) 3%, transparent);
+    cursor: pointer;
+}
+.jam-room-tabs button:hover {
+    background: color-mix(in srgb, var(--ui-foreground) 8%, transparent);
+}
+.jam-room-tabs button[aria-selected="true"] {
+    border-color: var(--jam-accent);
+    color: var(--jam-accent);
+    background: color-mix(in srgb, var(--jam-accent) 10%, transparent);
+}
+.jam-room-tab-count {
+    position: absolute;
+    top: 4px;
+    right: 5px;
+    font-size: 9px;
+    opacity: 0.7;
+}

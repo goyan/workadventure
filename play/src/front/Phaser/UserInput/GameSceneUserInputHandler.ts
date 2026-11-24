@@ -1,6 +1,8 @@
 import * as Phaser from "phaser";
 import { get } from "svelte/store";
 import * as Sentry from "@sentry/svelte";
+import { CatastropheKind } from "@workadventure/messages";
+import { BALL_REPORT_MS, BALL_STILL_REPORT_MS, ballRadiusPx, DOWNPOUR_REPORT_MS } from "@workadventure/map-editor";
 import { getTileCenter } from "@wa/front/Phaser/Player/TileSnap";
 import { Player } from "@wa/front/Phaser/Player/Player";
 import { findSeatAtPoint, isSeatTaken } from "@wa/front/Phaser/Player/Seat";
@@ -23,15 +25,36 @@ import { localUserStore } from "@wa/front/Connection/LocalUserStore";
 import { wokaMenuStore } from "@wa/front/Stores/WokaMenuStore";
 import { nerfEquippedStore } from "@wa/front/Stores/NerfStore";
 import { torchEquippedStore } from "@wa/front/Stores/TorchStore";
+import { fishingContestSetupStore, fishingContestStore, rodEquippedStore } from "@wa/front/Stores/FishingStore";
 import { characterPickerStore, type CharacterPickerCandidate } from "@wa/front/Stores/CharacterPickerStore";
-import { Vehicle, VehicleMode } from "@wa/front/Phaser/Vehicle/Vehicle";
+import { Vehicle, VehicleMode, VehicleMedium } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { isHumanAvatar } from "@wa/front/Phaser/Entity/MusicHeadphonesEffect";
 import { AvatarAction } from "@wa/front/Phaser/Entity/AvatarAction";
 import { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
 import { ENABLE_TILE_SNAP, WOKA_SPEED } from "@wa/front/Enum/EnvironmentVariable";
+import {
+    armedCatastropheStore,
+    ballDiameterTilesStore,
+    coldCelsiusStore,
+    coldRadiusTilesStore,
+    heldBallStore,
+    downpourRadiusTilesStore,
+    downpourWholeMapStore,
+    fireRadiusTilesStore,
+    drainRadiusTilesStore,
+    meteorRadiusTilesStore,
+} from "@wa/front/Stores/CatastropheStore";
+import {
+    endWaterLevelGesture,
+    noteWaterLevelPress,
+    takeWaterLevel,
+    waterLevelPipetteStore,
+} from "@wa/front/Stores/WaterLevelPipetteStore";
 import { cameraDetachedStore } from "@wa/front/Stores/CameraStore";
+import { weatherPipetteStore } from "@wa/front/Stores/VisualisationStore";
 import { isKeyFromInteractiveElement } from "@wa/front/Utils/isKeyFromInteractiveElement";
 import { findShortcutAction } from "@wa/front/Stores/ShortcutsStore";
+import { spaceClimbs } from "../Vehicle/AirplaneAltitudeKeys";
 import { MapDragPointerCapture } from "./MapDragPointerCapture";
 import { MapDragGesture } from "./MapDragGesture";
 import { MapPanShortcut } from "./MapPanShortcut";
@@ -43,6 +66,25 @@ import GameObject = Phaser.GameObjects.GameObject;
 // burst of tiny deltas. The zoom formula is tuned for the wheel, so a pinch needs a gain to feel as fast as a few notches.
 // 6 is close to the pinch gain used by d3-zoom and most map/design tools.
 const PINCH_ZOOM_RATE_MULTIPLIER = 6;
+/** The keys a pilot may hold with control (coming down): moves, and space to climb back. */
+const FLIGHT_KEYS = new Set([
+    "KeyW",
+    "KeyA",
+    "KeyS",
+    "KeyD",
+    "KeyZ",
+    "KeyQ",
+    "ArrowUp",
+    "ArrowDown",
+    "ArrowLeft",
+    "ArrowRight",
+]);
+
+/** A field or an editable element, where the keys type text. */
+function isTypingTarget(event: KeyboardEvent): boolean {
+    const target = event.target;
+    return target instanceof HTMLElement && (target.isContentEditable || target.matches("input, textarea, select"));
+}
 // Under this |deltaY|, a ctrlKey wheel event is a pinch. A Ctrl+notched-wheel keeps the normal rate.
 const PINCH_MAX_DELTA_Y = 50;
 
@@ -64,6 +106,13 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     private controlKeyisPressed: boolean = false;
     private readonly mapDrag = new MapDragGesture();
     private draggingMap = false;
+    /** While the click of an armed downpour is held: tells the server where the pointer is, a few times a second. */
+    private downpourReports: Phaser.Time.TimerEvent | undefined;
+    /** The catastrophe a held click is throwing: a downpour that follows the pointer, or fire painted along it. */
+    private heldKind: "downpour" | "fire" | "drain" | "ball" | "cold" | undefined;
+    /** The ball held under the pointer: the pointer that holds it, and what the server was last told of it. */
+    private ballPointer: Pointer | undefined;
+    private ballTold: { x: number; y: number; tiles: number; ticksAgo: number } | undefined;
     // The current touch gesture involved two fingers or more (a pinch): lifting a finger must not count as a tap.
     private multiTouch = false;
     private pinchFreedView = false;
@@ -71,13 +120,18 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     private readonly panShortcut: MapPanShortcut;
     private readonly spaceKey: Phaser.Input.Keyboard.Key | undefined;
     private nerfSpacePressed = false;
+    /** The space key went down for the fishing rod: its release casts, and nothing else. */
+    private rodSpacePressed = false;
+    /** The space key held now climbs the airplane (or took it off): it is the airplane's until it goes up. */
+    private climbSpacePressed = false;
     private readonly spaceListeners = new Map<() => void, () => void>();
 
     constructor(gameScene: GameScene) {
         this.gameScene = gameScene;
         this.pointerCapture = new MapDragPointerCapture(
             gameScene.game.canvas,
-            () => this.canDragMap(),
+            // A held downpour or fire keeps the pointer too: its release is seen even over a panel.
+            () => this.canDragMap() || this.heldCatastrophe() !== undefined,
             () => this.handlePointerCancelEvent(),
         );
         // Same Key object as the "interact" key: addKey returns the existing one.
@@ -95,7 +149,31 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 this.gameScene.getCameraManager().panBy(deltaX * scale.x, deltaY * scale.y);
             },
         });
+        // The canvas shows a crosshair while a catastrophe is armed, through the same default cursor as the map drag.
+        let wasArmed = false;
+        const unsubscribeArmed = armedCatastropheStore.subscribe((armed) => {
+            // A downpour only rains, and a fire is only painted, while it is the armed one.
+            if (armed !== this.heldKind) this.stopDownpour();
+            if (wasArmed === (armed !== undefined)) return;
+            wasArmed = armed !== undefined;
+            this.gameScene.input.setDefaultCursor(this.aiming() ? "crosshair" : this.idleCursor());
+        });
+        // The weather pipette only reads under the pointer: its own cursor, and no click of the map taken.
+        const unsubscribeWeatherPipette = weatherPipetteStore.subscribe(() => {
+            this.gameScene.input.setDefaultCursor(this.aiming() ? "crosshair" : this.idleCursor());
+        });
+        // The pipette of the level of a source aims with the same crosshair.
+        let wasAiming = false;
+        const unsubscribePipette = waterLevelPipetteStore.subscribe((take) => {
+            if (wasAiming === (take !== undefined)) return;
+            wasAiming = take !== undefined;
+            this.gameScene.input.setDefaultCursor(this.aiming() ? "crosshair" : this.idleCursor());
+        });
         gameScene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            unsubscribeArmed();
+            unsubscribePipette();
+            unsubscribeWeatherPipette();
+            this.stopDownpour();
             this.pointerCapture.destroy();
             this.panShortcut.destroy();
             for (const listener of this.spaceListeners.values()) {
@@ -128,6 +206,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     }
 
     public handlePointerUpEvent(pointer: Pointer, gameObjects: GameObject[]): void {
+        // A gesture of the pipette ends here, whatever it was (a drag of the view, a click that takes a level).
+        endWaterLevelGesture();
         if (pointer.leftButtonReleased()) {
             const wasDragging = this.draggingMap;
             const dragged = this.mapDrag.end(pointer.id);
@@ -141,6 +221,24 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             }
         }
         if (pointer.wasTouch && this.multiTouch) {
+            return;
+        }
+        // The armed pipette of the level of a source takes the click that is not a drag (the drag test above): the
+        // point clicked, and the ground under the water with Alt. Nothing else answers it: no walk, no object.
+        if (get(waterLevelPipetteStore) !== undefined && (pointer.wasTouch || pointer.leftButtonReleased())) {
+            if (!pointer.wasTouch || pointer.getDuration() <= 250) {
+                const ground = pointer.event instanceof MouseEvent && pointer.event.altKey;
+                takeWaterLevel(this.mapPointUnder(pointer), ground);
+            }
+            return;
+        }
+        // An armed catastrophe takes the click that is not a drag (the drag test above): it walks, activates and
+        // picks nothing. The press itself is left to the map drag, which stays free. In the map editor too, whose
+        // tool is put aside while a catastrophe is armed.
+        if (get(armedCatastropheStore) !== undefined && (pointer.wasTouch || pointer.leftButtonReleased())) {
+            // The downpour rained, the fire was painted, while the click was held: releasing it only ends it.
+            if (this.heldCatastrophe() !== undefined) this.stopDownpour();
+            else this.launchArmedCatastrophe(pointer);
             return;
         }
         if (get(mapEditorModeStore)) {
@@ -201,7 +299,9 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             }
         }
         const cameraManager = this.gameScene.getCameraManager();
-        const worldPoint = cameraManager.getCamera().getWorldPoint(pointer.x, pointer.y);
+        const clicked = cameraManager.getCamera().getWorldPoint(pointer.x, pointer.y);
+        // In a hollow of the relief seen in 3/4, the ground is drawn lower than its place: aim at the ground drawn there.
+        const worldPoint = this.gameScene.groundPointUnder(clicked);
         if (
             isDoubleClick &&
             (worldPoint.x < 0 ||
@@ -214,7 +314,12 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         // A double-click on a free seat (anywhere on the image of its object) runs there and sits: the only seat a
         // run sits on, since running does not pull the player onto the seats on its way.
         const seat = isDoubleClick
-            ? findSeatAtPoint(this.gameScene, worldPoint, (candidate) => !isSeatTaken(this.gameScene, candidate))
+            ? findSeatAtPoint(
+                  this.gameScene,
+                  worldPoint,
+                  (candidate) => !isSeatTaken(this.gameScene, candidate),
+                  this.gameScene.floorLevelAt(worldPoint),
+              )
             : undefined;
         // Otherwise a double-click ends at the center of the targeted tile, like the avatar does when it stops.
         const target =
@@ -244,6 +349,169 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 },
             )
             .finally(() => cameraManager.endWalkFraming(walk));
+    }
+
+    private launchArmedCatastrophe(pointer: Pointer): void {
+        // A long touch is a press, not a tap.
+        if (!this.gameScene.userInputManager.isControlsEnabled || (pointer.wasTouch && pointer.getDuration() > 250)) {
+            return;
+        }
+        // What the pointer shows: the ground or the water drawn there, where the relief is seen in 3/4.
+        const worldPoint = this.gameScene.seenPointUnder(
+            this.gameScene.getCameraManager().getCamera().getWorldPoint(pointer.x, pointer.y),
+        );
+        if (
+            worldPoint.x < 0 ||
+            worldPoint.y < 0 ||
+            worldPoint.x >= this.gameScene.Map.widthInPixels ||
+            worldPoint.y >= this.gameScene.Map.heightInPixels
+        ) {
+            return;
+        }
+        // The server decides what the comet or the fireball does there.
+        this.gameScene.connection?.emitLaunchCatastrophe(
+            get(armedCatastropheStore) === "fireball"
+                ? CatastropheKind.CATASTROPHE_FIREBALL
+                : CatastropheKind.CATASTROPHE_METEOR,
+            worldPoint.x,
+            worldPoint.y,
+            get(meteorRadiusTilesStore),
+        );
+    }
+
+    /**
+     * The catastrophe a held click throws, when one of those is armed: the downpour, the fire, the drain, the ball,
+     * the cold snap.
+     */
+    private heldCatastrophe(): "downpour" | "fire" | "drain" | "ball" | "cold" | undefined {
+        const armed = get(armedCatastropheStore);
+        return armed === "downpour" || armed === "fire" || armed === "drain" || armed === "ball" || armed === "cold"
+            ? armed
+            : undefined;
+    }
+
+    /**
+     * The click of an armed downpour or fire is pressed: it rains, or burns, under the pointer at once, and for as
+     * long as it is held, wherever the pointer goes.
+     */
+    private startDownpour(pointer: Pointer): void {
+        this.stopDownpour();
+        if (!this.gameScene.userInputManager.isControlsEnabled) return;
+        const kind = this.heldCatastrophe();
+        this.heldKind = kind;
+        const report = (): void => {
+            if (get(armedCatastropheStore) !== kind || !pointer.isDown) {
+                this.stopDownpour();
+                return;
+            }
+            const { x, y } = this.mapPointUnder(pointer);
+            if (kind === "fire") {
+                // A patch of fire at each report: the fire is painted along the way of the pointer.
+                this.gameScene.connection?.emitLaunchCatastrophe(
+                    CatastropheKind.CATASTROPHE_FIRE,
+                    x,
+                    y,
+                    get(fireRadiusTilesStore),
+                );
+                return;
+            }
+            if (kind === "drain") {
+                this.gameScene.connection?.emitLaunchCatastrophe(
+                    CatastropheKind.CATASTROPHE_DRAIN,
+                    x,
+                    y,
+                    get(drainRadiusTilesStore),
+                );
+                return;
+            }
+            if (kind === "ball") {
+                // The ball is under the pointer at once, here; the server is told when it moved, and now and then
+                // while it is held still.
+                const tiles = get(ballDiameterTilesStore);
+                heldBallStore.set({ x, y, radiusPx: ballRadiusPx(tiles) });
+                const told = this.ballTold;
+                if (told && told.x === x && told.y === y && told.tiles === tiles) {
+                    told.ticksAgo++;
+                    if (told.ticksAgo * BALL_REPORT_MS < BALL_STILL_REPORT_MS) return;
+                }
+                this.ballTold = { x, y, tiles, ticksAgo: 0 };
+                this.gameScene.connection?.emitLaunchCatastrophe(CatastropheKind.CATASTROPHE_BALL, x, y, tiles);
+                return;
+            }
+            if (kind === "cold") {
+                // The server lays the cold air there, and alone freezes what lies under it.
+                this.gameScene.connection?.emitLaunchCatastrophe(
+                    CatastropheKind.CATASTROPHE_COLD,
+                    x,
+                    y,
+                    get(coldRadiusTilesStore),
+                    false,
+                    false,
+                    get(coldCelsiusStore),
+                );
+                return;
+            }
+            this.gameScene.connection?.emitLaunchCatastrophe(
+                CatastropheKind.CATASTROPHE_DOWNPOUR,
+                x,
+                y,
+                get(downpourRadiusTilesStore),
+                get(downpourWholeMapStore),
+            );
+        };
+        if (kind === "ball") this.ballPointer = pointer;
+        report();
+        this.downpourReports = this.gameScene.time.addEvent({
+            // A ball is seen by everybody under the pointer of its player: it is told far more often.
+            delay: kind === "ball" ? BALL_REPORT_MS : DOWNPOUR_REPORT_MS,
+            loop: true,
+            callback: report,
+        });
+    }
+
+    /** The point of the map under a pointer. One past the edge is on the edge: a cloud never leaves the map. */
+    private mapPointUnder(pointer: Pointer): { x: number; y: number } {
+        // What the pointer shows: the ground or the water drawn there, where the relief is seen in 3/4.
+        const worldPoint = this.gameScene.seenPointUnder(
+            this.gameScene.getCameraManager().getCamera().getWorldPoint(pointer.x, pointer.y),
+        );
+        return {
+            x: Math.min(this.gameScene.Map.widthInPixels - 1, Math.max(0, worldPoint.x)),
+            y: Math.min(this.gameScene.Map.heightInPixels - 1, Math.max(0, worldPoint.y)),
+        };
+    }
+
+    private stopDownpour(): void {
+        this.downpourReports?.remove();
+        this.downpourReports = undefined;
+        // A ball that was held is let go: gone at once here, and the server is told so.
+        if (this.heldKind === "ball") {
+            heldBallStore.set(undefined);
+            const told = this.ballTold;
+            if (told) {
+                this.gameScene.connection?.emitLaunchCatastrophe(
+                    CatastropheKind.CATASTROPHE_BALL,
+                    told.x,
+                    told.y,
+                    told.tiles,
+                    false,
+                    true,
+                );
+            }
+        }
+        this.ballPointer = undefined;
+        this.ballTold = undefined;
+        this.heldKind = undefined;
+    }
+
+    /** Whether a click of the map is aimed: an armed catastrophe, or the pipette of the level of a source. */
+    private aiming(): boolean {
+        return get(armedCatastropheStore) !== undefined || get(waterLevelPipetteStore) !== undefined;
+    }
+
+    private idleCursor(): string {
+        if (get(weatherPipetteStore)) return "help";
+        return get(mapExplorationModeStore) ? "grab" : "auto";
     }
 
     private getTileCenterOf(x: number, y: number): { x: number; y: number } {
@@ -327,6 +595,37 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 wokaMenuStore.clear();
             },
         });
+        wokaMenuStore.addAction({
+            actionName: get(rodEquippedStore) ? get(LL).actionbar.rod.unequip() : get(LL).actionbar.rod.equip(),
+            icon: "rod",
+            testId: "avatar-rod",
+            callback: () => {
+                this.gameScene.fishingManager?.toggleEquipment();
+                wokaMenuStore.clear();
+            },
+        });
+        // Rod in hand and no contest running: the player may start one (its length is asked next).
+        if (get(rodEquippedStore) && get(fishingContestStore)?.finished !== false) {
+            wokaMenuStore.addAction({
+                actionName: get(LL).actionbar.rod.contest.start(),
+                icon: "rod",
+                testId: "avatar-fishing-contest",
+                callback: () => {
+                    fishingContestSetupStore.set(true);
+                    wokaMenuStore.clear();
+                },
+            });
+        }
+        // On the ice: put up an ice fishing shack, or sit in one, get up, take one's own down.
+        for (const action of this.gameScene.iceShackManager?.wheelActions() ?? []) {
+            wokaMenuStore.addAction({
+                ...action,
+                callback: () => {
+                    action.callback();
+                    wokaMenuStore.clear();
+                },
+            });
+        }
         // The interaction key lets a companion go only next to it: here, all of them, from anywhere.
         const tamed = this.gameScene.tamedAnimalCount() ?? 0;
         if (tamed > 0) {
@@ -342,8 +641,9 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         }
         // A costume such as the duck has no swimwear poses nor skateboard pose.
         const human = isHumanAvatar(player.sprites.keys());
-        const vehicle = localUserStore.getVehicle();
-        if (vehicle !== Vehicle.None && human) {
+        const vehicle = localUserStore.getVehicleForMedium(VehicleMedium.Land);
+        // A canoe is boarded by itself on the water: nothing to mount from the wheel.
+        if (vehicle !== Vehicle.None && vehicle !== Vehicle.Canoe && human) {
             const equipped = player.vehicleMode === VehicleMode.Always;
             const unicycle = vehicle === Vehicle.ElectricUnicycle;
             wokaMenuStore.addAction({
@@ -431,6 +731,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     }
 
     public handlePointerDownEvent(pointer: Pointer, gameObjects: GameObject[]): void {
+        // A gesture pressed while the pipette aims is the pipette's to its end (see waterLevelPipetteOwnsPointer).
+        noteWaterLevelPress();
         if (pointer.wasTouch) {
             // A first finger starts a new gesture; a second one turns it into a pinch and ends the one-finger drag.
             this.multiTouch = this.touchPointersDown() > 1;
@@ -439,6 +741,12 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 this.handlePointerCancelEvent();
                 return;
             }
+        }
+        // An armed downpour or fire takes the press: it rains, or burns, while it is held, and the drag moves the
+        // cloud or paints the fire, not the map.
+        if (this.heldCatastrophe() !== undefined) {
+            if (pointer.wasTouch || pointer.leftButtonDown()) this.startDownpour(pointer);
+            return;
         }
         if (!pointer.leftButtonDown() || !this.canDragMap()) {
             return;
@@ -453,6 +761,13 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         if (pointer.wasTouch && this.multiTouch) {
             return;
         }
+        // A held ball is under the pointer at each of its moves, without waiting for the next report.
+        if (this.ballPointer) {
+            const { x, y } = this.mapPointUnder(this.ballPointer);
+            heldBallStore.set({ x, y, radiusPx: ballRadiusPx(get(ballDiameterTilesStore)) });
+        }
+        // A held downpour follows the pointer by itself (see startDownpour): the move is no drag of the map.
+        if (this.downpourReports) return;
         if (!pointer.leftButtonDown()) {
             if (this.draggingMap) this.handlePointerCancelEvent();
             return;
@@ -479,6 +794,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     }
 
     public handlePointerCancelEvent(): void {
+        this.stopDownpour();
         this.pointerCapture.release();
         this.gameScene.getCameraManager().stopManualPanInertia();
         this.mapDrag.cancel();
@@ -497,7 +813,13 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
 
     private canDragMap(): boolean {
         // The other editor tools use the left drag themselves; they pan with MapPanShortcut instead.
-        return this.canMoveView() && (!get(mapEditorModeStore) || get(mapExplorationModeStore));
+        const armed = get(armedCatastropheStore);
+        if (armed === "downpour" || armed === "drain" || armed === "ball" || armed === "cold") return false;
+        // While the pipette aims, the left drag moves the view in the map editor too: only a click takes a level.
+        return (
+            this.canMoveView() &&
+            (!get(mapEditorModeStore) || get(mapExplorationModeStore) || get(waterLevelPipetteStore) !== undefined)
+        );
     }
 
     public handlePinch(zoomFactor: number, centre: { x: number; y: number }, pan: { x: number; y: number }): void {
@@ -519,7 +841,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
 
     private restoreDragCursor(): void {
         if (this.draggingMap) {
-            this.gameScene.input.setDefaultCursor(get(mapExplorationModeStore) ? "grab" : "auto");
+            this.gameScene.input.setDefaultCursor(this.aiming() ? "crosshair" : this.idleCursor());
             this.draggingMap = false;
         }
     }
@@ -573,9 +895,39 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         }
     }
     public handleKeyDownEvent(event: KeyboardEvent): KeyboardEvent {
-        if (event.code === "Space" && !event.repeat) this.nerfSpacePressed = false;
+        if (event.code === "Space" && !event.repeat) {
+            this.nerfSpacePressed = false;
+            this.rodSpacePressed = false;
+            this.climbSpacePressed = this.spaceClimbsNow(event);
+        }
         const hasExecutedCommand = this.gameScene.getMapEditorModeManager()?.handleKeyDownEvent(event);
         if (hasExecutedCommand) {
+            return event;
+        }
+
+        // In the sky, nothing on the ground is in reach: no rod, nerf, seat, door nor object until landing.
+        // Space climbs instead (see Player.pilotAltitude), and takes off from the ground when nothing else asks for it.
+        if (event.code === "Space" && (this.isFlying() || this.climbSpacePressed)) {
+            if (this.climbSpacePressed) event.preventDefault();
+            return event;
+        }
+        // In flight the control key comes down: keep the browser shortcuts it can stop from the keys held with it.
+        if (event.ctrlKey && this.isAltitudeKeysActive() && FLIGHT_KEYS.has(event.code) && !isTypingTarget(event)) {
+            event.preventDefault();
+        }
+
+        // The fishing rod takes the space key only when nothing else asks for it: a prompt (seat, door, animal) wins.
+        if (
+            event.code === "Space" &&
+            this.gameScene.fishingManager?.isEquipped &&
+            !get(mapEditorModeStore) &&
+            (this.rodSpacePressed || !this.isSpaceAskedFor())
+        ) {
+            if (!isKeyFromInteractiveElement(event) && !event.ctrlKey && !event.altKey && !event.metaKey) {
+                event.preventDefault();
+                this.rodSpacePressed = true;
+                this.gameScene.fishingManager.pressKey(event.repeat);
+            }
             return event;
         }
 
@@ -592,6 +944,15 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             case "toggleMapEditor": {
                 if (get(mapManagerActivated) == false) return event;
                 mapEditorModeStore.switchMode(!get(mapEditorModeStore));
+                break;
+            }
+            case "toggleAirVehicle": {
+                const typing =
+                    event.target instanceof HTMLElement &&
+                    (event.target.isContentEditable || event.target.matches("input, textarea, select"));
+                if (!event.repeat && !typing && !get(mapEditorModeStore)) {
+                    this.gameScene.CurrentPlayer?.toggleAirVehicle();
+                }
                 break;
             }
             case "rotatePlayer": {
@@ -695,6 +1056,12 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             }
             // SPACE
             case " ": {
+                // A press that climbed: nothing of the ground answers it.
+                if (this.climbSpacePressed) break;
+                if (this.rodSpacePressed) {
+                    this.gameScene.fishingManager?.releaseKey();
+                    break;
+                }
                 const shotPressed = this.nerfSpacePressed;
                 if (shotPressed || this.gameScene.nerfManager?.isEquipped) break;
                 if (isKeyFromInteractiveElement(event)) break;
@@ -717,6 +1084,14 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         return event;
     }
 
+    /** Whether the space key has something to do now: a prompt is shown, or an object next to the avatar is selected. */
+    private isSpaceAskedFor(): boolean {
+        if (this.spaceListeners.size > 0) return true;
+        const activatableManager = this.gameScene.getActivatablesManager();
+        const activatable = activatableManager.getSelectedActivatableObject();
+        return Boolean(activatable?.isActivatable() && activatableManager.isSelectingByDistanceEnabled());
+    }
+
     public handleActivableEntity() {
         const activatableManager = this.gameScene.getActivatablesManager();
         const activatable = activatableManager.getSelectedActivatableObject();
@@ -727,10 +1102,48 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         this.gameScene.CurrentPlayer?.handlePressSpacePlayerTextCallback();
     }
 
+    /** In flight: the control key comes down (see UserInputManager.getEventListForGameTick). */
+    public isAltitudeKeysActive(): boolean {
+        return this.isFlying() && !get(mapEditorModeStore);
+    }
+
+    public isClimbPressed(): boolean {
+        return this.climbSpacePressed;
+    }
+
+    /** Whether this press of space climbs or takes off (see spaceClimbs), decided once when the key goes down. */
+    private spaceClimbsNow(event: KeyboardEvent): boolean {
+        if (get(mapEditorModeStore) || event.ctrlKey || event.altKey || event.metaKey) return false;
+        if (isKeyFromInteractiveElement(event)) return false;
+        // Optional calls: a scene without a full player (tests, loading) has no airplane.
+        const player = this.gameScene.CurrentPlayer;
+        const inAirplane = player?.isInAirplane?.() ?? false;
+        const flying = this.isFlying();
+        if (!inAirplane || flying) return spaceClimbs({ inAirplane, flying, spaceAskedFor: false, toolInHand: false });
+        // The airplane's own hint answers space too: it does not keep the plane on the ground.
+        const ownPrompt = player?.isAirplanePromptShown?.() ? 1 : 0;
+        const activatableManager = this.gameScene.getActivatablesManager();
+        const activatable = activatableManager.getSelectedActivatableObject();
+        return spaceClimbs({
+            inAirplane,
+            flying,
+            spaceAskedFor:
+                this.spaceListeners.size > ownPrompt ||
+                Boolean(activatable?.isActivatable() && activatableManager.isSelectingByDistanceEnabled()),
+            toolInHand: Boolean(this.gameScene.nerfManager?.isEquipped || this.gameScene.fishingManager?.isEquipped),
+        });
+    }
+
+    private isFlying(): boolean {
+        // Optional call: a scene without a full player (tests, loading) is on the ground.
+        return this.gameScene.CurrentPlayer?.isFlying?.() ?? false;
+    }
+
     public addSpaceEventListener(callback: () => void): void {
         const previous = this.spaceListeners.get(callback);
         if (previous) this.gameScene.input.keyboard?.removeListener("keyup-SPACE", previous);
         const listener = (): void => {
+            if (this.rodSpacePressed || this.isFlying() || this.climbSpacePressed) return;
             if (!this.nerfSpacePressed && !this.gameScene.nerfManager?.isEquipped) callback();
         };
         this.spaceListeners.set(callback, listener);

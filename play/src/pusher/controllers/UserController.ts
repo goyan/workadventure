@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { Request, Response } from "express";
 import Debug from "debug";
+import { normalizePlayerName } from "../../common/PlayerName";
+import { FRONT_ENVIRONMENT_VARIABLES } from "../enums/EnvironmentVariable";
 import { adminService } from "../services/AdminService";
 import { validatePostQuery } from "../services/QueryValidator";
 import type { ResponseWithUserIdentifier } from "../middlewares/Authenticated";
@@ -64,7 +66,11 @@ export class UserController extends BaseHttpController {
                 req,
                 res,
                 z.object({
-                    name: z.string(),
+                    name: z
+                        .string()
+                        .transform((name) =>
+                            normalizePlayerName(name, FRONT_ENVIRONMENT_VARIABLES.MAX_USERNAME_LENGTH),
+                        ),
                     roomUrl: z.string(),
                 }),
             );

@@ -1,6 +1,10 @@
 //this file contains all the depth indexes which will be used in our game
 
 export const DEPTH_TILE_INDEX = 0;
+/** The green or autumn grass of the outside: over the map tiles, under the snow and the floor tiles (0.5). */
+export const DEPTH_SEASONAL_GROUND_INDEX = DEPTH_TILE_INDEX + 0.2;
+/** The snow on the outside ground: over the grass, under the floor tiles, so that paving stays on top. */
+export const DEPTH_SNOW_GROUND_INDEX = DEPTH_TILE_INDEX + 0.25;
 //Note: Player characters use their y coordinate as their depth to simulate a perspective.
 //See the Character class.
 export const DEPTH_OVERLAY_INDEX = 1_000_000;
@@ -10,6 +14,11 @@ export const DEPTH_NIGHT_INDEX = 1_040_000;
 export const DEPTH_DOOR_LOCK_INDEX = 1_045_000;
 /** Lights of the lamps and the torches: above the night veil, which they pierce, so that they glow at night. */
 export const DEPTH_LAMP_LIGHT_INDEX = DEPTH_NIGHT_INDEX + 100;
+/**
+ * The fog over the buildings once the map is seen from far (WeatherManager): over the lights of the lamps (they reach
+ * DEPTH_LAMP_LIGHT_INDEX + 2), so that they no longer pierce it, under the padlocks, the bubbles and the texts.
+ */
+export const DEPTH_FAR_FOG_INDEX = DEPTH_LAMP_LIGHT_INDEX + 10;
 export const DEPTH_CONVERSATION_BUBBLE_INDEX = 1_050_000;
 export const DEPTH_INGAME_TEXT_INDEX = 1_100_000;
 /** Map editor area previews (zones) – above overlay layers so they are always visible when the map editor is open. */

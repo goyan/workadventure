@@ -6,6 +6,7 @@
     import type { ApplicationDefinitionInterface } from "@workadventure/messages";
     import { v4 as uuid } from "uuid";
     import type { EntityPrefab, PrefabOverride } from "@workadventure/map-editor";
+    import { paintImagePool } from "@wa/front/Phaser/Game/MapEditor/PoolConversion";
     import {
         mapEditorEntityModeStore,
         mapEditorSelectedEntityPrefabStore,
@@ -32,6 +33,12 @@
     import { executeUpdateWAMSettings } from "../../../Phaser/Game/MapEditor/Commands/Facades";
     import { isMapLayerPrefab } from "../../../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
     import { getEntityCategory, withCategory } from "../../../Utils/EntityCategory";
+    import FloorLevelPicker from "../FloorLevelPicker.svelte";
+    import { mapLayerBuiltLevelsStore } from "../../../Stores/MapLayerStore";
+    import SwitchPropertyEditor from "../PropertyEditor/SwitchPropertyEditor.svelte";
+    import WaterFlowPropertyEditor from "../PropertyEditor/WaterFlowPropertyEditor.svelte";
+    import { waterAnchorOf } from "../../../Phaser/Game/Terrain/WaterAnchor";
+    import { selfSensorProperty } from "../../../Phaser/Game/Switches/SwitchWiring";
     import DanceFloorSizeEditor from "./DanceFloorSizeEditor.svelte";
     import PlacedImageSizeEditor from "./PlacedImageSizeEditor.svelte";
     import RgbLampEditor from "./RgbLampEditor.svelte";
@@ -46,12 +53,21 @@
     let entitySearchable = $state(false);
     let showDescriptionField = $state(false);
     let selectedEntity: Entity | undefined = undefined;
+    // The level the selected object stands on (0: the ground), for the level picker.
+    let selectedElevation = $state(0);
+
+    function moveToLevel(level: number): void {
+        if (!$mapEditorSelectedEntityStore) return;
+        $mapEditorSelectedEntityStore.setElevation(level);
+        selectedElevation = level;
+    }
 
     let selectedEntityUnsubscriber = mapEditorSelectedEntityStore.subscribe((currentEntity) => {
         if (currentEntity) {
             currentEntity.setEditColor(0x00ffff);
             properties = currentEntity.getProperties() ?? [];
             entityName = currentEntity.getEntityData().name ?? "";
+            selectedElevation = currentEntity.getElevation();
             const descriptionProperty = properties.find((p) => p.type === "entityDescriptionProperties");
             if (!descriptionProperty) {
                 $mapEditorSelectedEntityStore?.addProperty({
@@ -137,6 +153,17 @@
     function onUpdateProperty(property: EntityDataProperty) {
         if ($mapEditorSelectedEntityStore) {
             $mapEditorSelectedEntityStore.updateProperty($state.snapshot(property));
+        }
+    }
+
+    /**
+     * Replaces the property whole. updateProperty merges: a list in it (the targets of a switch) would only grow, and
+     * a field taken out (the level a source holds) would stay.
+     */
+    function onSetProperty(property: EntityDataProperty) {
+        if ($mapEditorSelectedEntityStore) {
+            $mapEditorSelectedEntityStore.setProperty($state.snapshot(property));
+            properties = $mapEditorSelectedEntityStore.getProperties();
         }
     }
 
@@ -261,6 +288,20 @@
                     width: LAMP_LIGHT_DEFAULT_TILES,
                     height: LAMP_LIGHT_DEFAULT_TILES,
                 };
+            case "switchPropertyData":
+                // A lamp made a switch commands itself; any other object, the lamps of its room.
+                return $mapEditorSelectedEntityStore?.getPrefab().lamp?.kind === "rgb"
+                    ? { id, type, key: "on", targets: { mode: "ids", ids: [$mapEditorSelectedEntityStore.entityId] } }
+                    : { id, type, key: "on", targets: { mode: "zone" } };
+            case "waterSourcePropertyData":
+            case "waterSinkPropertyData":
+                // 60 cubic metres an hour by default (the flow is in litres a minute), at the foot of the object.
+                return {
+                    id,
+                    type,
+                    flow: 1000,
+                    ...($mapEditorSelectedEntityStore ? waterAnchorOf($mapEditorSelectedEntityStore) : {}),
+                };
             default:
                 throw new Error(`Unknown property type ${type}`);
         }
@@ -278,6 +319,21 @@
             // $mapEditorSelectedEntityStore.delete();
             // mapEditorSelectedEntityStore.set(undefined);
             // mapEditorEntityModeStore.set("ADD");
+        }
+    }
+
+    /** A pool placed as an image, turned into a pool painted with the relief tool: then edited on the map. */
+    let convertingPool = $state(false);
+    async function convertSelectedPool(): Promise<void> {
+        const entity = $mapEditorSelectedEntityStore;
+        if (!entity) return;
+        convertingPool = true;
+        try {
+            if (await paintImagePool(entity)) deleteSelectedEntity();
+        } catch (error) {
+            console.error("The pool could not be converted", error);
+        } finally {
+            convertingPool = false;
         }
     }
 
@@ -476,6 +532,23 @@
             <IconArrowLeft font-size="12" class="cursor-pointer" />
             <span class="ml-1 cursor-pointer">{$LL.mapEditor.entityEditor.itemPicker.backToSelectObject()}</span>
         </p>
+        {#if $mapLayerBuiltLevelsStore.length > 0 || selectedElevation > 0}
+            <!-- The level the object stands on: choosing another one moves it there, over the same place. -->
+            <div class="my-2">
+                <FloorLevelPicker objectLevel={selectedElevation} onObjectLevel={moveToLevel} />
+            </div>
+        {/if}
+        {#if ($mapEditorSelectedEntityStore?.getPrefab().water?.length ?? 0) > 0}
+            <button
+                type="button"
+                class="flex flex-row items-center gap-2 p-2 my-2 rounded text-sm bg-secondary"
+                data-testid="convertPoolButton"
+                disabled={convertingPool}
+                onclick={convertSelectedPool}
+            >
+                {$LL.mapEditor.entityEditor.convertPool()}
+            </button>
+        {/if}
         <button
             type="button"
             class="flex flex-row items-center gap-2 p-2 my-2 rounded text-sm bg-danger"
@@ -493,6 +566,38 @@
                 }}
             />
         </div>
+        <!-- Any object can be made a switch, once: using it turns its lamps on or off. -->
+        {#if !properties.some((property) => property.type === "switchPropertyData")}
+            <div class="properties-buttons flex flex-row m-2">
+                <AddPropertyButtonWrapper
+                    property="switchPropertyData"
+                    onclick={() => {
+                        onAddProperty("switchPropertyData");
+                    }}
+                />
+            </div>
+        {/if}
+        <!-- Any object can be a source or a sink of the water of the relief, once each. -->
+        {#if !properties.some((property) => property.type === "waterSourcePropertyData")}
+            <div class="properties-buttons flex flex-row m-2">
+                <AddPropertyButtonWrapper
+                    property="waterSourcePropertyData"
+                    onclick={() => {
+                        onAddProperty("waterSourcePropertyData");
+                    }}
+                />
+            </div>
+        {/if}
+        {#if !properties.some((property) => property.type === "waterSinkPropertyData")}
+            <div class="properties-buttons flex flex-row m-2">
+                <AddPropertyButtonWrapper
+                    property="waterSinkPropertyData"
+                    onclick={() => {
+                        onAddProperty("waterSinkPropertyData");
+                    }}
+                />
+            </div>
+        {/if}
         <!-- A lamp (its catalog entry says so) can have the size of its light set, once. A dance floor has its own
              size editor (see DanceFloorSizeEditor), an RGB lamp its own settings (see RgbLampEditor). -->
         {#if $mapEditorSelectedEntityStore?.getPrefab().lamp && $mapEditorSelectedEntityStore.getPrefab().lamp?.kind !== "dancefloor" && $mapEditorSelectedEntityStore.getPrefab().lamp?.kind !== "rgb" && !properties.some((property) => property.type === "lampPropertyData")}
@@ -616,6 +721,31 @@
         {#if $mapEditorSelectedEntityStore.getPrefab().lamp?.kind === "rgb" && $mapEditorSelectedEntityStore.visible}
             {#key $mapEditorSelectedEntityStore.entityId}
                 <RgbLampEditor entity={$mapEditorSelectedEntityStore} />
+                {#if !properties.some((property) => property.type === "switchPropertyData")}
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-light btn-ghost m-2"
+                        data-testid="lampAddSensor"
+                        onclick={() => {
+                            if (!$mapEditorSelectedEntityStore) return;
+                            $mapEditorSelectedEntityStore.addProperty(
+                                selfSensorProperty($mapEditorSelectedEntityStore.entityId, uuid),
+                            );
+                            properties = $mapEditorSelectedEntityStore.getProperties();
+                        }}
+                    >
+                        {$LL.mapEditor.properties.switchPropertyData.addSensorToLamp()}
+                    </button>
+                {/if}
+                <p class="m-2 text-sm text-white/70" data-testid="lampSwitchCount">
+                    {$LL.mapEditor.properties.switchPropertyData.commandedBy({
+                        count:
+                            gameManager
+                                .getCurrentGameScene()
+                                .getSwitches()
+                                ?.switchesCommanding($mapEditorSelectedEntityStore.entityId).length ?? 0,
+                    })}
+                </p>
             {/key}
         {/if}
         {#if $mapEditorSelectedEntityStore.visible}
@@ -689,6 +819,26 @@
                                 }}
                                 onchange={() => onUpdateProperty(properties[i])}
                             />
+                        {:else if properties[i].type === "switchPropertyData"}
+                            {#if $mapEditorSelectedEntityStore}
+                                <SwitchPropertyEditor
+                                    entity={$mapEditorSelectedEntityStore}
+                                    bind:property={properties[i]}
+                                    onclose={() => {
+                                        onDeleteProperty(property.id);
+                                    }}
+                                    onchange={() => onSetProperty(properties[i])}
+                                />
+                            {/if}
+                        {:else if properties[i].type === "waterSourcePropertyData" || properties[i].type === "waterSinkPropertyData"}
+                            {#if $mapEditorSelectedEntityStore}<WaterFlowPropertyEditor
+                                    entity={$mapEditorSelectedEntityStore}
+                                    bind:property={properties[i]}
+                                    onclose={() => {
+                                        onDeleteProperty(property.id);
+                                    }}
+                                    onchange={() => onSetProperty(properties[i])}
+                                />{/if}
                         {:else if properties[i].type === "lampPropertyData"}
                             {#if $mapEditorSelectedEntityStore?.getPrefab().lamp?.kind !== "dancefloor" && $mapEditorSelectedEntityStore?.getPrefab().lamp?.kind !== "rgb"}
                                 <LampPropertyEditor

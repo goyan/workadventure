@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import type * as Phaser from "phaser";
 import type { EntityPrefab } from "@workadventure/map-editor";
 import type { Entity } from "../../../../../../src/front/Phaser/ECS/Entity";
-import { mapLayerPrefabId } from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
+import {
+    MAP_LAYER_WALL_HEIGHTS,
+    mapLayerPrefabId,
+    wallRise,
+} from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import { DOOR_SOUND_KEYS, DoorAnimator } from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/DoorAnimator";
 import type { DoorCharacter } from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/DoorAnimator";
 
@@ -350,6 +354,23 @@ describe("DoorAnimator high doors", () => {
         run(animator, 600, 900, () => [], player);
     }
 
+    it.each(MAP_LAYER_WALL_HEIGHTS)(
+        "keeps a vertical leaf aligned with its wall cap, closed and open, at height %i",
+        async (height) => {
+            const rise = wallRise(height);
+            const name = `porte-v-gris-haut${height > 1 ? `-h${height}` : ""}`;
+            const { animator, entity, drawnTop, requested } = makeFramedDoor(name, 96, 160 - rise, 32);
+            animator.update(0, [], { x: 0, y: 0 });
+            expect(drawnTop()).toBe(160 - rise);
+            await openWithPlayerIn(animator, { x: 128, y: 176 - rise });
+            expect(drawnTop()).toBe(160 - rise);
+            expect(entity.height).toBe(32);
+            expect(requested).toContain(`${name}-0`);
+            run(animator, 1000, 3000, () => [], { x: 0, y: 0 });
+            expect(drawnTop()).toBe(160 - rise);
+        },
+    );
+
     it("opens a door of height 2 from its opening and plays the frames of its height, 14 px above the door", async () => {
         // Door of height 2 on the segments (4, 5) and (5, 5): drawn from y = 160 - 32, opening 128..192 x 160..192.
         const { animator, entity, requested, drawnTop } = makeFramedDoor("porte-h-gris-g-h2", 128, 128, 32 + 32 + 28);
@@ -370,14 +391,17 @@ describe("DoorAnimator high doors", () => {
         expect(drawnTop()).toBe(160 - 14);
     });
 
-    it("opens a vertical door of a wall of 2 from the ground, plays the frames of its height and marks what is seen", async () => {
-        // Raised by 32 px: drawn from y = 128, its opening on the ground 112..144 x 160..224.
-        const { animator, requested } = makeFramedDoor("porte-v-gris-haut-h2", 96, 128, 32);
-        await openWithPlayerIn(animator, { x: 128, y: 176 });
+    it("opens a vertical door of a wall of 2 at its visible opening and keeps its leaf and marker aligned", async () => {
+        // Raised by 32 px: the visible opening spans y = 128..180.
+        const { animator, requested, entity } = makeFramedDoor("porte-v-gris-haut-h2", 96, 128, 32);
+        await openWithPlayerIn(animator, { x: 128, y: 144 });
+        expect(animator.isDoorOpen("door")).toBe(true);
         expect(requested).toContain("porte-v-gris-haut-h2-0");
+        // The visible leaf stays on its wall cap.
+        expect(entity.originY).toBe(0);
         expect(requested.filter((name) => !name.startsWith("porte-v-gris-haut-h2-"))).toEqual([]);
         const zone = { x: 128, y: 160, width: 128, height: 64 };
-        // Seen from 128 to 180: the door raised by 32, its last 12 px under the joint of the vertex below.
+        // The marker follows the raised cap from y = 128 to 180.
         expect(Array.from(animator.getLockedDoorMarkers([zone]).values())).toEqual([{ x: 128, y: 154 }]);
     });
 
@@ -454,5 +478,32 @@ describe("glazed high doors", () => {
         expect(asked.sort()).toEqual(
             [...frames.map((frame) => `${name}-${frame}`), ...frames.map((frame) => `${name}-b${frame}`)].sort(),
         );
+    });
+});
+
+describe("open vertical passages", () => {
+    it.each(MAP_LAYER_WALL_HEIGHTS)("does not open above the visible doorway at wall height %i", (height) => {
+        const rise = wallRise(height);
+        const name = `porte-v-gris-haut${height > 1 ? `-h${height}` : ""}`;
+        const { animator } = makeAnimator(name, 96, 160 - rise);
+        const player = { x: 128, y: 164 - rise, facingSideways: true };
+        run(animator, 0, 1000, () => [], player);
+        expect(animator.isDoorOpen("door")).toBe(false);
+    });
+
+    it.each(MAP_LAYER_WALL_HEIGHTS)("only releases the visible opening at wall height %i", (height) => {
+        const rise = wallRise(height);
+        const name = `porte-v-gris-haut${height > 1 ? `-h${height}` : ""}`;
+        const { animator } = makeAnimator(name, 96, 160 - rise);
+        const player = { x: 128, y: 176 - rise, facingSideways: true };
+        expect(animator.isInOpenVerticalPassage(128, player.y)).toBe(false);
+        run(animator, 0, 1000, () => [], player);
+        expect(animator.isInOpenVerticalPassage(128, player.y)).toBe(true);
+        // A 16px body must fit between the jambs, including while another character holds the door open.
+        expect(animator.isInOpenVerticalPassage(128, 164 - rise)).toBe(false);
+        expect(animator.isInOpenVerticalPassage(128, 208 - rise)).toBe(false);
+        expect(animator.isInOpenVerticalPassage(128, 145 - rise)).toBe(false);
+        expect(animator.isInOpenVerticalPassage(128, 212 - rise)).toBe(false);
+        expect(animator.isInOpenVerticalPassage(128, 240 - rise)).toBe(false);
     });
 });

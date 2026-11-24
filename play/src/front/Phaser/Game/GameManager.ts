@@ -37,6 +37,7 @@ import { ABSOLUTE_PUSHER_URL } from "../../Enum/ComputedConst";
 import type { WokaData } from "../../Components/Woka/WokaTypes";
 import { createWokaListCache } from "../../Components/Woka/WokaListCache";
 import { generateRandomName } from "../../Utils/RandomNameGenerator";
+import { isUserNameValid, normalizeUserName } from "../../Connection/LocalUserUtils";
 import { shouldShowPwaInstallSceneAsync } from "../../Utils/PwaInstallEligibility";
 import { raceTimeout } from "../../Utils/PromiseUtils";
 import { GameScene } from "./GameScene";
@@ -192,6 +193,11 @@ export class GameManager {
             }
         }
 
+        if (this.playerName !== null && !isUserNameValid(this.playerName)) {
+            this.setPlayerName(this.playerName);
+            localUserStore.setName(this.playerName);
+        }
+
         if (this.playerName && localUserStore.getAuthToken() && shouldShowPwaInstall) {
             return PwaInstallSceneName;
         } else if (!this.playerName || (this.startRoom.authenticationMandatory && !localUserStore.getAuthToken())) {
@@ -231,6 +237,7 @@ export class GameManager {
     }
 
     public setPlayerName(name: string): void {
+        name = normalizeUserName(name);
         this.playerName = name;
         localUserStore.notifyPlayerDisplayNameChanged(name);
         Sentry.setUser({

@@ -1,43 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { WeatherType } from "@workadventure/map-editor";
+import { SeasonalTheme } from "../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme";
 import {
-    effectiveWeather,
     FOG_LEVELS,
     fogBlocks,
     fogPatches,
     fogStrength,
     keepOutdoorParticles,
     lastStrike,
-    leafParticles,
     lightningBolt,
     stormFlash,
-    weatherParticles,
     weatherAtTime,
+    themedFall,
+    WINTER_SNOWFALL,
 } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
 import { autoWeatherAt, slotStart } from "../../../../../src/front/Phaser/Game/Weather/WeatherSchedule";
 import { OutdoorGrid } from "../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid";
-import { SeasonalTheme } from "../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme";
 
 const view = { x: 0, y: 0, width: 800, height: 600 };
-
-describe("world weather", () => {
-    it("does no particle work for clear sky", () => {
-        expect(weatherParticles(WeatherType.Clear, 1000, view)).toEqual([]);
-    });
-    it("keeps overlapping particles fixed in the world when the camera moves", () => {
-        const original = weatherParticles(WeatherType.Rain, 1000, view);
-        const shifted = weatherParticles(WeatherType.Rain, 1000, { ...view, x: 64 });
-        expect(original.filter((particle) => particle.x >= 0 && particle.x < 800)).toEqual(
-            shifted.filter((particle) => particle.x >= 0 && particle.x < 800),
-        );
-        expect(weatherParticles(WeatherType.Rain, 1100, view)).not.toEqual(original);
-    });
-    it("bounds particle work even when zoomed far out", () => {
-        expect(weatherParticles(WeatherType.Snow, 1000, { ...view, width: 20000, height: 20000 }).length).toBeLessThan(
-            500,
-        );
-    });
-});
 
 describe("storm", () => {
     it("strikes every 12 to 30 seconds, at the same times for everyone, without a fixed rhythm", () => {
@@ -113,15 +93,20 @@ describe("storm", () => {
 
 describe("common automatic weather", () => {
     const halfHour = 30 * 60 * 1000;
-    it("replaces fixed snow with rain outside November through March, and never snows there in automatic", () => {
-        for (const date of ["2026-07-01T01:30:00Z", "2026-04-01T01:30:00Z", "2026-10-01T01:30:00Z"]) {
+    it("shows a map saved with a fixed snow as a rain in every season, and never draws a snow in automatic", () => {
+        for (const date of [
+            "2026-07-01T01:30:00Z",
+            "2026-04-01T01:30:00Z",
+            "2026-11-01T01:30:00Z",
+            "2026-01-10T12:00:00Z",
+        ]) {
             expect(weatherAtTime(WeatherType.Snow, new Date(date))).toBe(WeatherType.Rain);
         }
-        expect(weatherAtTime(WeatherType.Snow, new Date("2026-11-01T01:30:00Z"))).toBe(WeatherType.Snow);
-        // A cloudy sky is a clear one with clouds: never rain, sound or particles.
+        // Without the server date too: a fixed weather needs none.
+        expect(weatherAtTime(WeatherType.Snow, undefined)).toBe(WeatherType.Rain);
+        // A cloudy sky is a clear one with clouds: never rain nor sound.
         expect(weatherAtTime(WeatherType.Cloudy, new Date("2026-11-01T01:30:00Z"))).toBe(WeatherType.Clear);
-        expect(weatherParticles(WeatherType.Clear, 1000, { x: 0, y: 0, width: 800, height: 600 })).toEqual([]);
-        for (const month of ["2026-04", "2026-07", "2026-10"]) {
+        for (const month of ["2026-01", "2026-04", "2026-07", "2026-10", "2026-12"]) {
             for (let t = Date.parse(`${month}-01T00:00:00Z`); t < Date.parse(`${month}-28T00:00:00Z`); t += halfHour) {
                 expect(weatherAtTime(WeatherType.Automatic, new Date(t))).not.toBe(WeatherType.Snow);
             }
@@ -180,38 +165,6 @@ describe("outdoor weather", () => {
 
     it("drops particles above indoor cells", () => {
         expect(keepOutdoorParticles(particles, (x, y) => closedRoom.isOutdoorAt(x, y))).toEqual([particles[1]]);
-    });
-
-    it("christmas forces snow", () => {
-        expect(effectiveWeather(WeatherType.Rain, SeasonalTheme.Christmas)).toBe(WeatherType.Snow);
-        expect(effectiveWeather(WeatherType.Rain, undefined)).toBe(WeatherType.Rain);
-        expect(effectiveWeather(WeatherType.Clear, SeasonalTheme.Christmas)).toBe(WeatherType.Snow);
-        // Autumn keeps the map weather: its leaves fall on top of it.
-        expect(effectiveWeather(WeatherType.Rain, SeasonalTheme.Autumn)).toBe(WeatherType.Rain);
-    });
-});
-
-describe("leafParticles", () => {
-    const view = { x: 0, y: 0, width: 1280, height: 720 };
-    const inView = (particle: { x: number; y: number }) =>
-        particle.x >= view.x &&
-        particle.x < view.x + view.width &&
-        particle.y >= view.y &&
-        particle.y < view.y + view.height;
-
-    it("is about three times sparser than snow", () => {
-        const snow = weatherParticles(WeatherType.Snow, 0, view).filter(inView).length;
-        const leaves = leafParticles(0, view).filter(inView).length;
-        expect(leaves).toBeGreaterThan((snow / 3) * 0.8);
-        expect(leaves).toBeLessThan((snow / 3) * 1.2);
-    });
-
-    it("is the same for everyone at the same time, and falls", () => {
-        expect(leafParticles(5000, view)).toEqual(leafParticles(5000, view));
-        const before = leafParticles(5000, view);
-        const after = leafParticles(5500, view);
-        const fell = before.filter((particle, index) => after[index].y > particle.y).length;
-        expect(fell).toBeGreaterThan(before.length * 0.9);
     });
 });
 
@@ -361,6 +314,73 @@ describe("fog", () => {
 
         it("are none without a patch", () => {
             expect(fogBlocks([view], [], 16)).toEqual([]);
+        });
+    });
+});
+
+describe("the automatic weather of a map with a place", () => {
+    it("follows the schedule of its place, its fog included, and that of Paris without one", () => {
+        const sydney = { latitude: -33.87, timezone: "Australia/Sydney" };
+        const auto = { frequency: "normal" as const, include: [WeatherType.Rain, WeatherType.Storm, WeatherType.Fog] };
+        let differs = 0;
+        for (
+            let time = Date.parse("2026-01-01T00:00:00Z");
+            time < Date.parse("2026-02-01T00:00:00Z");
+            time += 1_800_000
+        ) {
+            const date = new Date(time + 900_000);
+            const there = autoWeatherAt(date, auto, sydney);
+            expect(weatherAtTime(WeatherType.Automatic, date, auto, sydney)).toBe(there);
+            expect(weatherAtTime(WeatherType.Automatic, date, auto)).toBe(autoWeatherAt(date, auto));
+            expect(fogStrength(WeatherType.Automatic, date, auto, undefined, undefined, sydney) > 0).toBe(
+                there === WeatherType.Fog,
+            );
+            if (there !== autoWeatherAt(date, auto)) differs++;
+        }
+        expect(differs).toBeGreaterThan(0);
+    });
+});
+
+describe("what falls for who chose the winter theme", () => {
+    it("is what the map says without the theme", () => {
+        expect(themedFall(undefined, WeatherType.Clear, 0.5, 0)).toEqual({
+            weather: WeatherType.Clear,
+            rain: 0.5,
+            snow: 0,
+        });
+        expect(themedFall(SeasonalTheme.Autumn, WeatherType.Rain, 0.8, 0.3)).toEqual({
+            weather: WeatherType.Rain,
+            rain: 0.8,
+            snow: 0.3,
+        });
+    });
+
+    it("is a light snow under a clear, cloudy or foggy sky", () => {
+        for (const weather of [WeatherType.Clear, WeatherType.Cloudy, WeatherType.Fog]) {
+            expect(themedFall(SeasonalTheme.Christmas, weather, 0.5, 0)).toEqual({
+                weather: WeatherType.Rain,
+                rain: WINTER_SNOWFALL,
+                snow: 1,
+                flakes: WINTER_SNOWFALL,
+            });
+        }
+    });
+
+    it("leaves how hard the flakes fall to the rain of the map when it rains", () => {
+        expect(themedFall(SeasonalTheme.Christmas, WeatherType.Rain, 0.8, 0).flakes).toBeUndefined();
+        expect(themedFall(undefined, WeatherType.Rain, 0.8, 1).flakes).toBeUndefined();
+    });
+
+    it("is the rain or the storm of the map, as hard, all in flakes", () => {
+        expect(themedFall(SeasonalTheme.Christmas, WeatherType.Rain, 0.8, 0)).toEqual({
+            weather: WeatherType.Rain,
+            rain: 0.8,
+            snow: 1,
+        });
+        expect(themedFall(SeasonalTheme.Christmas, WeatherType.Storm, 0.9, 0.2)).toEqual({
+            weather: WeatherType.Storm,
+            rain: 0.9,
+            snow: 1,
         });
     });
 });

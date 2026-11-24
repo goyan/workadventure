@@ -1,13 +1,35 @@
 import path from "path";
-import * as Sentry from "@sentry/node";
-import { Metadata } from "@grpc/grpc-js";
-import type { WAMFileFormat, AreaData, AreaDataProperty } from "@workadventure/map-editor";
 import {
+    isAtAreaLevel,
     canUpdateListeningZoneJams,
+    DEFAULT_FIRE_THRESHOLDS,
+    NEUTRAL_FIRE_CONDITIONS,
     GameMapProperties,
+    hurricaneTimesOf,
     LISTENING_ZONE_JAM_VARIABLE,
     parseListeningZoneJams,
     parseListeningZoneJamsUpdate,
+    KARAOKE_STAGE_STATE_EVENT,
+    KaraokeStageStateSchema,
+    KARAOKE_SCORE_EVENT,
+    KaraokeScoreReportSchema,
+    KARAOKE_LEADERBOARD_EVENT,
+    KARAOKE_LEADERBOARD_MIN_COVERAGE,
+    KARAOKE_LEADERBOARD_REQUEST_EVENT,
+    KaraokeLeaderboardRequestSchema,
+    mapCellsOf,
+    TERRAIN_CELL,
+} from "@workadventure/map-editor";
+import * as Sentry from "@sentry/node";
+import { Metadata } from "@grpc/grpc-js";
+import type {
+    WAMFileFormat,
+    AreaData,
+    AreaDataProperty,
+    KaraokeReference,
+    KaraokeScoreReport,
+    KaraokeSongLeaderboard,
+    KaraokeStageState,
 } from "@workadventure/map-editor";
 import { LocalUrlError } from "@workadventure/map-editor/src/LocalUrlError";
 import { mapFetcher } from "@workadventure/map-editor/src/MapFetcher";
@@ -16,12 +38,25 @@ import type {
     DuckRushEventMessage,
     EmoteEventMessage,
     EntityEvent,
+    EntityStateMessage,
+    TerrainWaterMessage,
+    FireConditionsMessage,
+    MeadowMessage,
+    TreeFireMessage,
+    SetFireConditionsMessage,
+    AquaticLifeMessage,
+    CatastropheKind,
+    HurricaneTrackMessage,
+    FishingMessage,
+    IceShackAction,
+    IceShacksMessage,
     JoinRoomMessage,
     MapBbbData,
     MapDetailsData,
     MapJitsiData,
     MapThirdPartyData,
     ServerToClientMessage,
+    SetEntityStateMessage,
     SetPlayerDetailsMessage,
     SubToPusherRoomMessage,
 } from "@workadventure/messages";
@@ -81,6 +116,7 @@ import { VariablesManager } from "../Services/VariablesManager";
 import type { AreaPropertyVariable } from "../Services/AreaPropertyVariablesManager";
 import { AreaPropertyVariablesManager } from "../Services/AreaPropertyVariablesManager";
 import { getVariablesRepository } from "../Services/Repository/VariablesRepository";
+import { sameFloor } from "./FloorLevel";
 import { PrivateMessages, PrivateMessageRefusedError } from "./PrivateMessages";
 import { AreaZoneTracker } from "./AreaZoneTracker";
 import type { BrothersFinder } from "./BrothersFinder";
@@ -92,6 +128,21 @@ import { User } from "./User";
 import type { PointInterface } from "./Websocket/PointInterface";
 import { LockableAreaManager } from "./AreaPropertyEvents/LockableAreaManager";
 import { ListeningZoneManager } from "./AreaPropertyEvents/ListeningZoneManager";
+import { EntityStateManager } from "./EntityStateManager";
+import { SwitchTriggerEvaluator } from "./SwitchTriggerEvaluator";
+import { FireConditionsManager } from "./FireConditionsManager";
+import { InlineRoomGround } from "./Ground/InlineRoomGround";
+import { groundThreads } from "./Ground/ServerGroundThreads";
+import "./Ground/ServerWaterKernel";
+import { RemoteRoomGround } from "./Ground/RemoteRoomGround";
+import type { RoomGround, RoomGroundInputs } from "./Ground/RoomGround";
+import { AquaticLifeManager } from "./AquaticLifeManager";
+import { CatastropheManager } from "./CatastropheManager";
+import { anglersOf, FishingManager } from "./FishingManager";
+import { iceShackGround, IceShackManager } from "./IceShackManager";
+import type { IceShackPlayer } from "./IceShackManager";
+import { rainTimelineService } from "./Services/RainTimelineService";
+import { KaraokeLeaderboardManager } from "./AreaPropertyEvents/KaraokeLeaderboardManager";
 import { MaxUsersInAreaManager } from "./AreaPropertyEvents/MaxUsersInAreaManager";
 import { BubbleListeners } from "./BubbleListeners";
 import type { BubbleListeningCallbacks } from "./BubbleListeners";
@@ -103,12 +154,16 @@ const MEETING_INVITATION_MAX_REQUESTS = 50;
 const MEETING_INVITATION_MAX_REQUESTS_PER_USER = 3;
 const MEETING_INVITATION_REQUEST_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
+/** The life of the land reads at most this many cells of the relief on each side of a map. */
+
 export class GameRoom implements BrothersFinder {
     private readonly privateMessages = new PrivateMessages((uuid) => this.getUsersByUuid(uuid));
     public readonly id: string;
     // Users, sorted by ID
     private readonly users: SpatialMap<number, User>;
     private readonly usersByUuid = new Map<string, Set<User>>();
+    private readonly karaokeStages = new Map<string, KaraokeStageState>();
+    private readonly karaokeScoreTimes = new Map<string, number>();
     // Users indexed by composite key (userUuid + tabId), used to detect reconnections from the same tab
     // and immediately kill stale connections instead of waiting for ping timeout
     private readonly usersByTabKey = new Map<string, User>();
@@ -123,6 +178,18 @@ export class GameRoom implements BrothersFinder {
     // Ephemeral variables attached to area properties (not persisted)
     private readonly areaPropertyVariablesManager = new AreaPropertyVariablesManager();
     private listeningZoneManager: ListeningZoneManager | undefined;
+    private entityStateManager: EntityStateManager | undefined;
+    private switchTriggers: SwitchTriggerEvaluator | undefined;
+    /** The water of the relief and the meadow of the room. */
+    private ground: RoomGround | undefined;
+    private fireConditions: FireConditionsManager | undefined;
+    private aquaticLife: AquaticLifeManager | undefined;
+    /** The size of the map in cells of the relief; undefined until its Tiled map is read. */
+    private mapCells: { width: number; height: number } | undefined;
+    private fishing: FishingManager | undefined;
+    private iceShacks: IceShackManager | undefined;
+    private catastrophes: CatastropheManager | undefined;
+    private karaokeLeaderboard: KaraokeLeaderboardManager | undefined;
     private readonly wamManager?: WamManager;
     private versionNumber = 1;
     private nextUserId = 1;
@@ -138,7 +205,8 @@ export class GameRoom implements BrothersFinder {
     private readonly _userLeaveStream = new Subject<User>();
     public readonly userLeaveStream = this._userLeaveStream.asObservable();
 
-    private readonly _userMoveStream = new Subject<{ user: User; oldPosition: PointInterface }>();
+    /** `oldFloorZ`: set when the user changed of floor of the map (see FloorLevel), its position unchanged. */
+    private readonly _userMoveStream = new Subject<{ user: User; oldPosition: PointInterface; oldFloorZ?: number }>();
     public readonly userMoveStream = this._userMoveStream.asObservable();
 
     private readonly _destroyRoomStream = new Subject<void>();
@@ -267,10 +335,163 @@ export class GameRoom implements BrothersFinder {
             repository: await getVariablesRepository(),
             roomUrl,
         });
+        gameRoom.karaokeLeaderboard = new KaraokeLeaderboardManager({
+            repository: await getVariablesRepository(),
+            roomUrl,
+        });
         // A store that does not answer must not keep the room closed: the rooms are only a convenience.
         await gameRoom.listeningZoneManager
             .restore()
             .catch((error) => console.error("Could not restore the Jam rooms of the listening zones", error));
+        // Keeps the state of the objects that can be switched (a lamp on or off): saved across restarts.
+        gameRoom.entityStateManager = new EntityStateManager(gameRoom, {
+            repository: await getVariablesRepository(),
+            roomUrl,
+        });
+        await gameRoom.entityStateManager.restore();
+        // Uses the switches that have a trigger (presence sensors, timers) once a second.
+        const switchTriggers = new SwitchTriggerEvaluator(
+            gameRoom,
+            gameRoom.entityStateManager,
+            undefined,
+            // The antelopes, lions and tigers the server runs are sensed like the avatars.
+            gameRoom.landAnimalPositions.bind(gameRoom),
+        );
+        gameRoom.switchTriggers = switchTriggers;
+        switchTriggers.start();
+        // No need to unsubscribe since GameRoom.destroy completes this stream.
+        // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
+        gameRoom.destroyRoomStream.subscribe(() => switchTriggers.stop());
+        // The ground of the room: the water of the hollows of its relief (lakes) and its meadow, saved across restarts,
+        // nothing on a map without relief. What it reads of the room is asked each time it is needed: its
+        // catastrophes, its animals and its weather are made further down.
+        const groundParts: {
+            catastrophes?: CatastropheManager;
+            aquaticLife?: AquaticLifeManager;
+            fireConditions?: FireConditionsManager;
+        } = {};
+        const groundInputs: RoomGroundInputs = {
+            room: gameRoom,
+            rain: rainTimelineService,
+            store: { repository: await getVariablesRepository(), roomUrl },
+            // The water stays on the map: no avatar walks on the ground shown past its edges.
+            mapSize: gameRoom.mapSizeInCells.bind(gameRoom),
+            // A door holds the water while it is closed: it opens for the avatars that stand in its passage.
+            walkers: gameRoom.groundAvatarPositions.bind(gameRoom),
+            downpours: () => groundParts.catastrophes?.downpours() ?? [],
+            drains: () => groundParts.catastrophes?.drains() ?? [],
+            balls: () => groundParts.catastrophes?.balls() ?? [],
+            colds: () => groundParts.catastrophes?.colds() ?? [],
+            hurricane: () => groundParts.catastrophes?.hurricane(),
+            // The antelopes of the life of the land graze the meadow.
+            grazers: () => groundParts.aquaticLife?.grazers() ?? [],
+            // In the cold of the room the rain of the map falls as snow; the weather is not known until it is read.
+            air: () => groundParts.fireConditions?.air(),
+            fire: () => groundParts.fireConditions?.conditions() ?? NEUTRAL_FIRE_CONDITIONS,
+            thresholds: () => groundParts.fireConditions?.thresholds() ?? DEFAULT_FIRE_THRESHOLDS,
+        };
+        // Computed on the thread of the rooms, or on one of the threads kept for it (GROUND_THREADS).
+        const ground: RoomGround =
+            groundThreads.count > 0
+                ? new RemoteRoomGround(groundInputs, groundThreads)
+                : new InlineRoomGround(groundInputs);
+        gameRoom.ground = ground;
+
+        // The meteors that fall on that water; the map size is passed in pixels.
+        const catastrophes = new CatastropheManager(
+            gameRoom,
+            gameRoom.mapSizeInPixels.bind(gameRoom),
+            // A comet takes the water of its crater, and breaks the ice on it.
+            ground.strike.bind(ground),
+        );
+        groundParts.catastrophes = catastrophes;
+        catastrophes.levelWith(ground.ballLevelAt.bind(ground));
+        // A hurricane turns clockwise over a map in the southern hemisphere.
+        catastrophes.southernWith(gameRoom.inSouthernHemisphere.bind(gameRoom));
+        // The widget of the speed of the map speeds the hurricane up too.
+        catastrophes.hurricaneTimesWith(gameRoom.hurricaneTimes.bind(gameRoom));
+        gameRoom.catastrophes = catastrophes;
+        // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
+        gameRoom.destroyRoomStream.subscribe(() => catastrophes.stop());
+        await ground.startWater();
+        // The life in that water (fish, dolphins): its own pace, nothing on a map whose life is off.
+        // The fishing lines in that water: stepped with the life, just before it.
+        const fishing = new FishingManager(
+            gameRoom,
+            gameRoom.anglers.bind(gameRoom),
+            { repository: await getVariablesRepository(), roomUrl },
+            undefined,
+            undefined,
+            // A fishing contest knows its players by their uuid: the id of a user changes when they reconnect.
+            gameRoom.fishingPlayer.bind(gameRoom),
+        );
+        gameRoom.fishing = fishing;
+        await fishing.restore();
+        const aquaticLife = new AquaticLifeManager(
+            gameRoom,
+            ground,
+            { repository: await getVariablesRepository(), roomUrl },
+            undefined,
+            undefined,
+            // The animals fear the avatars that are on the ground, where the water is.
+            gameRoom.groundAvatarPositions.bind(gameRoom),
+            // The animals of the land live on the whole map: its size is in its Tiled map.
+            gameRoom.mapSizeInCells.bind(gameRoom),
+            // The animals a player tamed follow them.
+            gameRoom.masterPosition.bind(gameRoom),
+            {
+                beforeStep: (life) => fishing.beforeStep(life),
+                stopped: (emptied) => fishing.lifeStopped(emptied),
+            },
+        );
+        groundParts.aquaticLife = aquaticLife;
+        gameRoom.aquaticLife = aquaticLife;
+        await aquaticLife.restore();
+        aquaticLife.start();
+        // The heat, the humidity of the air and the wind the fire of the room goes by: real, or set by hand.
+        const fireConditions = new FireConditionsManager(gameRoom, rainTimelineService);
+        gameRoom.fireConditions = fireConditions;
+        fireConditions.start();
+        // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
+        gameRoom.destroyRoomStream.subscribe(() => fireConditions.stop());
+        groundParts.fireConditions = fireConditions;
+        // The ice that gives way under a player is the ice the meadow keeps, broken as by a comet.
+        catastrophes.breakIceWith(ground.shatter.bind(ground));
+        catastrophes.calmWith(ground.calm.bind(ground));
+        // The animals of the map run from the fire of its grass and of its trees.
+        aquaticLife.followFire(() => ground.lifeFire());
+        // A downpour also soaks the ground of the meadow.
+        catastrophes.soakWith(ground.soak.bind(ground));
+        // A patch of fire a player sets burns the grass of the meadow.
+        catastrophes.igniteWith(ground.ignite.bind(ground));
+        // A fireball boils the water of its crater away first, then burns the ground it left dry.
+        catastrophes.burnWith(ground.burn.bind(ground));
+        await ground.startMeadow();
+        // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
+        gameRoom.destroyRoomStream.subscribe(() => ground.stop());
+        // The ice fishing shacks stand on the ice the meadow keeps, over the water of the relief: made once both are.
+        const shacksRepository = await getVariablesRepository();
+        const wamOfRoom = gameRoom.getWam.bind(gameRoom);
+        const iceShacks = new IceShackManager(
+            gameRoom,
+            () => iceShackGround(wamOfRoom(), ground.getGrid(), ground),
+            gameRoom.iceShackPlayers.bind(gameRoom),
+            () => Object.values(wamOfRoom()?.entities ?? {}),
+            { repository: shacksRepository, roomUrl },
+        );
+        iceShacks.catchUpWith(ground.catchingUp.bind(ground));
+        gameRoom.keepIceShacks(iceShacks);
+        await iceShacks.restore();
+        iceShacks.start();
+        // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
+        gameRoom.destroyRoomStream.subscribe(() => iceShacks.stop());
+        gameRoom.readMapSize(() => {
+            // The water first: the life of the map lives on its grid.
+            ground.mapChanged();
+            aquaticLife.mapChanged();
+        });
+        // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
+        gameRoom.destroyRoomStream.subscribe(() => aquaticLife.stop());
 
         return gameRoom;
     }
@@ -467,6 +688,10 @@ export class GameRoom implements BrothersFinder {
             return;
         }
         user.disconnected = true;
+        // The animals they tamed are free again, now rather than at the next step of the life.
+        this.aquaticLife?.release(user.id);
+        // Nor do they sit in an ice fishing shack any more.
+        this.iceShacks?.userLeft(user.id);
 
         if (!this.users.has(user.id)) {
             console.warn("User ", user.id, "does not belong to this game room! It should!");
@@ -492,6 +717,8 @@ export class GameRoom implements BrothersFinder {
             set.delete(user);
             if (set.size === 0) {
                 this.usersByUuid.delete(user.uuid);
+                this.karaokeStages.delete(user.uuid);
+                this.karaokeScoreTimes.delete(user.uuid);
             }
         }
 
@@ -536,9 +763,15 @@ export class GameRoom implements BrothersFinder {
 
     updatePlayerDetails(user: User, playerDetailsMessage: SetPlayerDetailsMessage) {
         const wasSilent = user.silent;
+        const floorBefore = user.getFloorZ();
         user.updateDetails(playerDetailsMessage);
         if (user.group !== undefined && user.silent) {
             this.leaveGroup(user);
+        } else if (!sameFloor(floorBefore, user.getFloorZ())) {
+            // On another floor now: out of the bubble of the floor left, in with whoever stands next on this one.
+            this.updateUserGroup(user);
+            // And out of the areas of the floor left, into the ones of this one.
+            this._userMoveStream.next({ user, oldPosition: user.getPosition(), oldFloorZ: floorBefore });
         } else if (wasSilent && !user.silent) {
             // Back from a silent status (DND, sound blocked...): join whoever is next to us, without waiting for a move.
             this.updateUserGroup(user);
@@ -582,6 +815,12 @@ export class GameRoom implements BrothersFinder {
                 }
             }
         } else {
+            // Gone to another floor than the others of its bubble (up a stair): it leaves them.
+            const other = group.getUsers().find((member) => member !== user);
+            if (other && !sameFloor(user.getFloorZ(), other.getFloorZ())) {
+                this.leaveGroup(user);
+                return;
+            }
             let hasKickOutSomeone = false;
             let followingMembers: User[] = [];
 
@@ -732,6 +971,10 @@ export class GameRoom implements BrothersFinder {
             if (currentUser.silent) {
                 continue;
             }
+            // Drawn at the same place on another floor of the map: not next to each other.
+            if (!sameFloor(user.getFloorZ(), currentUser.getFloorZ())) {
+                continue;
+            }
 
             const distance = GameRoom.computeDistance(user, currentUser); // compute distance between peers.
 
@@ -743,6 +986,9 @@ export class GameRoom implements BrothersFinder {
 
         for (const group of this.groups.queryCircle(userPosition.x, userPosition.y, this.groupRadius)) {
             if (group.isFull() || group.isLocked()) {
+                continue;
+            }
+            if (!sameFloor(user.getFloorZ(), group.getFloorZ())) {
                 continue;
             }
             const distance = GameRoom.computeDistanceBetweenPositions(user.getPosition(), group.getPosition());
@@ -1026,6 +1272,187 @@ export class GameRoom implements BrothersFinder {
         return { success: true, changed };
     }
 
+    /** The use of a switch of the map by a user: sets the state of the objects it commands. */
+    public pressSwitch(user: Pick<User, "uuid" | "tags">, message: SetEntityStateMessage): string[] {
+        return this.entityStateManager?.press(user, message) ?? [];
+    }
+
+    /** The presence sensors a wandering animal stands in, as the browser of a user sees them. */
+    public reportSwitchAnimals(user: Pick<User, "id">, switchIds: readonly string[]): void {
+        this.switchTriggers?.reportAnimals(String(user.id), switchIds);
+    }
+
+    /** The water of the relief of the map (its whole state), sent to a user who joins the room. */
+    public getTerrainWater(): TerrainWaterMessage | undefined {
+        return this.ground?.waterSnapshot();
+    }
+
+    /** The meadow of the map (its whole state), sent to a user who joins the room. */
+    public getMeadow(): MeadowMessage | undefined {
+        return this.ground?.meadowSnapshot();
+    }
+
+    /** The trees that burn or are charred, sent to a user who joins the room. */
+    public getTreeFire(): TreeFireMessage | undefined {
+        return this.ground?.treeSnapshot();
+    }
+
+    /** The conditions the fire of the room goes by, sent to a user who joins the room. */
+    public getFireConditions(): FireConditionsMessage | undefined {
+        return this.fireConditions?.snapshot();
+    }
+
+    /** A player sets the conditions the fire of the room goes by, or goes back to the real ones. */
+    public setFireConditions(user: Pick<User, "id">, sent: SetFireConditionsMessage): void {
+        this.fireConditions?.set(user.id, sent);
+    }
+
+    /** The size of the map in cells of the relief (16 px), for the life of its land; undefined until it is read. */
+    public mapSizeInCells(): { width: number; height: number } | undefined {
+        return this.mapCells;
+    }
+
+    /** The size of the map in pixels, for the meteors; undefined until it is read. */
+    public mapSizeInPixels(): { width: number; height: number } | undefined {
+        const cells = this.mapCells;
+        return cells && { width: cells.width * TERRAIN_CELL, height: cells.height * TERRAIN_CELL };
+    }
+
+    /** Reads the size of the map in its Tiled map; a map that cannot be read has no life on its land. */
+    private readMapSize(onRead: () => void): void {
+        this.getMap()
+            .then((map) => {
+                this.mapCells = mapCellsOf(map);
+                onRead();
+            })
+            .catch((error) => console.warn("Could not read the size of the map for the life of its land", error));
+    }
+
+    /** Where the avatars standing on the ground are, in map pixels (not those on a raised floor). */
+    public groundAvatarPositions(): { x: number; y: number }[] {
+        const positions: { x: number; y: number }[] = [];
+        for (const user of this.users.values()) {
+            if (!sameFloor(user.getFloorZ(), 0)) continue;
+            const { x, y } = user.getPosition();
+            positions.push({ x, y });
+        }
+        return positions;
+    }
+
+    /** Where the animals of the land the server runs are, in map pixels: for the presence sensors. */
+    public landAnimalPositions(): { x: number; y: number }[] {
+        return this.aquaticLife?.landAnimals() ?? [];
+    }
+
+    /** Where a player of the room stands, for the animals they tamed; undefined once they left. */
+    public masterPosition(userId: number): { x: number; y: number; ground: boolean } | undefined {
+        const user = this.users.get(userId);
+        if (!user || user.disconnected === true) return undefined;
+        const { x, y } = user.getPosition();
+        return { x, y, ground: sameFloor(user.getFloorZ(), 0) };
+    }
+
+    /** A player asks to tame an animal of the life of the map that is near them. */
+    public tameAnimal(user: Pick<User, "id">, animalId: number): void {
+        this.aquaticLife?.tame(user.id, animalId);
+    }
+
+    /** A player lets go one of the animals they tamed, or all of them. */
+    public releaseAnimals(user: Pick<User, "id">, animalId?: number): void {
+        this.aquaticLife?.release(user.id, animalId);
+    }
+
+    /** Where the players of the room cast their fishing line from, by user id: on the ground or over it. */
+    public anglers(): Map<number, { x: number; y: number }> {
+        return anglersOf(this.users.values());
+    }
+
+    /** How many times faster the hurricane goes, by the speed of the freeze and the thaw of the map. */
+    public hurricaneTimes(): number {
+        return hurricaneTimesOf(this.getWam()?.settings?.water?.freezeThawSpeed);
+    }
+
+    /** Whether the place of the map is in the southern hemisphere (Paris, in the north, without a place). */
+    public inSouthernHemisphere(): boolean {
+        return (this.getWam()?.settings?.weatherLocation?.latitude ?? 48.86) < 0;
+    }
+
+    /** A player launches a catastrophe at a point of the map: a meteor, or the downpour that follows their pointer. */
+    public launchCatastrophe(
+        user: User,
+        kind: CatastropheKind,
+        x: number,
+        y: number,
+        radiusTiles: number,
+        wholeMap: boolean,
+        release = false,
+        temperature?: number,
+        hurricane?: HurricaneTrackMessage,
+    ): void {
+        this.catastrophes?.request(user.id, kind, x, y, radiusTiles, wholeMap, release, temperature, hurricane);
+    }
+
+    /** A player casts their fishing line at a point of the map. */
+    public castFishingLine(user: Pick<User, "id">, x: number, y: number): void {
+        this.fishing?.cast(user.id, x, y);
+    }
+
+    /** A player hooks the fish that bites their line, or brings their line back. */
+    public reelFishingLine(user: Pick<User, "id">): void {
+        this.fishing?.reel(user.id);
+    }
+
+    /** Who a player of the room is for a fishing contest; undefined once they left. */
+    public fishingPlayer(userId: number): { key: string; name: string } | undefined {
+        const user = this.users.get(userId);
+        return user ? { key: user.uuid, name: user.name } : undefined;
+    }
+
+    /** A player starts a fishing contest in the room. */
+    public startFishingContest(user: Pick<User, "id">, minutes: number): void {
+        this.fishing?.startContest(user.id, minutes);
+    }
+
+    /** The fishing lines of the room, sent to a user who joins it. */
+    public getFishing(): FishingMessage | undefined {
+        return this.fishing?.snapshot();
+    }
+
+    /** The ice fishing shacks of the room, once made. */
+    private keepIceShacks(iceShacks: IceShackManager): void {
+        this.iceShacks = iceShacks;
+    }
+
+    /** The players of the room as the ice fishing shacks see them, by user id. */
+    public iceShackPlayers(): Map<number, IceShackPlayer> {
+        const players = new Map<number, IceShackPlayer>();
+        for (const user of this.users.values()) {
+            const { x, y } = user.getPosition();
+            players.set(user.id, { id: user.id, key: user.uuid, name: user.name, x, y, floorZ: user.getFloorZ() });
+        }
+        return players;
+    }
+
+    /** A player puts up, enters, leaves or takes down an ice fishing shack. */
+    public iceShackAction(user: Pick<User, "id">, action: IceShackAction, shackId: number): void {
+        this.iceShacks?.act(user.id, action, shackId);
+    }
+
+    /** The ice fishing shacks of the room, sent to a user who joins it. */
+    public getIceShacks(): IceShacksMessage | undefined {
+        return this.iceShacks?.snapshot();
+    }
+
+    /** The animals of the water of the relief, sent to a user who joins the room. */
+    public getAquaticLife(): AquaticLifeMessage | undefined {
+        return this.aquaticLife?.snapshot();
+    }
+
+    /** The states of the objects of the map that differ from their default, sent to a user who joins the room. */
+    public getEntityStates(): EntityStateMessage[] {
+        return this.entityStateManager?.getAll() ?? [];
+    }
+
     /**
      * Gets all area property variables for the room.
      * Used when a user joins the room to send the initial state.
@@ -1093,7 +1520,7 @@ export class GameRoom implements BrothersFinder {
      */
     public hasUsersInArea(area: AreaData): boolean {
         for (const user of this.users.values()) {
-            if (GameRoom.isPositionInArea(user.getPosition(), area)) {
+            if (isAtAreaLevel(area, user.getFloorZ()) && GameRoom.isPositionInArea(user.getPosition(), area)) {
                 return true;
             }
         }
@@ -1595,6 +2022,10 @@ export class GameRoom implements BrothersFinder {
         }
 
         await this.wamManager.applyCommand(editMapCommandMessage);
+        // The relief or the sources and sinks may have changed.
+        this.ground?.mapChanged();
+        // After the water: the life reads its grid, and its own setting.
+        this.aquaticLife?.mapChanged();
 
         if (GameRoom.commandInvalidatesJitsiModeratorTagFinder(editMapMessage.$case)) {
             this.jitsiModeratorTagFinderPromise = undefined;
@@ -1713,7 +2144,94 @@ export class GameRoom implements BrothersFinder {
         this.privateMessages.send(sender, data);
     }
 
+    private recordKaraokeScore(
+        reference: Pick<KaraokeReference, "recordingKey" | "title" | "artist">,
+        singer: User,
+        score: KaraokeScoreReport,
+    ): void {
+        this.karaokeLeaderboard
+            ?.record(reference, {
+                singerUuid: singer.uuid,
+                name: singer.name.slice(0, 200),
+                score: score.score,
+                accuracy: score.accuracy,
+                at: Date.now(),
+            })
+            .then((board) => {
+                if (board) {
+                    this.sendSubMessageToRoom({
+                        message: {
+                            $case: "receivedEventMessage",
+                            receivedEventMessage: karaokeLeaderboardEvent(board),
+                        },
+                    });
+                }
+            })
+            .catch((error) => console.error("Could not save a karaoke ranking", error));
+    }
+
+    public getKaraokeStage(hostUuid: string): KaraokeStageState | undefined {
+        const stage = this.karaokeStages.get(hostUuid);
+        return stage?.singerUuid && this.getUsersByUuid(stage.singerUuid).size === 0 ? undefined : stage;
+    }
+
     public dispatchEvent(name: string, data: unknown, senderId: number | "RoomApi", targetUserIds: number[]): void {
+        if (name === KARAOKE_LEADERBOARD_EVENT) return;
+        if (name === KARAOKE_LEADERBOARD_REQUEST_EVENT) {
+            const parsed = KaraokeLeaderboardRequestSchema.safeParse(data);
+            const sender = senderId === "RoomApi" ? undefined : this.getUserById(senderId);
+            if (!parsed.success || !sender) return;
+            this.karaokeLeaderboard
+                ?.get(parsed.data.recordingKey)
+                .then((board) => {
+                    if (board) {
+                        sender.emitInBatch({
+                            message: {
+                                $case: "receivedEventMessage",
+                                receivedEventMessage: karaokeLeaderboardEvent(board),
+                            },
+                        });
+                    }
+                })
+                .catch((error) => console.error("Could not read a karaoke ranking", error));
+            return;
+        }
+        if (name === KARAOKE_SCORE_EVENT) {
+            const parsed = KaraokeScoreReportSchema.safeParse(data);
+            const sender = senderId === "RoomApi" ? undefined : this.getUserById(senderId);
+            if (!parsed.success || !sender || sender.uuid !== parsed.data.singerUuid) return;
+            const score = parsed.data;
+            const stage = this.getKaraokeStage(score.hostUuid);
+            if (
+                !stage?.enabled ||
+                stage.singerUuid !== sender.uuid ||
+                stage.turnId !== score.turnId ||
+                stage.reference?.id !== score.referenceId
+            )
+                return;
+            const jams = parseListeningZoneJams(
+                this.getAreaPropertyVariable(stage.areaId, stage.propertyId, LISTENING_ZONE_JAM_VARIABLE),
+            );
+            if (!jams.some((jam) => jam.hostUuid === stage.hostUuid)) return;
+            if (score.finished && stage.reference && score.coverage >= KARAOKE_LEADERBOARD_MIN_COVERAGE) {
+                this.recordKaraokeScore(stage.reference, sender, score);
+            }
+            const now = Date.now();
+            if (now - (this.karaokeScoreTimes.get(stage.hostUuid) ?? -Infinity) < 200) return;
+            this.karaokeScoreTimes.set(stage.hostUuid, now);
+        }
+        if (name === KARAOKE_STAGE_STATE_EVENT) {
+            const parsed = KaraokeStageStateSchema.safeParse(data);
+            const sender = senderId === "RoomApi" ? undefined : this.getUserById(senderId);
+            if (!parsed.success || !sender || sender.uuid !== parsed.data.hostUuid) return;
+            const stage = parsed.data;
+            const jams = parseListeningZoneJams(
+                this.getAreaPropertyVariable(stage.areaId, stage.propertyId, LISTENING_ZONE_JAM_VARIABLE),
+            );
+            if (!jams.some((jam) => jam.hostUuid === sender.uuid)) return;
+            if (stage.singerUuid && this.getUsersByUuid(stage.singerUuid).size === 0) return;
+            this.karaokeStages.set(sender.uuid, stage);
+        }
         if (name === privateMessageEventName)
             throw new PrivateMessageRefusedError("Private messages require a dedicated query");
         if (targetUserIds.length === 0) {
@@ -1819,4 +2337,8 @@ export class GameRoom implements BrothersFinder {
         this._userLeaveStream.complete();
         this._destroyRoomStream.complete();
     }
+}
+
+function karaokeLeaderboardEvent(board: KaraokeSongLeaderboard): { name: string; data: unknown; senderId: undefined } {
+    return { name: KARAOKE_LEADERBOARD_EVENT, data: board, senderId: undefined };
 }

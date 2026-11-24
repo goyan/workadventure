@@ -290,6 +290,134 @@ export const RgbLampPropertyData = PropertyBase.extend({
     intensity: z.number().min(RGB_LAMP_MIN_INTENSITY).max(RGB_LAMP_MAX_INTENSITY).optional().catch(undefined),
 });
 
+/**
+ * The states an object of the map may have, kept by the server (never in the WAM): a lamp is `on` or not. A closed
+ * list: a new kind of object that can be switched (a shutter that is `open`) adds its key here.
+ */
+/** The states an object may be switched in: lit ("on"), and the hot water of a pool ("hot", that never freezes). */
+export const ENTITY_STATE_KEYS = ["on", "hot"] as const;
+/** A switch commands at most this many objects. */
+export const SWITCH_MAX_TARGETS = 200;
+
+/** Seconds after the last person left before a presence trigger lets go, by default. */
+export const SWITCH_OFF_DELAY_DEFAULT_S = 30;
+export const SWITCH_OFF_DELAY_MAX_S = 600;
+/** How far a proximity trigger senses, in tiles, by default. */
+export const SWITCH_PROXIMITY_DEFAULT_TILES = 3;
+export const SWITCH_PROXIMITY_MAX_TILES = 20;
+/** How wide a cone trigger senses, in degrees, by default. */
+export const SWITCH_CONE_DEFAULT_ANGLE = 90;
+
+const SwitchHour = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
+/**
+ * What uses a switch without anybody touching it; the server decides (see SwitchTriggerEvaluator in the back).
+ * - presence: somebody is in the room of the switch (`scope: "room"`, `areaId` found by the editor), in a chosen area
+ *   (`scope: "area"`, `areaId`), within `tiles` of it on its floor (`scope: "proximity"`), or in a cone in front of
+ *   it (`scope: "cone"`, like the beam of a lamp), or anywhere in the building it stands in (`scope: "building"`:
+ *   the cells that are not outdoors and touch one another, walls included — only the browsers know them, so they
+ *   report it). It lets go `offDelay` seconds after the last person left.
+ * - hours: the time in Paris is between `from` (included) and `to` (excluded); the range may pass midnight.
+ */
+export const SwitchTrigger = z.discriminatedUnion("type", [
+    z.object({
+        type: z.literal("presence"),
+        scope: z.enum(["room", "area", "proximity", "cone", "building"]),
+        areaId: z.string().optional(),
+        tiles: z.number().int().min(1).max(SWITCH_PROXIMITY_MAX_TILES).default(SWITCH_PROXIMITY_DEFAULT_TILES),
+        offDelay: z.number().int().min(0).max(SWITCH_OFF_DELAY_MAX_S).default(SWITCH_OFF_DELAY_DEFAULT_S),
+        // The cone of `scope: "cone"`, like the light of an RGB lamp: degrees clockwise on the screen from the east
+        // (90 points downwards), `angle` degrees wide, `tiles` long.
+        direction: z.number().min(0).lt(360).default(RGB_LAMP_DEFAULT_DIRECTION),
+        angle: z.number().min(RGB_LAMP_MIN_ANGLE).max(RGB_LAMP_MAX_ANGLE).default(SWITCH_CONE_DEFAULT_ANGLE),
+    }),
+    z.object({ type: z.literal("hours"), from: SwitchHour, to: SwitchHour }),
+]);
+
+/** The objects a switch commands: the ones listed, or the ones of the room it stands in. */
+export const SwitchTargets = z.discriminatedUnion("mode", [
+    z.object({ mode: z.literal("ids"), ids: z.array(z.string()).max(SWITCH_MAX_TARGETS) }),
+    z.object({ mode: z.literal("zone") }),
+]);
+
+/** The most a source gives or a sink takes, in litres a minute: 1000 cubic metres a second, a large river. */
+export const MAX_WATER_FLOW = 60_000_000;
+/** The largest radius a source pours over or a sink takes from, in tiles, and the radius of a sink that sets none. */
+export const MAX_WATER_RADIUS_TILES = 10;
+export const DEFAULT_SINK_RADIUS_TILES = 1.5;
+/**
+ * The levels a source or a sink can hold, in pixels of altitude (0: the ground of the map): from the deepest hollow
+ * to the highest water a map may set over the highest mount.
+ */
+export const MIN_WATER_LEVEL = -256;
+export const MAX_WATER_LEVEL = 512;
+
+/**
+ * Where the water comes out of (or goes into) the object, from the corner of its image, in pixels: its foot, written
+ * by the editor, which knows the size of the object (the server does not). Absent: the corner itself.
+ */
+const WaterAnchor = {
+    anchorX: z.number().min(-4096).max(4096).optional(),
+    anchorY: z.number().min(-4096).max(4096).optional(),
+};
+
+/**
+ * A source of water: the object pours this many litres a minute into the hollow of the relief it stands in (or the
+ * nearest one close by). The water itself is kept by the server (see Terrain/WaterBalance.ts).
+ */
+export const WaterSourcePropertyData = PropertyBase.extend({
+    type: z.literal("waterSourcePropertyData"),
+    flow: z.number().min(0).max(MAX_WATER_FLOW),
+    /** The radius of the disc the water is poured over, in tiles: at the foot of the object when absent. */
+    radius: z.number().min(0).max(MAX_WATER_RADIUS_TILES).optional(),
+    /**
+     * The level the source holds, in pixels of altitude: it pours only while the water at its foot is under it (a
+     * lake kept full whatever the weather). Absent: it always pours.
+     */
+    level: z.number().min(MIN_WATER_LEVEL).max(MAX_WATER_LEVEL).optional(),
+    ...WaterAnchor,
+});
+
+/** A sink: the object takes this many litres a minute out of the hollow it stands in, while there is water. */
+export const WaterSinkPropertyData = PropertyBase.extend({
+    type: z.literal("waterSinkPropertyData"),
+    flow: z.number().min(0).max(MAX_WATER_FLOW),
+    /** The radius of the disc the water is taken from, in tiles: DEFAULT_SINK_RADIUS_TILES when absent. */
+    radius: z.number().min(0).max(MAX_WATER_RADIUS_TILES).optional(),
+    /**
+     * The level the sink holds, in pixels of altitude: it takes only while the water at its foot is over it (an
+     * overflow). Absent: it takes all the water it finds.
+     */
+    level: z.number().min(MIN_WATER_LEVEL).max(MAX_WATER_LEVEL).optional(),
+    /**
+     * Standing on a floor of the "Map" tool, the sink is the drain of a building: it takes all the water that reaches
+     * that floor, whatever its flow, so that the corridors and the rooms stay dry (WaterGrid.step). False keeps its
+     * flow and its disc there too. Absent: adaptive. Off a floor it always keeps its flow.
+     */
+    adaptive: z.boolean().optional(),
+    ...WaterAnchor,
+});
+
+/**
+ * A switch: activating the object sets the state `key` of its targets. The wiring is in the WAM; the state itself is
+ * kept by the server (see EntityStates.ts). Several switches may command the same object: none has a position of
+ * its own, the state belongs to the target.
+ */
+export const SwitchPropertyData = PropertyBase.extend({
+    type: z.literal("switchPropertyData"),
+    key: z.enum(ENTITY_STATE_KEYS).default("on"),
+    targets: SwitchTargets.default({ mode: "zone" }),
+    /** Only the users with one of these tags may use the switch; everybody when absent or empty. */
+    allowedTags: z.array(z.string()).optional(),
+    /** Used by hand when absent. Fail open: a trigger that is not valid leaves a manual switch. */
+    trigger: SwitchTrigger.optional().catch(undefined),
+    /**
+     * The objects of its room, for a switch with a trigger that commands its room: the server, which does not know
+     * what a lamp is, acts on these. Written and kept up to date by the map editor.
+     */
+    resolvedTargets: z.array(z.string()).max(SWITCH_MAX_TARGETS).optional().catch(undefined),
+});
+
 export const MatrixRoomPropertyData = PropertyBase.extend({
     type: z.literal("matrixRoomPropertyData"),
     shouldOpenAutomatically: z.boolean(),
@@ -381,6 +509,12 @@ export const AreaData = AreaCoordinates.extend({
     visible: z.boolean(),
     name: z.string(),
     properties: AreaDataProperties,
+    /**
+     * Altitude of the raised floor the area belongs to, in pixels above the ground; the ground when absent. Like an
+     * entity (see EntityData.elevation), its rectangle is where it is drawn: over the ground `elevation` further
+     * south. It only applies to the players of that floor.
+     */
+    elevation: z.number().int().min(0).optional(),
 });
 
 export const EntityDataProperty = z.discriminatedUnion("type", [
@@ -393,6 +527,9 @@ export const EntityDataProperty = z.discriminatedUnion("type", [
     GobeurPropertyData,
     LampPropertyData,
     RgbLampPropertyData,
+    SwitchPropertyData,
+    WaterSourcePropertyData,
+    WaterSinkPropertyData,
 ]);
 
 export const EntityDataProperties = z.array(EntityDataProperty);
@@ -521,6 +658,31 @@ export const EntityRawPrefab = z.object({
      * pass. Fail open like `collisionRectangles`.
      */
     castsShadow: z.boolean().optional().catch(undefined),
+    /**
+     * A switch ready to use: placed from the catalog, the object is given a `switchPropertyData` that commands the
+     * lamps of its room (any other object can be made a switch in the editor): used by hand (`true`), a presence
+     * sensor (`"presence"`) or a timer (`"hours"`). Fail open like `castsShadow`.
+     */
+    switch: z
+        .union([z.boolean(), z.enum(["presence", "hours"])])
+        .optional()
+        .catch(undefined),
+    /**
+     * A source or a sink of water ready to use (a fountain, a chasm): placed from the catalog, the object is given a
+     * `waterSourcePropertyData` or a `waterSinkPropertyData` of this flow, in cubic metres an hour. `anchor` is where
+     * its water comes out or goes, in pixels from the top-left corner of the image (the middle of its foot when
+     * absent). Any other object can be made a source or a sink in the editor. Fail open like `castsShadow`.
+     */
+    waterFlow: z
+        .object({
+            kind: z.enum(["source", "sink"]),
+            flow: z.number().min(0),
+            /** The radius the object starts with, in tiles (see the water properties). */
+            radius: z.number().min(0).optional().catch(undefined),
+            anchor: z.object({ x: z.number(), y: z.number() }).optional().catch(undefined),
+        })
+        .optional()
+        .catch(undefined),
     // UUID of the user who uploaded this custom entity. Stamped by map-storage from the
     // authenticated user UUID, never from the client. Undefined on the built-in ("Default")
     // collections and on custom entities uploaded before this field existed: those can only be
@@ -565,6 +727,12 @@ export const EntityData = z.object({
      * previous one. Absent or 0 keeps the automatic order, which follows the position of the foot.
      */
     depthStep: z.number().int().optional(),
+    /**
+     * Altitude of the floor the entity stands on, in pixels above the ground of the map: absent or 0 on the ground. The
+     * position (x, y) stays the one of the image, which is drawn that much further north than the place the entity
+     * stands on: that place, on the ground, is (x, y + elevation).
+     */
+    elevation: z.number().int().min(0).optional(),
     prefab: EntityRawPrefab,
     prefabRef: EntityPrefabRef,
 });
@@ -698,6 +866,11 @@ export enum WeatherType {
     /** The weather at the place of the map (Paris by default), from Open-Meteo through the pusher (else Automatic). */
     Real = "real",
     Rain = "rain",
+    /**
+     * @deprecated No longer a weather of its own: snow is a precipitation falling in cold air (Weather/Precipitation.ts).
+     * Kept so that maps saved with it and older clients are still read; shown and stored as a rain
+     * (precipitationWeather), and nothing produces it any more.
+     */
     Snow = "snow",
     Storm = "storm",
 }
@@ -717,20 +890,448 @@ export type AutoWeatherSettings = z.infer<typeof AutoWeather>;
 
 export const DEFAULT_AUTO_WEATHER: AutoWeatherSettings = {
     frequency: "normal",
-    include: [WeatherType.Rain, WeatherType.Snow, WeatherType.Storm, WeatherType.Fog],
+    include: [WeatherType.Rain, WeatherType.Storm, WeatherType.Fog],
 };
 
+/** The weather a saved or sent one stands for: a snow (maps and clients from before) is a rain. */
+export function precipitationWeather(weather: WeatherType): WeatherType {
+    return weather === WeatherType.Snow ? WeatherType.Rain : weather;
+}
+
 /** Where the map is: its real weather and its day/night follow this place (Paris when absent). */
+/** Whether this is a time zone the clock knows (an IANA name, like "Europe/Paris"). */
+export function isTimeZone(timeZone: string): boolean {
+    if (timeZone === "") {
+        return false;
+    }
+    try {
+        new Intl.DateTimeFormat("en-GB", { timeZone });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 export const WeatherLocation = z.object({
     name: z.string().trim().min(1).max(200),
     latitude: z.number().finite().min(-90).max(90),
     longitude: z.number().finite().min(-180).max(180),
+    /**
+     * The time zone of the place (IANA name): the clock shown and the timers of the map follow it. Absent for a
+     * place chosen before it was kept, or when it is not a time zone: the time of Paris then (fail open).
+     */
+    timezone: z.string().max(64).refine(isTimeZone).optional().catch(undefined),
 });
 export type WeatherLocation = z.infer<typeof WeatherLocation>;
+
+/** Side of a tile, in map pixels and in pixels of altitude. */
+export const TILE_PX = 32;
+/** Side of a cell of the relief, in map pixels: half a tile. */
+export const TERRAIN_CELL = 16;
+/** Cells along the side of a chunk of the relief: the relief is stored by chunks, only where it was dug. */
+export const TERRAIN_CHUNK = 16;
+/** The lowest height a cell can have, in pixels of altitude: 8 tiles under the ground. */
+export const TERRAIN_MIN_HEIGHT = -256;
+/** The pools of a map are painted as soils: the styles of pool after the six soils (see Terrain/Pools.ts). */
+export const MAX_POOL_STYLES = 8;
+/** How many ladders can be put by hand on the pools of a map. */
+export const MAX_POOL_LADDERS = 200;
+/** The key "x,y" of a cell of the relief. */
+export const POOL_LADDER_CELL = /^-?\d+,-?\d+$/;
+/** The largest number a soil is kept as in a map: the six soils (see Terrain/Soils.ts), then the pool styles. */
+export const TERRAIN_MAX_SOIL = 6 + MAX_POOL_STYLES;
+/** The highest height a cell can have, in pixels of altitude: 8 tiles over the ground. */
+export const TERRAIN_MAX_HEIGHT = 256;
+/**
+ * How deep the relief of a map may be dug, and how high it may be raised over the ground, in tiles: set for each
+ * map, within these bounds.
+ */
+export const DEFAULT_MAX_DEPTH_TILES = 2;
+export const MAX_DEPTH_TILES = 8;
+
+/**
+ * The relief of the ground of a map: a height for each cell (TERRAIN_CELL map pixels wide), 0 on the ground,
+ * negative where it was dug and positive where it was raised, by chunks of TERRAIN_CHUNK × TERRAIN_CHUNK cells keyed "chunkX,chunkY" (row by row).
+ */
+export const TerrainData = z.object({
+    chunks: z.record(
+        z.string().regex(/^-?\d{1,6},-?\d{1,6}$/),
+        z.array(z.number().int().min(TERRAIN_MIN_HEIGHT).max(TERRAIN_MAX_HEIGHT)).length(TERRAIN_CHUNK * TERRAIN_CHUNK),
+    ),
+    maxDepthTiles: z.number().int().min(1).max(MAX_DEPTH_TILES).optional(),
+    /**
+     * The soil of the cells that were painted (see Terrain/Soils.ts), by the same chunks as the heights: 0 for a cell
+     * not painted. Absent from a map where no soil was painted.
+     */
+    soil: z
+        .record(
+            z.string().regex(/^-?\d{1,6},-?\d{1,6}$/),
+            z.array(z.number().int().min(0).max(TERRAIN_MAX_SOIL)).length(TERRAIN_CHUNK * TERRAIN_CHUNK),
+        )
+        .optional()
+        .catch(undefined),
+});
+export type TerrainData = z.infer<typeof TerrainData>;
+
+/**
+ * How fast the water of the relief comes and goes on a map that says nothing: as in reality. It goes at its real
+ * pace, has inertia, and no flood is cut short.
+ */
+export const DEFAULT_WATER_SETTINGS = {
+    runoff: 10,
+    evaporation: 0.2,
+    speed: 1,
+    absorption: 5,
+    current: 1,
+    maxSurface: 256,
+    indoorDrain: 300,
+    inertia: true,
+} as const;
+/** Whether the water of a map has inertia: unless the map turned it off, it has. */
+export function waterHasInertia(water: { inertia?: boolean } | undefined): boolean {
+    return water?.inertia ?? DEFAULT_WATER_SETTINGS.inertia;
+}
+/**
+ * The lowest a map may set for how high its water stands over the level it spills at, in pixels: just over the
+ * depth one swims at and under the floors of the buildings (the default before no flood was cut short).
+ */
+export const MIN_WATER_MAX_SURFACE = 18;
+/**
+ * How the water with inertia makes its waves, on a map that says nothing: the friction of the ground as its soils
+ * give it, a slight damping, waves that break and water that carries its momentum.
+ */
+export const DEFAULT_WAVE_SETTINGS = { roughness: 1, damping: 0.02, breaking: 1, momentum: 1 } as const;
+/** The bounds of each of them. */
+export const WAVE_BOUNDS = {
+    roughness: [0, 10],
+    damping: [0, 1],
+    breaking: [0, 5],
+    momentum: [0, 1],
+} as const satisfies Record<keyof typeof DEFAULT_WAVE_SETTINGS, readonly [number, number]>;
+/**
+ * How finely the water of a map is computed and how often its players are told, on a map that says nothing: up to
+ * three moves of the water with inertia a step, and the room told once a second while it moves.
+ */
+export const DEFAULT_WATER_PACE = { precision: 3, updates: 5 } as const;
+/** The bounds of each of them. */
+export const WATER_PACE_BOUNDS = { precision: [1, 8], updates: [1, 10] } as const;
+/**
+ * How fast the water with inertia flows next to reality: 1 as in reality for the scale of the map (a tile is about
+ * 1.10 m wide), less to see it spread slower. From a tenth of its real pace to twice.
+ */
+export const DEFAULT_FLOW_PACE = 1;
+export const FLOW_PACE_BOUNDS = [0.1, 2] as const;
+/**
+ * How far the blast of a meteor drives the water away, in times the radius of its crater: 1 is the crater alone. The
+ * usual 2.5 is about how far the continuous ejecta of a crater reach (two to three times its radius).
+ */
+export const DEFAULT_IMPACT_REACH = 2.5;
+export const IMPACT_REACH_BOUNDS = [1, 4] as const;
+
+/**
+ * Every setting of the water of a map as it is by default, as in reality (the button of the relief tool that sets
+ * them back): it goes at its real pace, has inertia and makes its waves as the ground and its depth make them, and
+ * no flood is cut short. The damping is the only figure that is not physical (0 in reality): the least that keeps
+ * the computation calm. Made of the defaults, never a list of its own.
+ */
+export const REALISTIC_WATER_SETTINGS = {
+    ...DEFAULT_WATER_SETTINGS,
+    waves: DEFAULT_WAVE_SETTINGS,
+    precision: DEFAULT_WATER_PACE.precision,
+    updates: DEFAULT_WATER_PACE.updates,
+    flowPace: DEFAULT_FLOW_PACE,
+    impactReach: DEFAULT_IMPACT_REACH,
+} as const;
+/** The fastest the floors of the rooms of a map may drain, in mm an hour. */
+export const MAX_WATER_INDOOR_DRAIN = 10000;
+/** The strongest current a map may set: twice the usual one. */
+export const MAX_WATER_CURRENT = 2;
+export const MAX_WATER_SPEED = 1000;
+/**
+ * The speed of the freeze and the thaw of a map (WaterSettings.freezeThawSpeed): how many times faster than its water
+ * its ice takes and thaws, its snow melts and goes, its frost comes and goes. At most 600 (an hour of frost or thaw in
+ * six seconds), the steps offered by the editor in between.
+ */
+export const MAX_FREEZE_THAW_SPEED = 600;
+export const FREEZE_THAW_SPEED_STEPS = [1, 10, 60, 600] as const;
+/** The highest a map may let its water stand over the level it spills at, in pixels: as high as its relief goes. */
+export const MAX_WATER_MAX_SURFACE = 256;
+export const WaterSettings = z.object({
+    /** Ground around a hollow whose rain runs into it, in times the surface of the hollow. */
+    runoff: z.number().min(0).max(100).default(DEFAULT_WATER_SETTINGS.runoff),
+    /** Water lost by a wet surface in dry weather, in mm an hour. */
+    evaporation: z.number().min(0).max(10).default(DEFAULT_WATER_SETTINGS.evaporation),
+    /**
+     * How many times faster than in reality the water of the map goes, what comes in and goes out (rain, sources,
+     * sinks, evaporation): 1 by default, as in reality, where a rain fills a lake in hours; 60: a minute for an hour.
+     */
+    speed: z.number().min(1).max(MAX_WATER_SPEED).default(DEFAULT_WATER_SETTINGS.speed),
+    /** Water the flat ground drinks from the sheet of a flood, in mm an hour: how fast a flood goes down. */
+    absorption: z.number().min(0).max(100).default(DEFAULT_WATER_SETTINGS.absorption),
+    /**
+     * How hard the current of the water carries the avatars: 0 not at all, 1 as fast as one walks where it is
+     * hardest, up to twice that.
+     */
+    current: z.number().min(0).max(MAX_WATER_CURRENT).default(DEFAULT_WATER_SETTINGS.current),
+    /**
+     * How high the water may stand over the level it spills at, in pixels: 256 by default (8.7 m), so that no flood
+     * is cut short; from 18, just over the depth one swims at and under the floors of the buildings.
+     */
+    maxSurface: z
+        .number()
+        .min(MIN_WATER_MAX_SURFACE)
+        .max(MAX_WATER_MAX_SURFACE)
+        .default(DEFAULT_WATER_SETTINGS.maxSurface),
+    /**
+     * Water the floors of the rooms (what the walls close, doors closed) drain, in mm an hour of the time of the map:
+     * 300 by default, a slow seep: a flooded room is dry in about two hours as in reality (two minutes at a speed of
+     * 60); drains placed on the floor (sinks) take it faster. 0 keeps the water inside.
+     */
+    indoorDrain: z.number().min(0).max(MAX_WATER_INDOOR_DRAIN).default(DEFAULT_WATER_SETTINGS.indoorDrain),
+    /**
+     * Whether the water has inertia: it keeps its flow from a step to the next, so waves run and a lake levels as
+     * fast as its depth allows. Absent: it has (DEFAULT_WATER_SETTINGS.inertia, read by waterHasInertia); false:
+     * the water creeps from cell to cell. Left optional, so that the settings a map writes need not say it.
+     */
+    inertia: z.boolean().optional(),
+    /**
+     * How the water with inertia makes its waves (absent: DEFAULT_WAVE_SETTINGS):
+     * - `roughness`: how many times the friction of the ground its soils give (Manning). It grows with the speed
+     *   of the water and falls with its depth: next to nothing under a swell at sea, strong under a sheet of water
+     *   that runs on land. 0: no such friction.
+     * - `damping`: the share of its flow the water loses a second whatever its depth and its speed: what calms a
+     *   lake that was stirred.
+     * - `breaking`: how hard a wave whose front is steep for the water it runs in loses its flow (0: waves never
+     *   break).
+     * - `momentum`: the share of its momentum the water carries along (0: each passage keeps its own flow only;
+     *   1: a wave throws itself up a shore, and runs back).
+     */
+    /**
+     * How finely the water with inertia is computed: the most moves it makes in a step (3 when absent). More
+     * moves let a deep water carry its waves faster and a torrent run faster, for as many times the computation.
+     */
+    precision: z.number().int().min(WATER_PACE_BOUNDS.precision[0]).max(WATER_PACE_BOUNDS.precision[1]).optional(),
+    /**
+     * How many times a second the players are told the water while it moves (five when absent, fewer while the
+     * states are big: WaterSendLoad). More often, a wave is seen running instead of fading from a place to the next,
+     * for as much more network.
+     */
+    updates: z.number().int().min(WATER_PACE_BOUNDS.updates[0]).max(WATER_PACE_BOUNDS.updates[1]).optional(),
+    /**
+     * How fast the water with inertia flows next to reality (1 when absent): its waves, its floods and its
+     * currents all go that many times their real speed. What comes in and goes out (rain, sources, sinks) follows
+     * `speed`, not this.
+     */
+    flowPace: z.number().min(FLOW_PACE_BOUNDS[0]).max(FLOW_PACE_BOUNDS[1]).optional(),
+    /**
+     * How far the blast of a meteor fallen in the water drives it away, in times the radius of its crater (2.5 when
+     * absent, 1: the water of the crater alone is moved).
+     */
+    impactReach: z.number().min(IMPACT_REACH_BOUNDS[0]).max(IMPACT_REACH_BOUNDS[1]).optional(),
+    /**
+     * How many times faster than its water the cold of the map does its work (1 when absent): its ice takes and
+     * thaws, its snow melts and goes, its frost comes and goes that many times faster, on top of `speed`; the water
+     * itself, the rain and the snow that falls keep the clock of `speed`. 60: an hour of frost or thaw in a minute
+     * on water in real time.
+     */
+    freezeThawSpeed: z.number().min(1).max(MAX_FREEZE_THAW_SPEED).optional(),
+    waves: z
+        .object({
+            roughness: z.number().min(WAVE_BOUNDS.roughness[0]).max(WAVE_BOUNDS.roughness[1]),
+            damping: z.number().min(WAVE_BOUNDS.damping[0]).max(WAVE_BOUNDS.damping[1]),
+            breaking: z.number().min(WAVE_BOUNDS.breaking[0]).max(WAVE_BOUNDS.breaking[1]),
+            momentum: z.number().min(WAVE_BOUNDS.momentum[0]).max(WAVE_BOUNDS.momentum[1]),
+        })
+        .optional(),
+});
+export type WaveSettings = NonNullable<z.infer<typeof WaterSettings>["waves"]>;
+export type WaterSettings = z.infer<typeof WaterSettings>;
+
+/**
+ * The meadow of a map: the grass that grows by itself on its fertile soils (see Terrain/Meadow.ts), kept by the
+ * server. Absent from a map saved before it existed: on, with these values.
+ */
+export const DEFAULT_MEADOW_SETTINGS = { enabled: true, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 } as const;
+export const MEADOW_BOUNDS = {
+    growMinutes: [1, 120],
+    thirstMinutes: [1, 240],
+    moistureHold: [0.25, 8],
+} as const;
+export const MeadowSettings = z.object({
+    enabled: z.boolean().default(DEFAULT_MEADOW_SETTINGS.enabled),
+    /** Minutes of good conditions for bare ground to become a full meadow (in spring and summer, on earth). */
+    growMinutes: z.number().min(1).max(120).default(DEFAULT_MEADOW_SETTINGS.growMinutes),
+    /** Minutes a full meadow takes to die of thirst once its soil is dry. */
+    thirstMinutes: z.number().min(1).max(240).default(DEFAULT_MEADOW_SETTINGS.thirstMinutes),
+    /** How many times longer than usual the soils hold their moisture (after the rain, away from the water). */
+    moistureHold: z.number().min(0.25).max(8).default(DEFAULT_MEADOW_SETTINGS.moistureHold),
+});
+export type MeadowSettings = z.infer<typeof MeadowSettings>;
+
+/**
+ * The life in the water of the relief of a map (fish that breed, dolphins that hunt them), kept by the server, and
+ * how often the land animals come to drink it (computed by each browser). All durations are in real seconds: the
+ * speed of the water does not hasten them.
+ */
+export const DEFAULT_LIFE_SETTINGS = {
+    enabled: false,
+    reproductionDelay: 120,
+    maxLifespan: 900,
+    maxSpeed: 1.5,
+    huntInterval: 60,
+    dolphinReproductionDelay: 300,
+    dolphinMaxLifespan: 3600,
+    drinkInterval: 120,
+} as const;
+export const LIFE_BOUNDS = {
+    reproductionDelay: [10, 3600],
+    maxLifespan: [30, 86400],
+    maxSpeed: [0.2, 6],
+    huntInterval: [5, 3600],
+    dolphinReproductionDelay: [30, 7200],
+    dolphinMaxLifespan: [60, 172800],
+    drinkInterval: [20, 3600],
+} as const;
+/**
+ * The life on the land of a map (antelopes that breed, lions and tigers that hunt them and the fish of the shallow
+ * water), kept by the server. Absent from a map saved before it existed: off, with these values.
+ */
+export const DEFAULT_LAND_LIFE_SETTINGS = {
+    landEnabled: false,
+    antelopeReproductionDelay: 120,
+    antelopeMaxLifespan: 900,
+    landHuntInterval: 60,
+    landPredatorReproductionDelay: 300,
+    landPredatorMaxLifespan: 3600,
+} as const;
+export const LAND_LIFE_BOUNDS = {
+    antelopeReproductionDelay: [10, 3600],
+    antelopeMaxLifespan: [30, 86400],
+    landHuntInterval: [5, 3600],
+    landPredatorReproductionDelay: [30, 7200],
+    landPredatorMaxLifespan: [60, 172800],
+} as const;
+/**
+ * The gulls of a map (they fish in its water, land on its shores), kept by the server. Absent from a map saved
+ * before they existed: off, with these values. They need the life of the water (`enabled`).
+ */
+export const DEFAULT_AIR_LIFE_SETTINGS = {
+    gullsEnabled: false,
+    gullHuntInterval: 45,
+    gullReproductionDelay: 300,
+    gullMaxLifespan: 1800,
+} as const;
+export const AIR_LIFE_BOUNDS = {
+    gullHuntInterval: [5, 3600],
+    gullReproductionDelay: [30, 7200],
+    gullMaxLifespan: [60, 172800],
+} as const;
+const airDuration = (key: keyof typeof AIR_LIFE_BOUNDS) =>
+    z.number().min(AIR_LIFE_BOUNDS[key][0]).max(AIR_LIFE_BOUNDS[key][1]).optional().catch(undefined);
+const landDuration = (key: keyof typeof LAND_LIFE_BOUNDS) =>
+    z.number().min(LAND_LIFE_BOUNDS[key][0]).max(LAND_LIFE_BOUNDS[key][1]).optional().catch(undefined);
+export const LifeSettings = z.object({
+    enabled: z.boolean().default(DEFAULT_LIFE_SETTINGS.enabled),
+    /** How long a fish waits between two matings, and a newborn before its first, in seconds. */
+    reproductionDelay: z
+        .number()
+        .min(LIFE_BOUNDS.reproductionDelay[0])
+        .max(LIFE_BOUNDS.reproductionDelay[1])
+        .default(DEFAULT_LIFE_SETTINGS.reproductionDelay),
+    /** The longest life of a fish, in seconds (each lives 70 % to 100 % of it). */
+    maxLifespan: z
+        .number()
+        .min(LIFE_BOUNDS.maxLifespan[0])
+        .max(LIFE_BOUNDS.maxLifespan[1])
+        .default(DEFAULT_LIFE_SETTINGS.maxLifespan),
+    /** The fastest a fish swims, in tiles (32 map pixels) a second. */
+    maxSpeed: z
+        .number()
+        .min(LIFE_BOUNDS.maxSpeed[0])
+        .max(LIFE_BOUNDS.maxSpeed[1])
+        .default(DEFAULT_LIFE_SETTINGS.maxSpeed),
+    /** How long a dolphin waits between two hunts, in seconds. */
+    huntInterval: z
+        .number()
+        .min(LIFE_BOUNDS.huntInterval[0])
+        .max(LIFE_BOUNDS.huntInterval[1])
+        .default(DEFAULT_LIFE_SETTINGS.huntInterval),
+    /** How long a dolphin waits between two calves, and a calf before its first, in seconds. */
+    dolphinReproductionDelay: z
+        .number()
+        .min(LIFE_BOUNDS.dolphinReproductionDelay[0])
+        .max(LIFE_BOUNDS.dolphinReproductionDelay[1])
+        .default(DEFAULT_LIFE_SETTINGS.dolphinReproductionDelay),
+    /** The longest life of a dolphin, in seconds (each lives 70 % to 100 % of it). */
+    dolphinMaxLifespan: z
+        .number()
+        .min(LIFE_BOUNDS.dolphinMaxLifespan[0])
+        .max(LIFE_BOUNDS.dolphinMaxLifespan[1])
+        .default(DEFAULT_LIFE_SETTINGS.dolphinMaxLifespan),
+    /**
+     * How long a land animal (the wandering ones) waits between two drinks at the water of the relief, in seconds.
+     * It applies whether the life of the water is on or not.
+     */
+    drinkInterval: z
+        .number()
+        .min(LIFE_BOUNDS.drinkInterval[0])
+        .max(LIFE_BOUNDS.drinkInterval[1])
+        .default(DEFAULT_LIFE_SETTINGS.drinkInterval),
+    /** Whether antelopes, lions and tigers live on the outdoor land of the map (independent of `enabled`). */
+    landEnabled: z.boolean().optional().catch(undefined),
+    /** How long an antelope waits between two matings, and its longest life, in seconds. */
+    antelopeReproductionDelay: landDuration("antelopeReproductionDelay"),
+    antelopeMaxLifespan: landDuration("antelopeMaxLifespan"),
+    /** The lions and the tigers: between two hunts, between two young, and their longest life, in seconds. */
+    landHuntInterval: landDuration("landHuntInterval"),
+    landPredatorReproductionDelay: landDuration("landPredatorReproductionDelay"),
+    landPredatorMaxLifespan: landDuration("landPredatorMaxLifespan"),
+    /** Whether gulls fish in the water of the map (they need `enabled`). */
+    gullsEnabled: z.boolean().optional().catch(undefined),
+    /** The gulls: between two hunts, between two broods, and their longest life, in seconds. */
+    gullHuntInterval: airDuration("gullHuntInterval"),
+    gullReproductionDelay: airDuration("gullReproductionDelay"),
+    gullMaxLifespan: airDuration("gullMaxLifespan"),
+});
+export type LifeSettings = z.infer<typeof LifeSettings>;
+
+/**
+ * @deprecated Written by maps that had a snow weather; read so that they still load, used by nothing.
+ */
+export const LastSnow = z.object({
+    startedAt: z.number().finite().nonnegative().optional(),
+    endedAt: z.number().finite().nonnegative(),
+});
+export type LastSnow = z.infer<typeof LastSnow>;
+
+/** A colour of a pool, `#rrggbb`. */
+const PoolColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+/**
+ * A style of pool of the map (see Terrain/Pools.ts): the colour of its water and of its coping, how deep it is (map
+ * pixels: the clearer the shallower, and the sooner it freezes), and whether its water is hot (it never freezes).
+ */
+export const PoolStyle = z.object({
+    water: PoolColor,
+    coping: PoolColor,
+    depthPx: z.number().min(8).max(160),
+    hot: z.boolean(),
+    /** Ladders along its top edge: none, one in its middle, or two at its quarters (one only on a short edge). */
+    ladders: z.number().int().min(0).max(2).default(2),
+});
+export type PoolStyle = z.infer<typeof PoolStyle>;
+/**
+ * The lighting of a map. `energySaving`: its lamps standing outdoors go out by day, while the sky gives light enough
+ * (see Lamps/EnergySaving.ts in play). Absent from a map saved before it existed: off.
+ */
+export const LightingSettings = z.object({
+    energySaving: z.boolean().default(false),
+});
+export type LightingSettings = z.infer<typeof LightingSettings>;
 
 export const WAMSettings = z.object({
     weather: Weather.optional().catch(undefined),
     weatherStartedAt: z.number().finite().nonnegative().optional().catch(undefined),
+    lastSnow: LastSnow.optional().catch(undefined),
     weatherAuto: AutoWeather.optional().catch(undefined),
     weatherLocation: WeatherLocation.optional().catch(undefined),
     megaphone: MegaphoneSettings.optional(),
@@ -739,6 +1340,17 @@ export const WAMSettings = z.object({
     prefabOverrides: z.record(z.string(), PrefabOverride).optional().catch(undefined),
     /** Per category, by its name in lower case. Fail open like `prefabOverrides`. */
     categories: z.record(z.string(), CategorySettings).optional().catch(undefined),
+    water: WaterSettings.optional().catch(undefined),
+    life: LifeSettings.optional().catch(undefined),
+    meadow: MeadowSettings.optional().catch(undefined),
+    /** The styles of the pools painted on the map, by their number. Fail open: a broken list draws default pools. */
+    pools: z.array(PoolStyle).max(MAX_POOL_STYLES).optional().catch(undefined),
+    /**
+     * The ladders put by hand on the pools, by the cell of the top edge each stands on ("x,y"). The top edge of a pool
+     * with none gets the ladders of its style.
+     */
+    poolLadders: z.array(z.string().regex(POOL_LADDER_CELL)).max(MAX_POOL_LADDERS).optional().catch(undefined),
+    lighting: LightingSettings.optional().catch(undefined),
 });
 
 export const WAMFileFormat = z.object({
@@ -751,6 +1363,8 @@ export const WAMFileFormat = z.object({
     settings: WAMSettings.optional(),
     metadata: WAMMetadata.optional().describe("Contains metadata about the map (name, description, copyright, etc.)"),
     vendor: WAMVendor.optional(),
+    /** Fail open: a broken relief must not make the whole map unreadable. */
+    terrain: TerrainData.optional().catch(undefined),
 });
 
 export const MapsCacheSingleMapFormat = z.object({
@@ -785,7 +1399,10 @@ export type EntityDataPropertiesKeys =
     | "openWebsite"
     | "openFile"
     | "livekitRoomProperty"
-    | "lampPropertyData";
+    | "lampPropertyData"
+    | "switchPropertyData"
+    | "waterSourcePropertyData"
+    | "waterSinkPropertyData";
 export type AreaCoordinates = z.infer<typeof AreaCoordinates>;
 export type AreaData = z.infer<typeof AreaData>;
 export type AreaDataProperties = z.infer<typeof AreaDataProperties>;
@@ -820,6 +1437,11 @@ export type GobeurLevel = z.infer<typeof GobeurLevel>;
 export type GobeurPropertyData = z.infer<typeof GobeurPropertyData>;
 export type LampPropertyData = z.infer<typeof LampPropertyData>;
 export type RgbLampPropertyData = z.infer<typeof RgbLampPropertyData>;
+export type SwitchTargets = z.infer<typeof SwitchTargets>;
+export type SwitchTrigger = z.infer<typeof SwitchTrigger>;
+export type SwitchPropertyData = z.infer<typeof SwitchPropertyData>;
+export type WaterSourcePropertyData = z.infer<typeof WaterSourcePropertyData>;
+export type WaterSinkPropertyData = z.infer<typeof WaterSinkPropertyData>;
 export type MatrixRoomPropertyData = z.infer<typeof MatrixRoomPropertyData>;
 export type PersonalAreaAccessClaimMode = z.infer<typeof PersonalAreaAccessClaimMode>;
 export type ExtensionModuleAreaPropertyData = z.infer<typeof ExtensionModuleAreaProperty>;

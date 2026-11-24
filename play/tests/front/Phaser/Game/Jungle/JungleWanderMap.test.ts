@@ -41,7 +41,58 @@ describe("outdoorWanderMap", () => {
         ).toEqual(outside);
     });
 
+    it("rejects sparse paths whose outdoor waypoints cross a building", async () => {
+        const from = { x: 16, y: 48 };
+        const to = { x: 144, y: 48 };
+        const outside = (x: number): boolean => x < 64 || x >= 96;
+        const map = outdoorWanderMap(baseMap([from, to]), outside, 32);
+        expect(map.isWalkable({ x: 0, y: 1 })).toBe(true);
+        expect(map.isWalkable({ x: 4, y: 1 })).toBe(true);
+        expect(await map.findPath(from, to)).toEqual([]);
+    });
+
+    it("checks the segment to the destination when the base path omits it", async () => {
+        const from = { x: 16, y: 48 };
+        const to = { x: 144, y: 48 };
+        const map = outdoorWanderMap(baseMap([from]), (x) => x < 64 || x >= 96, 32);
+        expect(await map.findPath(from, to)).toEqual([]);
+    });
+
+    it("checks diagonals through a narrow indoor strip", async () => {
+        const from = { x: 16, y: 16 };
+        const to = { x: 144, y: 144 };
+        const map = outdoorWanderMap(baseMap([from, to]), (x, y) => x < 64 || x >= 72 || y < 64 || y >= 72, 32);
+        expect(await map.findPath(from, to)).toEqual([]);
+    });
+
+    it("rejects a diagonal that barely grazes an indoor cell", async () => {
+        const from = { x: 16, y: 16.1 };
+        const to = { x: 144, y: 144.1 };
+        const map = outdoorWanderMap(baseMap([from, to]), (x, y) => x < 64 || x >= 72 || y < 72 || y >= 80, 32);
+        expect(await map.findPath(from, to)).toEqual([]);
+    });
+
     it("has no seats", () => {
         expect("seats" in outdoorWanderMap(baseMap(), isOutdoor, 32)).toBe(false);
+    });
+
+    it("the floors in the open air are walked (the deck of a bridge), not the storeys of a building", () => {
+        const base: WanderMap = { ...baseMap(), levelsAt: () => [20] };
+        const map = outdoorWanderMap(base, isOutdoor, 32);
+        expect(map.levelsAt?.({ x: 2, y: 3 })).toEqual([20]);
+        expect(map.levelsAt?.({ x: 12, y: 3 })).toEqual([]);
+        // A map without floors tells none.
+        expect(outdoorWanderMap(baseMap(), isOutdoor, 32).levelsAt?.({ x: 2, y: 3 })).toEqual([]);
+    });
+
+    it("a path over a deck stays a path: it is looked at where it stands on the ground", async () => {
+        const overDeck = [
+            { x: 16, y: 48 },
+            { x: 48, y: 48, z: 20 },
+            { x: 80, y: 48, z: 20 },
+        ];
+        expect(
+            await outdoorWanderMap(baseMap(overDeck), isOutdoor, 32).findPath({ x: 0, y: 0 }, { x: 0, y: 0 }),
+        ).toEqual(overDeck);
     });
 });

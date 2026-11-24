@@ -1,7 +1,9 @@
 import * as Phaser from "phaser";
 import { get, readable } from "svelte/store";
+import { BALL_REPORT_MS } from "@workadventure/map-editor";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { mock } from "vitest-mock-extended";
+import { CatastropheKind } from "@workadventure/messages";
 import { Vehicle, VehicleMode } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { localUserStore } from "@wa/front/Connection/LocalUserStore";
 import { waScaleManager } from "@wa/front/Phaser/Services/WaScaleManager";
@@ -24,11 +26,38 @@ import { Swimwear } from "../../../../src/front/Phaser/Entity/Swimwear";
 import { LL, setLocale } from "../../../../src/i18n/i18n-svelte";
 import { nerfEquippedStore } from "../../../../src/front/Stores/NerfStore";
 import type { NerfManager } from "../../../../src/front/Phaser/Game/Nerf/NerfManager";
+import type { FishingManager } from "../../../../src/front/Phaser/Game/Fishing/FishingManager";
+import type { ActivatableInterface } from "../../../../src/front/Phaser/Game/ActivatableInterface";
+import {
+    fishingContestSetupStore,
+    fishingContestStore,
+    rodEquippedStore,
+} from "../../../../src/front/Stores/FishingStore";
+import {
+    ballDiameterTilesStore,
+    coldCelsiusStore,
+    coldRadiusTilesStore,
+    heldBallStore,
+    catastrophePanelStore,
+    fireRadiusTilesStore,
+    downpourRadiusTilesStore,
+    downpourWholeMapStore,
+    drainRadiusTilesStore,
+    meteorRadiusTilesStore,
+    toggleArmedCatastrophe,
+} from "../../../../src/front/Stores/CatastropheStore";
+import type { RoomConnection } from "../../../../src/front/Connection/RoomConnection";
 import { torchEquippedStore } from "../../../../src/front/Stores/TorchStore";
 import type { TorchManager } from "../../../../src/front/Phaser/Game/Torch/TorchManager";
 import { findSeatAtPoint } from "../../../../src/front/Phaser/Player/Seat";
+import {
+    armWaterLevelPipette,
+    disarmWaterLevelPipette,
+    waterLevelPipetteStore,
+} from "../../../../src/front/Stores/WaterLevelPipetteStore";
 import type { Seat } from "../../../../src/front/Phaser/Player/Seat";
 
+const setDefaultCursor = vi.fn();
 const tileSnap = vi.hoisted(() => ({ enabled: false }));
 vi.mock("../../../../src/front/Enum/EnvironmentVariable", async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
@@ -45,7 +74,7 @@ vi.mock("../../../../src/front/Stores/MenuStore", () => ({}));
 vi.mock("../../../../src/front/Stores/FollowStore", () => ({}));
 vi.mock("../../../../src/front/Stores/EmoteStore", () => ({}));
 vi.mock("../../../../src/front/Connection/LocalUserStore", () => ({
-    localUserStore: { getLocalUser: () => ({ uuid: "self-uuid" }), getVehicle: vi.fn(() => Vehicle.None) },
+    localUserStore: { getLocalUser: () => ({ uuid: "self-uuid" }), getVehicleForMedium: vi.fn(() => Vehicle.None) },
 }));
 vi.mock("../../../../src/front/Chat/Stores/ChatStore", () => ({}));
 vi.mock("../../../../src/front/Components/PopUp/SayPopUp.svelte", () => ({ default: vi.fn() }));
@@ -57,7 +86,11 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
     const activatablesManager = mock<ActivatablesManager>();
     let scene: ReturnType<typeof mock<GameScene>>;
     let handler: GameSceneUserInputHandler;
-    let currentPlayer: { sitOnSeat: ReturnType<typeof vi.fn>; stayStandingHere: ReturnType<typeof vi.fn> };
+    let currentPlayer: {
+        toggleAirVehicle: ReturnType<typeof vi.fn>;
+        sitOnSeat: ReturnType<typeof vi.fn>;
+        stayStandingHere: ReturnType<typeof vi.fn>;
+    };
     const chair: Seat = {
         id: "chair:0",
         entityId: "chair",
@@ -66,6 +99,19 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         depth: 0,
         trigger: "auto",
     };
+
+    it("toggles the airplane with V, once per press, and keeps typing and the editor alone", () => {
+        handler.handleKeyDownEvent(new KeyboardEvent("keydown", { code: "KeyV", key: "v" }));
+        expect(currentPlayer.toggleAirVehicle).toHaveBeenCalledTimes(1);
+        handler.handleKeyDownEvent(new KeyboardEvent("keydown", { code: "KeyV", key: "v", repeat: true }));
+        const field = document.createElement("input");
+        const typing = new KeyboardEvent("keydown", { code: "KeyV", key: "v" });
+        field.dispatchEvent(typing);
+        handler.handleKeyDownEvent(typing);
+        mapEditorModeStore.set(true);
+        handler.handleKeyDownEvent(new KeyboardEvent("keydown", { code: "KeyV", key: "v" }));
+        expect(currentPlayer.toggleAirVehicle).toHaveBeenCalledTimes(1);
+    });
 
     function pointer(button = 0, detail = 2): ReturnType<typeof mock<Phaser.Input.Pointer>> {
         const result = mock<Phaser.Input.Pointer>({
@@ -103,21 +149,28 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             value: { canvas: document.createElement("canvas") },
         });
         Object.defineProperty(scene, "events", { configurable: true, value: new Phaser.Events.EventEmitter() });
-        Object.defineProperty(scene, "input", { configurable: true, value: {} });
+        Object.defineProperty(scene, "input", { configurable: true, value: { setDefaultCursor } });
         scene.Map = mock<Phaser.Tilemaps.Tilemap>({ widthInPixels: 1504, heightInPixels: 1184 });
         scene.getCameraManager.mockReturnValue(cameraManager);
+        // The relief is not shown in 3/4: the ground is drawn where it is.
+        scene.groundPointUnder.mockImplementation((point) => point);
+        scene.seenPointUnder.mockImplementation((point) => point);
         scene.getActivatablesManager.mockReturnValue(activatablesManager);
         scene.getGameMapFrontWrapper.mockReturnValue(
             mock<GameMapFrontWrapper>({ getTileDimensions: () => ({ width: 32, height: 32 }) }),
         );
         scene.moveTo.mockResolvedValue({ x: 480, y: 640, cancelled: false });
-        currentPlayer = { sitOnSeat: vi.fn(), stayStandingHere: vi.fn() };
+        currentPlayer = { toggleAirVehicle: vi.fn(), sitOnSeat: vi.fn(), stayStandingHere: vi.fn() };
         Object.defineProperty(scene, "CurrentPlayer", { configurable: true, value: currentPlayer });
+        // No ice fishing shack unless a test puts one.
+        Object.defineProperty(scene, "iceShackManager", { configurable: true, value: undefined });
         vi.mocked(findSeatAtPoint).mockReturnValue(undefined);
         handler = new GameSceneUserInputHandler(scene);
     });
 
     afterEach(() => {
+        // Releases what every handler of the test (the extra ones too: they share the scene) subscribed to.
+        scene.events.emit(Phaser.Scenes.Events.SHUTDOWN);
         wokaMenuStore.clear();
         nerfEquippedStore.set(false);
         mapEditorModeStore.set(false);
@@ -138,6 +191,14 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
 
         expect(scene.moveTo.mock.calls).toEqual([[{ x: 496, y: 656 }, true, WOKA_SPEED * 2.5]]);
         expect(camera.getWorldPoint.mock.calls).toEqual([[120, 160]]);
+    });
+
+    it("walks to the ground drawn under the click, down in a hollow of the relief seen in 3/4", () => {
+        // The click lands on the floor of a hollow drawn 64 px lower than its place.
+        scene.groundPointUnder.mockImplementation((point) => ({ x: point.x, y: point.y - 64 }));
+        handler.handlePointerUpEvent(pointer(2, 1), []);
+
+        expect(scene.moveTo.mock.calls).toEqual([[{ x: 480, y: 576 }, true, undefined]]);
     });
 
     it("keeps the exact point for right-click navigation even when tile snapping is enabled", () => {
@@ -350,6 +411,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 "avatar-profile",
                 "avatar-nerf",
                 "avatar-torch",
+                "avatar-rod",
                 "avatar-action-dance",
                 "avatar-action-coffee",
                 "avatar-change-outfit",
@@ -372,6 +434,113 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 ?.callback();
             expect(setSwimwear).toHaveBeenCalledWith(Swimwear.TwoPiece);
             expect(get(avatarActionsOpenStore)).toBe(false);
+        });
+
+        it.each([false, true])("toggles the fishing rod from the own-avatar wheel when equipped is %s", (equipped) => {
+            rodEquippedStore.set(equipped);
+            const fishingManager = mock<FishingManager>();
+            fishingManager.toggleEquipment.mockImplementation(() => rodEquippedStore.update((value) => !value));
+            Object.defineProperty(scene, "fishingManager", { configurable: true, value: fishingManager });
+            const self = Object.assign(Object.create(Player.prototype) as Player, {
+                playerName: "Me",
+                sprites: new Map([["body1", mock<Phaser.GameObjects.Sprite>()]]),
+            });
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            const action = get(wokaMenuStore)?.actions.find(({ testId }) => testId === "avatar-rod");
+            expect(action?.actionName).toBe(equipped ? get(LL).actionbar.rod.unequip() : get(LL).actionbar.rod.equip());
+            expect(action?.icon).toBe("rod");
+            action?.callback();
+            expect(fishingManager.toggleEquipment.mock.calls).toHaveLength(1);
+            expect(get(wokaMenuStore)).toBeUndefined();
+            rodEquippedStore.set(false);
+        });
+
+        it("offers the ice fishing shacks on the own-avatar wheel, a greyed one with its reason", () => {
+            const build = vi.fn();
+            Object.defineProperty(scene, "iceShackManager", {
+                configurable: true,
+                value: {
+                    wheelActions: () => [
+                        { actionName: "Build", icon: "iceShack", testId: "avatar-ice-shack-build", callback: build },
+                        {
+                            actionName: "Enter",
+                            icon: "iceShack",
+                            testId: "avatar-ice-shack-enter",
+                            disabled: true,
+                            detail: "Too thin",
+                            callback: vi.fn(),
+                        },
+                    ],
+                },
+            });
+            const self = Object.assign(Object.create(Player.prototype) as Player, {
+                playerName: "Me",
+                sprites: new Map([["body1", mock<Phaser.GameObjects.Sprite>()]]),
+            });
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            const actions = get(wokaMenuStore)?.actions ?? [];
+            const enter = actions.find(({ testId }) => testId === "avatar-ice-shack-enter");
+            expect(enter?.disabled).toBe(true);
+            expect(enter?.detail).toBe("Too thin");
+            actions.find(({ testId }) => testId === "avatar-ice-shack-build")?.callback();
+            expect(build).toHaveBeenCalledTimes(1);
+            expect(get(wokaMenuStore)).toBeUndefined();
+        });
+
+        it("seated in an ice fishing shack, the own-avatar wheel still offers to take the rod in hand or put it away", () => {
+            Object.defineProperty(scene, "iceShackManager", {
+                configurable: true,
+                value: {
+                    wheelActions: () => [
+                        { actionName: "Get up", icon: "iceShack", testId: "avatar-ice-shack-leave", callback: vi.fn() },
+                    ],
+                },
+            });
+            const fishingManager = mock<FishingManager>();
+            fishingManager.toggleEquipment.mockImplementation(() => rodEquippedStore.update((value) => !value));
+            Object.defineProperty(scene, "fishingManager", { configurable: true, value: fishingManager });
+            const self = Object.assign(Object.create(Player.prototype) as Player, {
+                playerName: "Me",
+                sprites: new Map([["body1", mock<Phaser.GameObjects.Sprite>()]]),
+                isSeated: () => true,
+            });
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            const testIds = (get(wokaMenuStore)?.actions ?? []).map(({ testId }) => testId);
+            expect(testIds).toContain("avatar-ice-shack-leave");
+            const rod = get(wokaMenuStore)?.actions.find(({ testId }) => testId === "avatar-rod");
+            expect(rod?.actionName).toBe(get(LL).actionbar.rod.equip());
+            rod?.callback();
+            expect(fishingManager.toggleEquipment.mock.calls).toHaveLength(1);
+            rodEquippedStore.set(false);
+        });
+
+        it("offers a fishing contest from the own-avatar wheel, rod in hand and no contest running", () => {
+            const self = Object.assign(Object.create(Player.prototype) as Player, {
+                playerName: "Me",
+                sprites: new Map([["body1", mock<Phaser.GameObjects.Sprite>()]]),
+            });
+            const offered = (): boolean => {
+                wokaMenuStore.clear();
+                handler.handlePointerUpEvent(pointer(0, 1), [self]);
+                return get(wokaMenuStore)?.actions.some(({ testId }) => testId === "avatar-fishing-contest") ?? false;
+            };
+            const contest = { hostName: "Hugo", minutes: 3, endsAt: 0, rows: [] };
+            expect(offered()).toBe(false);
+            rodEquippedStore.set(true);
+            fishingContestStore.set({ ...contest, finished: false });
+            expect(offered()).toBe(false);
+            // A podium still shown does not keep the next contest from starting.
+            fishingContestStore.set({ ...contest, finished: true });
+            expect(offered()).toBe(true);
+            fishingContestStore.set(undefined);
+            expect(offered()).toBe(true);
+            get(wokaMenuStore)
+                ?.actions.find(({ testId }) => testId === "avatar-fishing-contest")
+                ?.callback();
+            expect(get(fishingContestSetupStore)).toBe(true);
+            expect(get(wokaMenuStore)).toBeUndefined();
+            fishingContestSetupStore.set(false);
+            rodEquippedStore.set(false);
         });
 
         it.each([false, true])("toggles the Nerf from the own-avatar wheel when equipped is %s", (equipped) => {
@@ -456,7 +625,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         });
 
         it("offers a selected scooter only on the own human avatar and equips it permanently", () => {
-            vi.spyOn(localUserStore, "getVehicle").mockReturnValue(Vehicle.Skateboard);
+            vi.spyOn(localUserStore, "getVehicleForMedium").mockReturnValue(Vehicle.Skateboard);
             const equipVehicle = vi.fn();
             const self = Object.assign(Object.create(Player.prototype) as unknown as Player, {
                 playerName: "Me",
@@ -471,7 +640,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             Object.assign(self, { sprites: new Map([["duck", mock<Phaser.GameObjects.Sprite>()]]) });
             handler.handlePointerUpEvent(pointer(0, 1), [self]);
             expect(get(wokaMenuStore)?.actions.some(({ testId }) => testId === "avatar-vehicle")).toBe(false);
-            vi.spyOn(localUserStore, "getVehicle").mockReturnValue(Vehicle.None);
+            vi.spyOn(localUserStore, "getVehicleForMedium").mockReturnValue(Vehicle.None);
         });
 
         it("opens a lone woka directly, without a choice", () => {
@@ -543,6 +712,625 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         await Promise.resolve();
 
         expect(warning).toHaveBeenCalledWith(error);
+    });
+
+    describe("the space key and the fishing rod", () => {
+        const space = (type: "keydown" | "keyup", repeat = false): KeyboardEvent =>
+            new KeyboardEvent(type, { code: "Space", key: " ", repeat, cancelable: true });
+        let fishingManager: ReturnType<typeof mock<FishingManager>>;
+
+        beforeEach(() => {
+            fishingManager = mock<FishingManager>();
+            Object.defineProperty(fishingManager, "isEquipped", { configurable: true, value: true });
+            Object.defineProperty(scene, "fishingManager", { configurable: true, value: fishingManager });
+            // What the key does without the rod: the texts of the player.
+            Object.assign(scene.CurrentPlayer, { handlePressSpacePlayerTextCallback: vi.fn() });
+        });
+
+        afterEach(() => {
+            // clearAllMocks keeps the values a test made a mock return.
+            activatablesManager.getSelectedActivatableObject.mockReset();
+            activatablesManager.isSelectingByDistanceEnabled.mockReset();
+        });
+
+        it("charges the cast while the key is held and casts when it goes up", () => {
+            const down = handler.handleKeyDownEvent(space("keydown"));
+            expect(down.defaultPrevented).toBe(true);
+            handler.handleKeyDownEvent(space("keydown", true));
+            expect(fishingManager.pressKey.mock.calls).toEqual([[false], [true]]);
+            handler.handleKeyUpEvent(space("keyup"));
+            expect(fishingManager.releaseKey.mock.calls).toHaveLength(1);
+        });
+
+        it("leaves the key to a prompt that is shown", () => {
+            const prompt = vi.fn();
+            handler.addSpaceEventListener(prompt);
+            handler.handleKeyDownEvent(space("keydown"));
+            handler.handleKeyUpEvent(space("keyup"));
+            expect(fishingManager.pressKey.mock.calls).toHaveLength(0);
+            expect(fishingManager.releaseKey.mock.calls).toHaveLength(0);
+            handler.removeSpaceEventListener(prompt);
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(fishingManager.pressKey.mock.calls).toHaveLength(1);
+        });
+
+        it("leaves the key to an object the avatar stands next to", () => {
+            activatablesManager.getSelectedActivatableObject.mockReturnValue(
+                mock<ActivatableInterface>({ isActivatable: () => true }),
+            );
+            activatablesManager.isSelectingByDistanceEnabled.mockReturnValue(true);
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(fishingManager.pressKey.mock.calls).toHaveLength(0);
+        });
+
+        it("still casts when a prompt came up while the key was held", () => {
+            handler.handleKeyDownEvent(space("keydown"));
+            handler.addSpaceEventListener(vi.fn());
+            handler.handleKeyDownEvent(space("keydown", true));
+            handler.handleKeyUpEvent(space("keyup"));
+            expect(fishingManager.pressKey.mock.calls).toHaveLength(2);
+            expect(fishingManager.releaseKey.mock.calls).toHaveLength(1);
+        });
+
+        it("does nothing with the rod in the map editor, nor with the rod put away", () => {
+            mapEditorModeStore.set(true);
+            handler.handleKeyDownEvent(space("keydown"));
+            mapEditorModeStore.set(false);
+            Object.defineProperty(fishingManager, "isEquipped", { configurable: true, value: false });
+            handler.handleKeyDownEvent(space("keydown"));
+            handler.handleKeyUpEvent(space("keyup"));
+            expect(fishingManager.pressKey.mock.calls).toHaveLength(0);
+            expect(fishingManager.releaseKey.mock.calls).toHaveLength(0);
+        });
+    });
+
+    describe("the space and control keys in the airplane", () => {
+        const key = (type: "keydown" | "keyup", init: KeyboardEventInit): KeyboardEvent =>
+            new KeyboardEvent(type, { cancelable: true, ...init });
+        const space = (type: "keydown" | "keyup"): KeyboardEvent => key(type, { code: "Space", key: " " });
+        const textCallback = vi.fn();
+
+        function inAirplane(flying: boolean, ownPrompt = false): void {
+            Object.assign(scene.CurrentPlayer, {
+                isInAirplane: () => true,
+                isFlying: () => flying,
+                isAirplanePromptShown: () => ownPrompt,
+                handlePressSpacePlayerTextCallback: textCallback,
+            });
+        }
+
+        afterEach(() => {
+            activatablesManager.getSelectedActivatableObject.mockReset();
+            activatablesManager.isSelectingByDistanceEnabled.mockReset();
+        });
+
+        it("climbs with space in flight, and nothing of the ground answers the press", () => {
+            inAirplane(true);
+            const down = handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(true);
+            expect(down.defaultPrevented).toBe(true);
+            handler.handleKeyUpEvent(space("keyup"));
+            expect(textCallback).not.toHaveBeenCalled();
+        });
+
+        it("takes off with space on the ground, even with the airplane's own hint shown", () => {
+            inAirplane(false, true);
+            handler.addSpaceEventListener(vi.fn());
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(true);
+            handler.handleKeyUpEvent(space("keyup"));
+            expect(textCallback).not.toHaveBeenCalled();
+        });
+
+        it("leaves space to another prompt or to an object next to the avatar on the ground", () => {
+            inAirplane(false);
+            const prompt = vi.fn();
+            handler.addSpaceEventListener(prompt);
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(false);
+            handler.removeSpaceEventListener(prompt);
+
+            activatablesManager.getSelectedActivatableObject.mockReturnValue(
+                mock<ActivatableInterface>({ isActivatable: () => true }),
+            );
+            activatablesManager.isSelectingByDistanceEnabled.mockReturnValue(true);
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(false);
+        });
+
+        it("leaves space alone on foot, in the map editor and in a field", () => {
+            Object.assign(scene.CurrentPlayer, { isInAirplane: () => false, isFlying: () => false });
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(false);
+
+            inAirplane(true);
+            mapEditorModeStore.set(true);
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(false);
+            mapEditorModeStore.set(false);
+
+            const field = document.createElement("input");
+            document.body.appendChild(field);
+            const typing = space("keydown");
+            field.dispatchEvent(typing);
+            handler.handleKeyDownEvent(typing);
+            expect(handler.isClimbPressed()).toBe(false);
+            field.remove();
+        });
+
+        it("takes control for the descent in flight only, out of the editor", () => {
+            inAirplane(true);
+            expect(handler.isAltitudeKeysActive()).toBe(true);
+            const save = handler.handleKeyDownEvent(key("keydown", { code: "KeyS", key: "s", ctrlKey: true }));
+            expect(save.defaultPrevented).toBe(true);
+            mapEditorModeStore.set(true);
+            expect(handler.isAltitudeKeysActive()).toBe(false);
+            mapEditorModeStore.set(false);
+            inAirplane(false);
+            expect(handler.isAltitudeKeysActive()).toBe(false);
+            const ground = handler.handleKeyDownEvent(key("keydown", { code: "KeyS", key: "s", ctrlKey: true }));
+            expect(ground.defaultPrevented).toBe(false);
+        });
+    });
+
+    describe("an armed pipette of the level of the water", () => {
+        const take = vi.fn();
+
+        afterEach(() => {
+            disarmWaterLevelPipette();
+        });
+
+        it("shows a crosshair while armed, and the usual cursor after", () => {
+            armWaterLevelPipette(take);
+            expect(setDefaultCursor).toHaveBeenLastCalledWith("crosshair");
+            disarmWaterLevelPipette();
+            expect(setDefaultCursor).toHaveBeenLastCalledWith("auto");
+        });
+
+        it("takes the left click on the map, in the map editor, and nothing else answers it", () => {
+            mapEditorModeStore.set(true);
+            armWaterLevelPipette(take);
+            vi.mocked(isActivatable).mockReturnValue(true);
+            handler.handlePointerUpEvent(pointer(0, 1), [mock<Phaser.GameObjects.GameObject>()]);
+
+            expect(take.mock.calls).toEqual([[{ x: 480, y: 640 }, false]]);
+            expect(get(waterLevelPipetteStore)).toBeUndefined();
+            expect(scene.moveTo.mock.calls).toEqual([]);
+            expect(activatablesManager.handlePointerDownEvent.mock.calls).toEqual([]);
+        });
+
+        it("takes the ground with Alt held at the release", () => {
+            armWaterLevelPipette(take);
+            const click = pointer(0, 1);
+            click.event = new MouseEvent("mouseup", { button: 0, detail: 1, altKey: true });
+            handler.handlePointerUpEvent(click, []);
+
+            expect(take.mock.calls).toEqual([[{ x: 480, y: 640 }, true]]);
+        });
+
+        it("a double click does not walk, a right click takes nothing (in the map editor, where it aims)", () => {
+            mapEditorModeStore.set(true);
+            armWaterLevelPipette(take);
+            handler.handlePointerUpEvent(pointer(2, 1), []);
+            expect(take).not.toHaveBeenCalled();
+            handler.handlePointerUpEvent(pointer(0, 2), []);
+            expect(take).toHaveBeenCalledTimes(1);
+            expect(scene.moveTo.mock.calls).toEqual([]);
+        });
+
+        it("a drag of the map takes nothing and keeps the pipette armed, in the map editor too", () => {
+            mapEditorModeStore.set(true);
+            armWaterLevelPipette(take);
+            const down = pointer();
+            down.x = 100;
+            down.y = 100;
+            handler.handlePointerDownEvent(down, []);
+            const moved = pointer();
+            Object.defineProperty(moved, "id", { value: down.id });
+            moved.x = 160;
+            moved.y = 100;
+            handler.handlePointerMoveEvent(moved, []);
+            handler.handlePointerUpEvent(moved, []);
+
+            expect(cameraManager.panBy.mock.calls.length).toBeGreaterThan(0);
+            expect(take).not.toHaveBeenCalled();
+            expect(get(waterLevelPipetteStore)).toBeDefined();
+        });
+    });
+
+    describe("an armed catastrophe", () => {
+        const launch = vi.fn();
+
+        function arm(): void {
+            catastrophePanelStore.set(true);
+            toggleArmedCatastrophe("meteor");
+        }
+
+        beforeEach(() => {
+            scene.connection = mock<RoomConnection>({ emitLaunchCatastrophe: launch });
+        });
+
+        afterEach(() => {
+            catastrophePanelStore.set(false);
+        });
+
+        it("the canvas shows a crosshair while armed, and the usual cursor after", () => {
+            arm();
+            expect(setDefaultCursor).toHaveBeenLastCalledWith("crosshair");
+
+            catastrophePanelStore.set(false);
+            expect(setDefaultCursor).toHaveBeenLastCalledWith("auto");
+        });
+
+        it("an armed meteor takes the left click", () => {
+            arm();
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+
+            expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_METEOR, 480, 640, 4]]);
+            expect(scene.moveTo.mock.calls).toEqual([]);
+        });
+
+        it("falls on what the pointer shows where the relief is seen in 3/4: the ground or the water drawn there", () => {
+            // A lake at the bottom of a hollow, drawn 64 px lower: the point shown is 64 px further north on the map.
+            scene.seenPointUnder.mockImplementation((point) => ({ x: point.x, y: point.y - 64 }));
+            arm();
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+
+            expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_METEOR, 480, 576, 4]]);
+        });
+
+        it("an armed fireball takes the left click, with the size chosen in the panel", () => {
+            catastrophePanelStore.set(true);
+            toggleArmedCatastrophe("fireball");
+            meteorRadiusTilesStore.set(9);
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+            meteorRadiusTilesStore.set(4);
+
+            expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_FIREBALL, 480, 640, 9]]);
+            expect(scene.moveTo.mock.calls).toEqual([]);
+        });
+
+        it("launches the meteor of the size chosen in the panel", () => {
+            arm();
+            meteorRadiusTilesStore.set(12);
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+            meteorRadiusTilesStore.set(4);
+
+            expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_METEOR, 480, 640, 12]]);
+        });
+
+        it("takes the click before an activatable object", () => {
+            arm();
+            vi.mocked(isActivatable).mockReturnValue(true);
+            handler.handlePointerUpEvent(pointer(0, 1), [mock<Phaser.GameObjects.GameObject>()]);
+
+            expect(launch).toHaveBeenCalledTimes(1);
+            expect(activatablesManager.handlePointerDownEvent.mock.calls).toEqual([]);
+        });
+
+        it("a double click while armed does not walk", () => {
+            arm();
+            handler.handlePointerUpEvent(pointer(0, 2), []);
+
+            expect(launch).toHaveBeenCalledTimes(1);
+            expect(scene.moveTo.mock.calls).toEqual([]);
+        });
+
+        it("a one-finger tap launches, a long press does not", () => {
+            arm();
+            const tap = pointer();
+            tap.wasTouch = true;
+            handler.handlePointerUpEvent(tap, []);
+            expect(launch).toHaveBeenCalledTimes(1);
+
+            const press = pointer();
+            press.wasTouch = true;
+            press.getDuration.mockReturnValue(600);
+            handler.handlePointerUpEvent(press, []);
+            expect(launch).toHaveBeenCalledTimes(1);
+        });
+
+        it("a drag of the map launches nothing", () => {
+            arm();
+            const down = pointer();
+            down.x = 100;
+            down.y = 100;
+            handler.handlePointerDownEvent(down, []);
+            const moved = pointer();
+            Object.defineProperty(moved, "id", { value: down.id });
+            moved.x = 160;
+            moved.y = 100;
+            handler.handlePointerMoveEvent(moved, []);
+            handler.handlePointerUpEvent(moved, []);
+
+            expect(launch).not.toHaveBeenCalled();
+        });
+
+        describe("a downpour", () => {
+            let ticks: (() => void)[];
+            const remove = vi.fn();
+
+            function armDownpour(): void {
+                catastrophePanelStore.set(true);
+                toggleArmedCatastrophe("downpour");
+            }
+            function held(): ReturnType<typeof pointer> {
+                const result = pointer(0, 1);
+                result.isDown = true;
+                return result;
+            }
+
+            beforeEach(() => {
+                ticks = [];
+                Object.defineProperty(scene, "time", {
+                    configurable: true,
+                    value: {
+                        addEvent: (config: { callback: () => void }) => {
+                            ticks.push(config.callback);
+                            return { remove };
+                        },
+                    },
+                });
+            });
+
+            afterEach(() => {
+                downpourWholeMapStore.set(false);
+                downpourRadiusTilesStore.set(3);
+            });
+
+            it("rains under the pointer as soon as the click is pressed, and again while it is held", () => {
+                armDownpour();
+                handler.handlePointerDownEvent(held(), []);
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_DOWNPOUR, 480, 640, 3, false]]);
+
+                camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(500, 700));
+                ticks[0]();
+                expect(launch.mock.calls[1]).toEqual([CatastropheKind.CATASTROPHE_DOWNPOUR, 500, 700, 3, false]);
+            });
+
+            it("rains on what the pointer shows where the relief is seen in 3/4", () => {
+                scene.seenPointUnder.mockImplementation((point) => ({ x: point.x, y: point.y - 64 }));
+                armDownpour();
+                handler.handlePointerDownEvent(held(), []);
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_DOWNPOUR, 480, 576, 3, false]]);
+            });
+
+            it("sets fire under the pointer as soon as the click is pressed, and paints it while the click is held", () => {
+                catastrophePanelStore.set(true);
+                toggleArmedCatastrophe("fire");
+                fireRadiusTilesStore.set(5);
+                const press = held();
+                handler.handlePointerDownEvent(press, []);
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_FIRE, 480, 640, 5]]);
+
+                // Dragging paints fire along the way: the map does not move.
+                camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(500, 700));
+                handler.handlePointerMoveEvent(press, []);
+                ticks[0]();
+                expect(launch.mock.calls[1]).toEqual([CatastropheKind.CATASTROPHE_FIRE, 500, 700, 5]);
+                expect(cameraManager.startManualPan.mock.calls).toEqual([]);
+
+                // Releasing ends it: no patch more, no walk.
+                handler.handlePointerUpEvent(pointer(0, 1), []);
+                expect(remove).toHaveBeenCalled();
+                expect(launch).toHaveBeenCalledTimes(2);
+                expect(scene.moveTo.mock.calls).toEqual([]);
+                fireRadiusTilesStore.set(2);
+            });
+
+            it("lays cold air under the pointer while the click is held, as wide and as cold as chosen, without dragging the map", () => {
+                catastrophePanelStore.set(true);
+                toggleArmedCatastrophe("cold");
+                coldRadiusTilesStore.set(5);
+                coldCelsiusStore.set(-60);
+                const press = held();
+                handler.handlePointerDownEvent(press, []);
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_COLD, 480, 640, 5, false, false, -60]]);
+
+                camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(500, 700));
+                handler.handlePointerMoveEvent(press, []);
+                ticks[0]();
+                expect(launch.mock.calls[1]).toEqual([
+                    CatastropheKind.CATASTROPHE_COLD,
+                    500,
+                    700,
+                    5,
+                    false,
+                    false,
+                    -60,
+                ]);
+                expect(cameraManager.startManualPan.mock.calls).toEqual([]);
+
+                handler.handlePointerUpEvent(pointer(0, 1), []);
+                expect(remove).toHaveBeenCalled();
+                expect(launch).toHaveBeenCalledTimes(2);
+                expect(scene.moveTo.mock.calls).toEqual([]);
+                coldRadiusTilesStore.set(3);
+                coldCelsiusStore.set(-80);
+            });
+
+            it("drains under the pointer while the click is held, without dragging the map, and stops at its release", () => {
+                catastrophePanelStore.set(true);
+                toggleArmedCatastrophe("drain");
+                drainRadiusTilesStore.set(7);
+                const press = held();
+                handler.handlePointerDownEvent(press, []);
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_DRAIN, 480, 640, 7]]);
+
+                camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(500, 700));
+                handler.handlePointerMoveEvent(press, []);
+                ticks[0]();
+                expect(launch.mock.calls[1]).toEqual([CatastropheKind.CATASTROPHE_DRAIN, 500, 700, 7]);
+                expect(cameraManager.startManualPan.mock.calls).toEqual([]);
+
+                handler.handlePointerUpEvent(pointer(0, 1), []);
+                expect(remove).toHaveBeenCalled();
+                expect(launch).toHaveBeenCalledTimes(2);
+                expect(scene.moveTo.mock.calls).toEqual([]);
+                drainRadiusTilesStore.set(3);
+            });
+
+            it("a ball is held on what the pointer shows where the relief is seen in 3/4: it floats at the surface of that water", () => {
+                scene.seenPointUnder.mockImplementation((point) => ({ x: point.x, y: point.y - 64 }));
+                catastrophePanelStore.set(true);
+                toggleArmedCatastrophe("ball");
+                ballDiameterTilesStore.set(6);
+                handler.handlePointerDownEvent(held(), []);
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_BALL, 480, 576, 6]]);
+                expect(get(heldBallStore)).toEqual({ x: 480, y: 576, radiusPx: 96 });
+            });
+
+            it("holds a ball under the pointer at once, tells it as it moves, and lets it go at the release", () => {
+                const delays: number[] = [];
+                Object.defineProperty(scene, "time", {
+                    configurable: true,
+                    value: {
+                        addEvent: (config: { callback: () => void; delay: number }) => {
+                            ticks.push(config.callback);
+                            delays.push(config.delay);
+                            return { remove };
+                        },
+                    },
+                });
+                catastrophePanelStore.set(true);
+                toggleArmedCatastrophe("ball");
+                ballDiameterTilesStore.set(6);
+                const press = held();
+                handler.handlePointerDownEvent(press, []);
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_BALL, 480, 640, 6]]);
+                // Shown under the pointer at once, without waiting for the server.
+                expect(get(heldBallStore)).toEqual({ x: 480, y: 640, radiusPx: 96 });
+                // Told far more often than a downpour, so that everybody sees it follow the pointer.
+                expect(delays).toEqual([BALL_REPORT_MS]);
+
+                // The pointer moves: the ball is under it at once, and the server is told at the next tick.
+                camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(500, 700));
+                handler.handlePointerMoveEvent(press, []);
+                expect(get(heldBallStore)).toEqual({ x: 500, y: 700, radiusPx: 96 });
+                expect(cameraManager.startManualPan.mock.calls).toEqual([]);
+                ticks[0]();
+                expect(launch.mock.calls[1]).toEqual([CatastropheKind.CATASTROPHE_BALL, 500, 700, 6]);
+
+                // Held still: nothing more is said for a while, then that it is still held.
+                ticks[0]();
+                ticks[0]();
+                ticks[0]();
+                expect(launch).toHaveBeenCalledTimes(2);
+                ticks[0]();
+                expect(launch).toHaveBeenCalledTimes(3);
+
+                // Released: it is gone at once, here and for the server.
+                handler.handlePointerUpEvent(pointer(0, 1), []);
+                expect(remove).toHaveBeenCalled();
+                expect(get(heldBallStore)).toBeUndefined();
+                expect(launch.mock.calls[3]).toEqual([CatastropheKind.CATASTROPHE_BALL, 500, 700, 6, false, true]);
+                expect(launch).toHaveBeenCalledTimes(4);
+                expect(scene.moveTo.mock.calls).toEqual([]);
+                ballDiameterTilesStore.set(4);
+            });
+
+            it("holding the click does not drag the map, and releasing it launches nothing more", () => {
+                armDownpour();
+                const press = held();
+                handler.handlePointerDownEvent(press, []);
+                handler.handlePointerMoveEvent(press, []);
+                expect(cameraManager.startManualPan.mock.calls).toEqual([]);
+                expect(remove).not.toHaveBeenCalled();
+
+                handler.handlePointerUpEvent(pointer(0, 1), []);
+                expect(remove).toHaveBeenCalled();
+                expect(launch).toHaveBeenCalledTimes(1);
+                expect(scene.moveTo.mock.calls).toEqual([]);
+            });
+
+            it("carries the size and the whole map chosen in the panel", () => {
+                armDownpour();
+                downpourRadiusTilesStore.set(9);
+                downpourWholeMapStore.set(true);
+                handler.handlePointerDownEvent(held(), []);
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_DOWNPOUR, 480, 640, 9, true]]);
+            });
+
+            it("stops once the click is no longer held or the downpour is disarmed, and keeps the cloud on the map", () => {
+                armDownpour();
+                const press = held();
+                camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(-50, 9999));
+                handler.handlePointerDownEvent(press, []);
+                expect(launch.mock.calls[0].slice(1, 3)).toEqual([0, 1183]);
+
+                press.isDown = false;
+                ticks[0]();
+                expect(launch).toHaveBeenCalledTimes(1);
+                expect(remove).toHaveBeenCalled();
+
+                remove.mockClear();
+                handler.handlePointerDownEvent(held(), []);
+                catastrophePanelStore.set(false);
+                expect(remove).toHaveBeenCalled();
+            });
+
+            it("rains in the map editor too", () => {
+                mapEditorModeStore.set(true);
+                armDownpour();
+                handler.handlePointerDownEvent(held(), []);
+                expect(launch).toHaveBeenCalledTimes(1);
+                expect(launch.mock.calls[0][0]).toBe(CatastropheKind.CATASTROPHE_DOWNPOUR);
+                mapEditorModeStore.set(false);
+            });
+
+            it("does not rain with the right button", () => {
+                armDownpour();
+                const right = pointer(2, 1);
+                right.isDown = true;
+                handler.handlePointerDownEvent(right, []);
+                expect(launch).not.toHaveBeenCalled();
+            });
+        });
+
+        it("launches in the map editor too", () => {
+            mapEditorModeStore.set(true);
+            arm();
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+            expect(launch).toHaveBeenCalledTimes(1);
+            mapEditorModeStore.set(false);
+        });
+
+        it("nothing is launched with the right button or unarmed", () => {
+            arm();
+            handler.handlePointerUpEvent(pointer(2, 1), []);
+            expect(launch).not.toHaveBeenCalled();
+
+            catastrophePanelStore.set(false);
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+            expect(launch).not.toHaveBeenCalled();
+        });
+
+        it("launches nothing outside the map", () => {
+            arm();
+            camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(-5, 640));
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+
+            expect(launch).not.toHaveBeenCalled();
+        });
+
+        it("a click the canvas did not receive launches nothing", () => {
+            const windowListen = vi.spyOn(window, "addEventListener");
+            const documentListen = vi.spyOn(document, "addEventListener");
+            try {
+                arm();
+                new GameSceneUserInputHandler(scene);
+
+                const pointerLike = /^(pointer|mouse|click|touch)/;
+                const listened = [...windowListen.mock.calls, ...documentListen.mock.calls].map(([type]) =>
+                    String(type),
+                );
+                expect(listened.filter((type) => pointerLike.test(type))).toEqual([]);
+                expect(launch.mock.calls).toEqual([]);
+            } finally {
+                windowListen.mockRestore();
+                documentListen.mockRestore();
+            }
+        });
     });
 
     describe("camera panning", () => {

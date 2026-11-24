@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+    ALWAYS_NIGHT_MINUTES,
+    forcedSunMinutes,
+    NIGHT_DARKNESS_MAX,
+    NIGHT_DARKNESS_MIN,
     NIGHT_MAX_OPACITY,
     nightOpacityAt,
+    nightOpacityWith,
     parisCalendarDay,
     parisWallClockToInstant,
     parseNightAt,
@@ -9,6 +14,7 @@ import {
     sunElevationInParis,
     sunPlaceOf,
     sunPositionAt,
+    worldClockTimeZone,
 } from "../../../../../src/front/Phaser/Game/Night/NightClock";
 
 const MINUTE = 60_000;
@@ -196,5 +202,83 @@ describe("sunPositionAt", () => {
     it("gives the same elevation as sunElevationAt", () => {
         const at = new Date("2026-11-14T14:00:00Z");
         expect(sunPositionAt(at, paris).elevation).toBe(sunElevationAt(at, paris));
+    });
+});
+
+describe("nightOpacityWith", () => {
+    it("leaves the night as it is at the default darkness", () => {
+        expect(nightOpacityWith(NIGHT_MAX_OPACITY, NIGHT_MAX_OPACITY)).toBeCloseTo(NIGHT_MAX_OPACITY);
+        expect(nightOpacityWith(0.3, NIGHT_MAX_OPACITY)).toBeCloseTo(0.3);
+    });
+
+    it("makes the full night as dark as the setting, and the dusk in the same proportion", () => {
+        expect(nightOpacityWith(NIGHT_MAX_OPACITY, 0.9)).toBeCloseTo(0.9);
+        expect(nightOpacityWith(NIGHT_MAX_OPACITY / 2, 0.9)).toBeCloseTo(0.45);
+        expect(nightOpacityWith(NIGHT_MAX_OPACITY, 0.3)).toBeCloseTo(0.3);
+    });
+
+    it("keeps the day clear whatever the setting", () => {
+        expect(nightOpacityWith(0, 0.95)).toBe(0);
+    });
+
+    it("keeps a setting it cannot read within its limits", () => {
+        expect(nightOpacityWith(NIGHT_MAX_OPACITY, 2)).toBeCloseTo(NIGHT_DARKNESS_MAX);
+        expect(nightOpacityWith(NIGHT_MAX_OPACITY, -1)).toBeCloseTo(NIGHT_DARKNESS_MIN);
+        expect(nightOpacityWith(NIGHT_MAX_OPACITY, Number.NaN)).toBeCloseTo(NIGHT_MAX_OPACITY);
+    });
+});
+
+describe("worldClockTimeZone", () => {
+    it("shows the time of the place of the map on the server clock", () => {
+        expect(worldClockTimeZone(false, "Australia/Sydney")).toBe("Australia/Sydney");
+    });
+
+    it("shows the time of Paris on a map without a place, or whose place has no time zone", () => {
+        expect(worldClockTimeZone(false, undefined)).toBe("Europe/Paris");
+    });
+
+    it("shows the time of the computer, whatever the map, for a player who follows their own clock", () => {
+        expect(worldClockTimeZone(true, "Australia/Sydney")).toBeUndefined();
+    });
+});
+
+describe("forcedSunMinutes", () => {
+    it("follows the clock unless the night is always on or a development time is given", () => {
+        expect(forcedSunMinutes(undefined, false)).toBeUndefined();
+        expect(forcedSunMinutes(undefined, true)).toBe(ALWAYS_NIGHT_MINUTES);
+        expect(forcedSunMinutes(12 * 60, true)).toBe(12 * 60);
+    });
+
+    it("keeps the night always shown fully dark, on the longest and on the shortest day", () => {
+        for (const day of ["2026-06-21", "2026-12-21"]) {
+            const [year, month, date] = day.split("-").map(Number);
+            const instant = parisWallClockToInstant(year, month, date, ALWAYS_NIGHT_MINUTES);
+            expect(nightOpacityAt(instant)).toBe(NIGHT_MAX_OPACITY);
+        }
+    });
+});
+
+describe("sunPositionAt, built from solarTermsAt", () => {
+    // Read on the code before the terms that depend on the instant alone were taken out of it: nothing may move.
+    const before: [string, number, number, number, number][] = [
+        ["2026-03-20T06:00:00Z", -33.45, -70.67, -52.61605231228319, 150.39691346717723],
+        ["2026-03-20T06:00:00Z", -31.95, 115.86, 50.94701717613423, 319.823192221064],
+        ["2026-06-21T12:00:00Z", 48.86, 2.35, 64.53407667632632, 184.04394013501314],
+        ["2026-06-21T12:00:00Z", -33.45, -70.67, 1.6268218065799402, 60.28591470307583],
+        ["2026-06-21T12:00:00Z", -31.95, 115.86, -32.987710859470866, 278.8617486042109],
+        ["2026-11-21T16:15:00Z", 48.86, 2.35, -2.4383317110033005, 241.84131820298603],
+        ["2026-11-21T16:15:00Z", -33.45, -70.67, 76.22843381814131, 13.50457007873797],
+        ["2026-11-21T16:15:00Z", -31.95, 115.86, -37.950125555275136, 176.2597670615479],
+        ["2026-12-21T23:30:00Z", 48.86, 2.35, -64.30494103710771, 349.9537953639008],
+        ["2026-12-21T23:30:00Z", -33.45, -70.67, 3.2561432942207063, 243.9025790244948],
+        ["2026-12-21T23:30:00Z", -31.95, 115.86, 27.45987481312782, 101.78186280209121],
+    ];
+
+    it("gives the same sun as before, to the last digit", () => {
+        for (const [iso, latitude, longitude, elevation, azimuth] of before) {
+            const sun = sunPositionAt(new Date(iso), { latitude, longitude });
+            expect(sun.elevation).toBe(elevation);
+            expect(sun.azimuth).toBe(azimuth);
+        }
     });
 });

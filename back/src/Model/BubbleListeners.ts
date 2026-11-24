@@ -1,3 +1,4 @@
+import { sameFloor } from "./FloorLevel";
 import type { Group } from "./Group";
 import type { User } from "./User";
 
@@ -67,20 +68,21 @@ export class BubbleListeners {
     private groupToHear(user: User, current: Group | undefined): Group | undefined {
         if (user.silent || user.group || user.disconnected) return undefined;
         const position = user.getPosition();
-        if (current && this.canBeHeard(current)) {
+        if (current && this.canBeHeard(current) && sameFloor(user.getFloorZ(), current.getFloorZ())) {
             const distance = distanceBetween(position, current.getPosition());
             if (distance <= this.groupRadius + LISTENING_RELEASE_MARGIN) return current;
         }
         // Like joining a bubble, starting to hear one waits for the user to stop: walking past is not eavesdropping.
         if (position.moving) return undefined;
-        return this.closestAudibleGroup(position);
+        return this.closestAudibleGroup(position, user.getFloorZ());
     }
 
-    private closestAudibleGroup(position: { x: number; y: number }): Group | undefined {
+    private closestAudibleGroup(position: { x: number; y: number }, floorZ: number): Group | undefined {
         let closest: Group | undefined;
         let closestDistance = this.groupRadius + LISTENING_MARGIN;
         for (const group of this.queryGroups(position.x, position.y, closestDistance)) {
-            if (!this.canBeHeard(group)) continue;
+            // A bubble of another floor of the map is not heard, drawn close as it may be.
+            if (!this.canBeHeard(group) || !sameFloor(floorZ, group.getFloorZ())) continue;
             const distance = distanceBetween(position, group.getPosition());
             if (distance <= closestDistance) {
                 closest = group;

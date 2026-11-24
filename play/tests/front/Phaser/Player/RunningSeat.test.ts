@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PositionMessage_Direction } from "@workadventure/messages";
+import { readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { Player } from "@wa/front/Phaser/Player/Player";
 import { RemotePlayer } from "@wa/front/Phaser/Entity/RemotePlayer";
 import { ActiveEventList, UserInputEvent } from "@wa/front/Phaser/UserInput/UserInputManager";
@@ -30,6 +31,7 @@ function fixture() {
     const show = vi.fn();
     const emit = vi.fn();
     Object.assign(player, {
+        vehicleState: readVehicleState(null),
         x: 16,
         y: 0,
         _lastDirection: PositionMessage_Direction.DOWN,
@@ -38,6 +40,7 @@ function fixture() {
         snapToTileCenter: vi.fn(),
         getBodyBox: () => ({ left: 8, right: 24, top: 8, bottom: 24 }),
         updateSwimming: vi.fn(),
+        updateCanoe: vi.fn(),
         updateObjectAction: vi.fn(),
         releaseSeatObjectWhenOut: vi.fn(),
         slideToSeat: slide,

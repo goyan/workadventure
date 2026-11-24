@@ -12,7 +12,19 @@
     import { isMediaBreakpointUp } from "../../Utils/BreakpointsUtils";
     import ArrowBarRight from "../Icons/ArrowBarRight.svelte";
     import type { WorkAdventureComponent } from "../../../types/component";
-    import { IconDeselect, IconX, IconTexture, IconLamp, IconMapSearch, IconSettings, IconWall } from "@wa-icons";
+    import { nightInEditorStore } from "../../Stores/NightStore";
+    import {
+        IconX,
+        IconMapSearch,
+        IconSunMoon,
+        IconSettings,
+        IconShovel,
+        IconHammer,
+        IconSofa,
+        IconMarquee,
+        IconSquareDashed,
+        IconPaw,
+    } from "@wa-icons";
 
     type SideBarTool = {
         toolName: EditorToolName;
@@ -30,17 +42,17 @@
 
     const entityEditorTool = {
         toolName: EditorToolName.EntityEditor,
-        iconComponent: IconLamp,
+        iconComponent: IconSofa,
         tooltiptext: $LL.mapEditor.sideBar.entityEditor(),
     };
     const mapLayerEditorTool = {
         toolName: EditorToolName.MapLayerEditor,
-        iconComponent: IconWall,
+        iconComponent: IconHammer,
         tooltiptext: $LL.mapEditor.sideBar.mapLayerEditor(),
     };
     const selectionEditorTool = {
         toolName: EditorToolName.SelectionEditor,
-        iconComponent: IconDeselect,
+        iconComponent: IconMarquee,
         tooltiptext: $LL.mapEditor.sideBar.selectionEditor(),
     };
 
@@ -54,7 +66,7 @@
         if ($mapEditorActivated && !isMobile) {
             tools.push({
                 toolName: EditorToolName.AreaEditor,
-                iconComponent: IconTexture,
+                iconComponent: IconSquareDashed,
                 tooltiptext: $LL.mapEditor.sideBar.areaEditor(),
             });
             tools.push(mapLayerEditorTool);
@@ -64,6 +76,18 @@
                 toolName: EditorToolName.WAMSettingsEditor,
                 iconComponent: IconSettings,
                 tooltiptext: $LL.mapEditor.sideBar.configureMyRoom(),
+            });
+            // The relief of the ground: dug with a brush, its hollows fill with the rain.
+            tools.push({
+                toolName: EditorToolName.TerrainEditor,
+                iconComponent: IconShovel,
+                tooltiptext: $LL.mapEditor.sideBar.terrainEditor(),
+            });
+            // The life of that water: its figures and its settings.
+            tools.push({
+                toolName: EditorToolName.LifeEditor,
+                iconComponent: IconPaw,
+                tooltiptext: $LL.mapEditor.sideBar.lifeEditor(),
             });
         }
 
@@ -109,9 +133,9 @@
     <!--put a section to avoid lower div to be affected by some css-->
     <div class="flex flex-col items-center gap-4 pt-24 side-bar">
         <div class="flex flex-col gap-1">
-            <div class="close-window p-2 retro-theme rounded-2xl">
+            <div class="close-window tool-floating p-1 retro-theme rounded-2xl">
                 <button
-                    class="p-3 hover:bg-white/10 rounded aspect-square w-12 m-0"
+                    class="build-slot m-0"
                     data-testid="closeMapEditorButton"
                     onclick={(event) => {
                         event.preventDefault();
@@ -121,9 +145,9 @@
                     <IconX font-size="20" />
                 </button>
             </div>
-            <div class="close-window p-2 retro-theme rounded-2xl">
+            <div class="close-window tool-floating p-1 retro-theme rounded-2xl">
                 <button
-                    class="p-3 hover:bg-white/10 rounded aspect-square w-12 m-0"
+                    class="build-slot m-0"
                     data-testid="hideMapEditorButton"
                     onclick={(event) => {
                         event.preventDefault();
@@ -142,17 +166,16 @@
                 </button>
             </div>
         </div>
-        <div class="p-2 retro-theme rounded-2xl flex flex-col gap-2">
+        <div class="tool-floating p-1 retro-theme rounded-2xl flex flex-col gap-2">
             {#each availableTools as tool (tool.toolName)}
                 {@const ToolIcon = tool.iconComponent}
                 {@const shortcutDigit = editorToolShortcutDigit(tool.toolName)}
                 <div class="tool-button relative">
                     <button
-                        class="peer p-3 aspect-square w-12 rounded {$mapEditorSelectedToolStore === tool.toolName
-                            ? 'bg-secondary'
-                            : 'hover:bg-white/10'}"
+                        class="peer build-slot"
                         id={tool.toolName}
                         class:active={$mapEditorSelectedToolStore === tool.toolName}
+                        aria-label={tool.tooltiptext}
                         onclick={(event) => {
                             event.preventDefault();
                             switchTool(tool.toolName);
@@ -160,6 +183,9 @@
                         type="button"
                     >
                         <ToolIcon font-size="22" />
+                        {#if shortcutDigit !== undefined}
+                            <span class="build-key" aria-hidden="true">{shortcutDigit}</span>
+                        {/if}
                     </button>
                     <div
                         class=" bg-contrast/90 backdrop-blur-xl text-white tooltip absolute text-nowrap p-2 invisible opacity-0 transition-all peer-hover:visible peer-hover:opacity-100 rounded top-1/2 -translate-y-1/2 right-[130%]"
@@ -173,6 +199,32 @@
                     </div>
                 </div>
             {/each}
+        </div>
+        <!-- Not a tool: shows in the editor the lighting of the game (night veil, bounced light), to set the lamps as
+             they will look, or the plain daylight of the editor again. -->
+        <div class="tool-floating p-1 retro-theme rounded-2xl">
+            <div class="tool-button relative">
+                <button
+                    class="peer build-slot"
+                    data-testid="mapEditorNightToggle"
+                    aria-pressed={$nightInEditorStore}
+                    aria-label={$LL.mapEditor.sideBar.nightInEditor()}
+                    onclick={(event) => {
+                        event.preventDefault();
+                        nightInEditorStore.set(!$nightInEditorStore);
+                    }}
+                    type="button"
+                >
+                    <IconSunMoon font-size="22" />
+                </button>
+                <div
+                    class=" bg-contrast/90 backdrop-blur-xl text-white tooltip absolute text-nowrap p-2 invisible opacity-0 transition-all peer-hover:visible peer-hover:opacity-100 rounded top-1/2 -translate-y-1/2 right-[130%]"
+                >
+                    {$nightInEditorStore
+                        ? $LL.mapEditor.sideBar.nightInEditorOn()
+                        : $LL.mapEditor.sideBar.nightInEditorOff()}
+                </div>
+            </div>
         </div>
     </div>
 </section>

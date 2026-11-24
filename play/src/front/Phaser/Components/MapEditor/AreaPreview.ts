@@ -15,6 +15,7 @@ import { SpeechDomElement } from "../../Entity/SpeechDomElement";
 import LL from "../../../../i18n/i18n-svelte";
 import { SizeAlteringSquare, SizeAlteringSquareEvent, SizeAlteringSquarePosition as Edge } from "./SizeAlteringSquare";
 import { isAreaDuplicateGesture } from "./AreaDuplicateGesture";
+import { clampAreaCorner, clampAreaTopLeft, type MapPixelSize } from "./AreaMapBounds";
 
 import Rectangle = Phaser.GameObjects.Rectangle;
 import Key = Phaser.Input.Keyboard.Key;
@@ -224,6 +225,19 @@ export class AreaPreview extends Rectangle {
         this.emit(AreaPreviewEvent.Updated, data, oldAreaData);
     }
 
+    /**
+     * Moves the area to another floor of the map (0: the ground), over the same place of the ground: its rectangle
+     * is drawn the difference of altitude higher or lower. Saved like any other edit of the area.
+     */
+    public setElevation(elevation: number): void {
+        const current = this.areaData.elevation ?? 0;
+        if (elevation === current) return;
+        // The altitude is written in the former data too, so that undoing sends the area back to its floor.
+        const oldAreaData = { ...structuredClone(this.areaData), elevation: current };
+        const data = { id: this.areaData.id, y: this.areaData.y + current - elevation, elevation };
+        this.emit(AreaPreviewEvent.Updated, data, oldAreaData);
+    }
+
     public getId(): string {
         return this.areaData.id;
     }
@@ -329,9 +343,18 @@ export class AreaPreview extends Rectangle {
             if (pointer.isDown && this.selected && !this.squareSelected) {
                 // Areas always stay on the tile grid.
                 const topLeftX = Math.round((dragX - this.displayWidth * 0.5) / 32) * 32;
-                const topLeftY = Math.round((dragY - this.displayHeight * 0.5) / 32) * 32;
-                this.x = Math.round(topLeftX + this.displayWidth * 0.5);
-                this.y = Math.round(topLeftY + this.displayHeight * 0.5);
+                // On the grid of the floor of the map the area belongs to: drawn its altitude further north.
+                const level = this.areaData.elevation ?? 0;
+                const topLeftY = Math.round((dragY - this.displayHeight * 0.5 + level) / 32) * 32 - level;
+                // Never past the edges of the map: no avatar walks there.
+                const topLeft = clampAreaTopLeft(
+                    { x: topLeftX, y: topLeftY },
+                    { width: this.displayWidth, height: this.displayHeight },
+                    level,
+                    this.mapSize(),
+                );
+                this.x = Math.round(topLeft.x + this.displayWidth * 0.5);
+                this.y = Math.round(topLeft.y + this.displayHeight * 0.5);
                 this.updateSquaresPositions();
                 this.moved = true;
                 if (this.scene instanceof GameScene) {
@@ -377,8 +400,15 @@ export class AreaPreview extends Rectangle {
                 const oldX = square.x;
                 const oldY = square.y;
 
-                square.x = Math.round(dragX / 32) * 32;
-                square.y = Math.round(dragY / 32) * 32;
+                const level = this.areaData.elevation ?? 0;
+                // Never past the edges of the map: no avatar walks there.
+                const corner = clampAreaCorner(
+                    { x: Math.round(dragX / 32) * 32, y: Math.round((dragY + level) / 32) * 32 - level },
+                    level,
+                    this.mapSize(),
+                );
+                square.x = corner.x;
+                square.y = corner.y;
 
                 let newWidth = 0;
                 let newHeight = 0;
@@ -467,6 +497,13 @@ export class AreaPreview extends Rectangle {
                 this.emit(AreaPreviewEvent.Updated, data);
             });
         });
+    }
+
+    private mapSize(): MapPixelSize {
+        if (!(this.scene instanceof GameScene)) {
+            throw new Error("Not the Game Scene");
+        }
+        return { width: this.scene.Map.widthInPixels, height: this.scene.Map.heightInPixels };
     }
 
     private updateSquaresPositions(): void {

@@ -9,6 +9,7 @@ import { jungleVolumeStore } from "../../../Stores/SoundEffectsStore";
 import type { Character } from "../../Entity/Character";
 import { CHARACTER_BODY_HEIGHT, CHARACTER_BODY_OFFSET_Y } from "../../Entity/Character";
 import type { GameScene } from "../GameScene";
+import { landSheetOf } from "../Life/LandSprites";
 import { InteractionPrompt } from "../Water/InteractionPrompt";
 import type { WanderingCharactersManager } from "../Wander/WanderingCharactersManager";
 import type { Point } from "../Wander/WanderSchedule";
@@ -21,7 +22,7 @@ import type { JunglePrefab } from "./JunglePlan";
 const REFRESH_INTERVAL_MS = 500;
 
 /** The feet of a character, like Player.getFeet: what the companions follow. */
-function feetOf(character: Character): Point {
+export function feetOf(character: Character): Point {
     return { x: character.x, y: character.y + CHARACTER_BODY_HEIGHT / 2 + CHARACTER_BODY_OFFSET_Y };
 }
 
@@ -34,6 +35,8 @@ export class GameJungle {
     private readonly manager: JungleManager;
     // The prefabs of the loaded collections, kept from their store rather than rebuilt twice a second.
     private loadedPrefabs: JunglePrefab[] = [];
+    /** The sheets of the species of the land found in the catalogues loaded (see sheetOf). */
+    private sheets: { prefabs: JunglePrefab[]; found: Map<string, string | undefined> } | undefined;
     private readonly unsubscribePrefabs: Unsubscriber;
     private readonly timer: Phaser.Time.TimerEvent;
     private readonly companions: JungleCompanions;
@@ -78,6 +81,7 @@ export class GameJungle {
                 tileSize: () => gameMapFrontWrapper.getTileDimensions().width,
                 // The clock of the wandering characters: the day changes at the same time as their walks.
                 now: () => new Date(),
+                simulated: () => scene.getGameMap().getWamFile()?.getWam().settings?.life?.landEnabled === true,
             },
             (animals, map) => wanderers.setFreeCharacters(animals, map),
             {
@@ -105,10 +109,20 @@ export class GameJungle {
                 return player ? feetOf(player) : undefined;
             },
             playerInWater: (userId) => playerOf(userId)?.isInWater() ?? false,
+            // A companion does not fly: left on the ground, it comes back by the walk of the wandering animals.
+            playerFlying: (userId) => playerOf(userId)?.isFlying() ?? false,
+            groundPath: (from, to) => wanderers.getWanderMap().findPath(from, to),
             // Every wandering animal: the jungle ones and the ones placed on the map.
             animals: () => wanderers.tameableCharacters(),
             animalPose: (id) => wanderers.characterPose(id),
             editorOpen: () => get(mapEditorModeStore),
+            // The floor a player stands on: an animal is tamed from its own floor, a companion climbs behind its master.
+            playerFloorZ: (userId) => {
+                const player = playerOf(userId);
+                return player && !player.isFlying() ? player.getFloorZ() : undefined;
+            },
+            // The lions and tigers of the life of the map the player tamed: one group, one limit.
+            otherCompanions: () => scene.landTamedCount(),
             serverNow: () => scene.getServerDate()?.getTime() ?? Date.now(),
             send: (message) => {
                 const { name, data } = encodeJungleCompanion(message);
@@ -137,6 +151,16 @@ export class GameJungle {
             loop: true,
             callback: () => this.manager.refresh(),
         });
+    }
+
+    /** The sheet of a species in the catalogues of the map, for the animals the server runs. */
+    public sheetOf(species: "antelope" | "lion" | "tiger"): string | undefined {
+        // Asked for every animal at every image: searched once in the catalogues as they are loaded.
+        if (this.sheets?.prefabs !== this.loadedPrefabs)
+            this.sheets = { prefabs: this.loadedPrefabs, found: new Map() };
+        const { found } = this.sheets;
+        if (!found.has(species)) found.set(species, landSheetOf(species, this.loadedPrefabs));
+        return found.get(species);
     }
 
     public tamedAnimalCount(): number {

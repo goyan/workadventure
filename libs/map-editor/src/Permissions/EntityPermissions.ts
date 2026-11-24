@@ -10,7 +10,7 @@ export class EntityPermissions {
     ) {}
 
     public canEdit(
-        entityCenterCoordinates: EntityCoordinates,
+        entityCenterCoordinates: EntityCoordinates & { z?: number },
         width: number = 0,
         height: number = 0,
         floating: boolean = false,
@@ -21,7 +21,7 @@ export class EntityPermissions {
         return this.isEntityInsideAreaWithUserWriteAccess(entityCenterCoordinates, width, height, floating);
     }
 
-    public canRead(entityCenterCoordinates: EntityCoordinates): boolean {
+    public canRead(entityCenterCoordinates: EntityCoordinates & { z?: number }): boolean {
         if (this.userCanEdit) {
             return true;
         }
@@ -29,7 +29,7 @@ export class EntityPermissions {
     }
 
     private isEntityInsideAreaWithUserWriteAccess(
-        entityCenterCoordinates: EntityCoordinates,
+        entityCenterCoordinates: EntityCoordinates & { z?: number },
         width: number,
         height: number,
         floating: boolean,
@@ -44,7 +44,7 @@ export class EntityPermissions {
         );
     }
 
-    private isEntityInsideAreaWithUserReadAccess(entityCenterCoordinates: EntityCoordinates) {
+    private isEntityInsideAreaWithUserReadAccess(entityCenterCoordinates: EntityCoordinates & { z?: number }) {
         return this.gameMapAreas.isUserHasReadAccessOnAreaForEntityCoordinates(
             entityCenterCoordinates,
             this.userConnectedTags,

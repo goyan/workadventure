@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NightFrame } from "../../../../../src/front/Phaser/Game/Night/NightRenderDecision";
-import { nightRenderAction } from "../../../../../src/front/Phaser/Game/Night/NightRenderDecision";
+import { nightRenderAction, nightHiddenInEditor } from "../../../../../src/front/Phaser/Game/Night/NightRenderDecision";
 
 function frame(overrides: Partial<NightFrame> = {}): NightFrame {
     return {
@@ -142,5 +142,20 @@ describe("nightRenderAction", () => {
         expect(nightRenderAction(moved, frame())).toBe("draw");
         expect(nightRenderAction(frame({ lamps: [] }), frame())).toBe("draw");
         expect(nightRenderAction(frame(), frame({ lamps: [] }))).toBe("draw");
+    });
+});
+
+describe("nightHiddenInEditor", () => {
+    it("hides the night while the map editor is open, as before", () => {
+        expect(nightHiddenInEditor(true, false)).toBe(true);
+    });
+
+    it("keeps the night in the editor for a player who asked for it: the lamps are set as they will look", () => {
+        expect(nightHiddenInEditor(true, true)).toBe(false);
+    });
+
+    it("never hides it out of the editor", () => {
+        expect(nightHiddenInEditor(false, false)).toBe(false);
+        expect(nightHiddenInEditor(false, true)).toBe(false);
     });
 });

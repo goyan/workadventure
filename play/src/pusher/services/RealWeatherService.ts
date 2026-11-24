@@ -1,12 +1,15 @@
 import * as Sentry from "@sentry/node";
 import { asError } from "catch-unknown";
 import { z } from "zod";
+import { isTimeZone } from "@workadventure/map-editor";
 import type { WeatherLocation } from "@workadventure/map-editor";
 import {
     PARIS_LATITUDE,
     PARIS_LONGITUDE,
     REAL_WEATHER_POLL_MS,
+    REAL_WEATHER_PAST_SLOTS,
     REAL_WEATHER_SLOT_MS,
+    openMeteoTimelineUrl,
     roundedCoordinate,
     slotsFromOpenMeteo,
 } from "../../common/RealWeather";
@@ -19,10 +22,8 @@ import type { MapPlace, RealWeatherForecast, RealWeatherSlot } from "../../commo
 const REFRESH_MS = 30 * 60 * 1000;
 /** Without any weather for now (first call failed, after a restart), the next try comes much sooner. */
 const RETRY_MS = 2 * 60 * 1000;
-/** Quarter hours asked before and after now: two hours back (the start of the weather under way), six ahead. */
-const PAST_SLOTS = 8;
-const FORECAST_SLOTS = 24;
-const KEPT_PAST_MS = PAST_SLOTS * REAL_WEATHER_SLOT_MS;
+/** Quarter hours kept behind now: as many as are asked (the start of the weather under way). */
+const KEPT_PAST_MS = REAL_WEATHER_PAST_SLOTS * REAL_WEATHER_SLOT_MS;
 const TIMEOUT_MS = 5000;
 const MINUTE_MS = 60 * 1000;
 /** Places followed at once (one per map with a place, in practice a handful): the one asked least recently goes. */
@@ -43,6 +44,7 @@ const OpenMeteoPlaces = z.object({
                 longitude: z.number().min(-180).max(180),
                 admin1: z.string().max(200).optional(),
                 country: z.string().max(200).optional(),
+                timezone: z.string().max(64).optional(),
             }),
         )
         .max(20)
@@ -148,16 +150,7 @@ export class RealWeatherService {
 
     private async refresh(entry: PlaceWeather, latitude: number, longitude: number): Promise<void> {
         try {
-            const url = new URL("https://api.open-meteo.com/v1/forecast");
-            url.searchParams.set("latitude", String(latitude));
-            url.searchParams.set("longitude", String(longitude));
-            url.searchParams.set(
-                "minutely_15",
-                "weather_code,temperature_2m,cloud_cover,wind_direction_10m,wind_speed_10m",
-            );
-            url.searchParams.set("past_minutely_15", String(PAST_SLOTS));
-            url.searchParams.set("forecast_minutely_15", String(FORECAST_SLOTS));
-            url.searchParams.set("timeformat", "unixtime");
+            const url = openMeteoTimelineUrl(latitude, longitude);
             const response = await this.fetchFn(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const slots = slotsFromOpenMeteo(await response.json());
@@ -202,6 +195,8 @@ export class PlaceSearchService {
                 name: [result.name, result.admin1, result.country].filter(Boolean).join(", ").slice(0, 200),
                 latitude: result.latitude,
                 longitude: result.longitude,
+                // The time zone of the town, for the clock and the timers of the map.
+                ...(result.timezone && isTimeZone(result.timezone) ? { timezone: result.timezone } : {}),
             }));
             if (this.cache.size >= MAX_SEARCHES) {
                 const oldest = this.cache.keys().next().value;

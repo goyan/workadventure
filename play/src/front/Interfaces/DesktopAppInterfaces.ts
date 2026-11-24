@@ -1,4 +1,6 @@
 import type { AutoWeatherSettings, WeatherType } from "@workadventure/map-editor";
+import type { GraphicsPreset, GraphicsQuality } from "../Stores/GraphicsSettingsStore";
+import type { PerfStats } from "../Phaser/Game/Perf/PerfMeter";
 import type { RetroPalette, UiFont } from "../Stores/RetroThemeStore";
 import type { LampMusicSource } from "../Stores/LampMusicSourceStore";
 import type { NightMode } from "../Stores/NightStore";
@@ -34,6 +36,11 @@ export enum DesktopWeatherSetting {
 
 export enum DesktopVisualSetting {
     Jungle = "jungle",
+    Quality = "graphicsQuality",
+    Metrics = "graphicsMonitoring",
+    Animations = "animations",
+    /** Opens the settings of WorkAdventure: the desktop keeps only a few quick settings. */
+    OpenSettings = "openSettings",
 }
 
 export enum DesktopSoundsSetting {
@@ -46,7 +53,12 @@ export enum DesktopAppearanceSetting {
 }
 
 export type DesktopEnvironmentRequest =
-    | { setting: DesktopVisualSetting.Jungle; value: boolean }
+    | {
+          setting: DesktopVisualSetting.Jungle | DesktopVisualSetting.Metrics | DesktopVisualSetting.Animations;
+          value: boolean;
+      }
+    | { setting: DesktopVisualSetting.Quality; value: GraphicsPreset }
+    | { setting: DesktopVisualSetting.OpenSettings; value: true }
     | { setting: DesktopSoundsSetting.Preview; value: DesktopSoundSetting }
     | { setting: DesktopAppearanceSetting.Appearance; value: DesktopAppearance }
     | { setting: "weather"; value: WeatherType }
@@ -61,9 +73,34 @@ export type DesktopEnvironmentRequest =
     | { setting: DesktopLightSetting.Source; value: LampMusicSource }
     | { setting: DesktopWeatherSetting.CloudsHeight; value: number }
     | { setting: DesktopWeatherSetting.Auto; value: AutoWeatherSettings }
-    | { setting: DesktopSoundsSetting.Sounds; value: { sound: DesktopSoundSetting; volume: number } };
+    | { setting: DesktopSoundsSetting.Sounds; value: { sound: DesktopSoundSetting; volume: number } }
+    | { setting: "light"; value: { name: string; value: number | boolean | string } };
+
+/**
+ * A light setting of WorkAdventure as the desktop app shows it: its label in the player's language, its bounds and,
+ * for a detail, the switch it depends on. The app draws them all, so a new one shows there without changing the app.
+ */
+export interface DesktopLightControl {
+    name: string;
+    group: "night" | "sky" | "shadows" | "other";
+    label: string;
+    kind: "number" | "switch" | "choice";
+    value: number | boolean | string;
+    min?: number;
+    max?: number;
+    step?: number;
+    choices?: { value: string; label: string }[];
+    /** Shown only while this switch is on. */
+    dependsOn?: string;
+}
 
 export interface DesktopEnvironmentState {
+    graphicsQuality: GraphicsQuality;
+    /** This WorkAdventure opens its settings at the request of the desktop (DesktopVisualSetting.OpenSettings). */
+    canOpenSettings: boolean;
+    graphicsMonitoring: boolean;
+    graphicsStats?: PerfStats;
+    animations: boolean;
     appearance: DesktopAppearance;
     weather: WeatherType;
     displayWeather: WeatherType;
@@ -84,6 +121,8 @@ export interface DesktopEnvironmentState {
     jungle: boolean;
     sounds: Record<DesktopSoundSetting, number>;
     canEditWeather: boolean;
+    /** Every light setting of WorkAdventure (night, sun and moon, shadows), in the order of its menu. */
+    lightControls: DesktopLightControl[];
     busy: boolean;
     error: string;
 }
@@ -191,6 +230,21 @@ export interface DesktopSpotifyMusicFrame {
     barStartMs?: number;
 }
 
+/** Where the WorkAdventure desktop app is downloaded: its latest release. */
+export const DESKTOP_APP_URL = "https://github.com/aminekun90/workadventure-desktop/releases/latest";
+
+/**
+ * Spotify's analysis of the playing track, through the WorkAdventure extension for Spicetify: per segment (about
+ * 0.2 s), its start and duration in milliseconds, its loudest level in dB, and the strength of the 12 notes of the
+ * scale (C to B, each 0 to 9). No sound.
+ */
+export interface DesktopSpotifyAnalysis {
+    uri: string;
+    segments: [startMs: number, durationMs: number, loudness: number, pitches: string][];
+    /** The synced lyrics Spotify shows for the track, line by line: absent when it has none synced. */
+    lyrics?: [startMs: number, text: string][];
+}
+
 export enum SpotifyPlaybackCommand {
     Play = "play",
     Pause = "pause",
@@ -221,6 +275,8 @@ export interface SpotifyPlaybackState {
 export type WorkAdventureDesktopApi = {
     desktop: boolean;
     watchSpotifyMusic?: (callback: (frame: DesktopSpotifyMusicFrame | null) => void) => () => void;
+    /** Optional: the analysis of the playing track, sent once per track, for the karaoke's melody. */
+    watchSpotifyAnalysis?: (callback: (analysis: DesktopSpotifyAnalysis | null) => void) => () => void;
     /** Optional: direct controls in the desktop toolbar; existing web settings keep their places. */
     onEnvironmentRequest?: (callback: (request: DesktopEnvironmentRequest) => void) => void;
     reportEnvironment?: (state: DesktopEnvironmentState | null) => void;

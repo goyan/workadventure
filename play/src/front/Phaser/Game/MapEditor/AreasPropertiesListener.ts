@@ -40,6 +40,7 @@ import {
     audioManagerVolumeStore,
 } from "../../../Stores/AudioManagerStore";
 import { chatVisibilityStore, chatZoneLiveStore } from "../../../Stores/ChatStore";
+import { areaHighlightHiddenStore } from "../../../Stores/NightStore";
 /**
  * @DEPRECATED - This is the old way to show trigger message
  import { layoutManagerActionStore } from "../../../Stores/LayoutManagerStore";
@@ -909,6 +910,10 @@ export class AreasPropertiesListener {
             // Maybe not supported (Canvas renderer)
             return;
         }
+        if (get(areaHighlightHiddenStore)) {
+            // Dropped by this player under the realistic lighting: the rest of the map is not darkened.
+            return;
+        }
         this.scene.focusFx.attachToArea(areaData);
         this.scene.focusFx.setFeather(property.gradientWidth);
         this.scene.focusFx.setColor(Color.HexStringToColor(property.color));
@@ -1436,7 +1441,12 @@ export class AreasPropertiesListener {
             return false;
         }
         return Array.from(this.scene.getRemotePlayersRepository().getPlayers().values()).some(
-            (player) => !isNpcUserUuid(player.userUuid) && gameMapAreas.isPlayerInsideArea(areaId, player.position),
+            (player) =>
+                !isNpcUserUuid(player.userUuid) &&
+                gameMapAreas.isPlayerInsideArea(areaId, {
+                    ...player.position,
+                    z: this.scene.MapPlayersByKey.get(player.userId)?.getFloorZ() ?? 0,
+                }),
         );
     }
 

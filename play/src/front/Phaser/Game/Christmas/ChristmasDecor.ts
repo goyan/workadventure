@@ -19,7 +19,7 @@ export class ChristmasDecor implements SeasonalDecor {
     constructor(scene: Phaser.Scene, deps: SeasonalDecorDeps) {
         this.ground = new SnowGround(scene);
         this.caps = new SnowCaps(scene, deps.readPixels);
-        this.prints = new FootprintLayer(scene);
+        this.prints = new FootprintLayer(scene, undefined, deps.dropAt);
         this.trail = new FootprintTrail(deps.isOutdoor);
     }
 
@@ -32,7 +32,8 @@ export class ChristmasDecor implements SeasonalDecor {
     }
 
     update(time: number, walkers: WalkerSample[]): boolean {
-        let dirty = false;
+        // The snow ground follows the view: laid again around the screen when the view moved away.
+        let dirty = this.ground.follow();
         // An empty list (editing) forgets where everyone was, so that leaving the editor draws no line.
         const marks = this.trail.update(walkers, time);
         if (marks.length > 0) {

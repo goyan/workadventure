@@ -1,0 +1,66 @@
+/**
+ * How far the edge of the lights of the map (RGB lamps, torches) is softened, in map pixels: a personal setting, set
+ * by the night (NightManager) and read by each light when it is drawn. A real lamp has a size: the edge of its shadows
+ * is a penumbra, not a line.
+ */
+let softEdgePx = 0;
+let version = 0;
+
+export function setLightSoftEdgePx(px: number): void {
+    if (px !== softEdgePx) {
+        softEdgePx = px;
+        version++;
+    }
+}
+
+export function lightSoftEdgePxNow(): number {
+    return softEdgePx;
+}
+
+/** Changes whenever the softening changes: the lights are then drawn again. */
+export function lightSoftEdgeVersion(): number {
+    return version;
+}
+
+/** The share of its light a wall sends back (see bounceSources), a personal setting too; 0: none. */
+let bounceStrength = 0;
+
+export function setLightBounceStrength(strength: number): void {
+    if (strength !== bounceStrength) {
+        bounceStrength = strength;
+        // The same version as the softening: the lights are drawn again, with their bounces.
+        version++;
+    }
+}
+
+export function lightBounceStrengthNow(): number {
+    return bounceStrength;
+}
+
+/** Whether the lights sent back are sent back once more (see secondBounceSources): costly, off by default. */
+let secondBounce = false;
+
+export function setLightSecondBounce(on: boolean): void {
+    if (on !== secondBounce) {
+        secondBounce = on;
+        version++;
+    }
+}
+
+export function lightSecondBounceNow(): boolean {
+    return secondBounce;
+}
+
+/** Whether the lights fade as a real lamp does (see realLightFalloff): a personal setting, off by default. */
+let realFalloff = false;
+
+export function setLightRealFalloff(on: boolean): void {
+    if (on !== realFalloff) {
+        realFalloff = on;
+        version++;
+    }
+}
+
+export function lightRealFalloffNow(): boolean {
+    return realFalloff;
+}

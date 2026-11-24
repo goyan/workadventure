@@ -154,7 +154,7 @@
                 <button
                     type="button"
                     class="shrink-0 rounded px-1 py-0.5 {liked.has(track.uri)
-                        ? 'text-[#1ed760]'
+                        ? 'text-[var(--jam-accent,#1ed760)]'
                         : 'text-white/60 hover:bg-white/10 hover:text-white'}"
                     title={$LL.spotify.listeningZone.like()}
                     aria-label={$LL.spotify.listeningZone.like()}
@@ -240,7 +240,7 @@
                     <button
                         type="button"
                         class="shrink-0 rounded px-1 py-0.5 {liked.has(track.uri)
-                            ? 'text-[#1ed760]'
+                            ? 'text-[var(--jam-accent,#1ed760)]'
                             : 'text-white/60 hover:bg-white/10 hover:text-white'}"
                         title={$LL.spotify.listeningZone.like()}
                         aria-label={$LL.spotify.listeningZone.like()}

@@ -34,7 +34,6 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                         stormy: label("Stormy"),
                         include: label("Possible weather"),
                         stormHint: label("storm hint"),
-                        snowHint: label("snow hint"),
                         fogHint: label("fog hint"),
                         now: ({ season, weather, time }: { season: string; weather: string; time: string }) =>
                             `${season} | Now: ${weather} until ${time}`,
@@ -46,12 +45,13 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                         summer: label("Summer"),
                         autumn: label("Autumn"),
                     },
-                    fixed: { snowHint: label("fixed snow hint"), fogHint: label("fixed fog hint") },
+                    fixed: { rainHint: label("fixed rain hint"), fogHint: label("fixed fog hint") },
                     previewHint: label("preview hint"),
                     location: {
                         title: label("Place"),
                         default: label("Paris (default)"),
                         search: label("Search"),
+                        map: label("Map of the world"),
                         searching: label("Searching"),
                         noResult: label("No town"),
                         error: label("Search error"),
@@ -163,24 +163,36 @@ afterEach(async () => {
 });
 
 describe("WeatherSettings", () => {
-    it("shows eight weather tiles and selects the map weather", () => {
+    it("shows seven weather tiles, none for the snow, and selects the map weather", () => {
         wamSettings.value = { weather: "rain" };
         render();
         const tiles = target.querySelectorAll('[data-testid="map-weather-type"] [role="radio"]');
-        expect(tiles).toHaveLength(8);
+        expect(tiles).toHaveLength(7);
+        expect(Array.from(tiles, (radio) => radio.textContent?.trim())).not.toContain("Snow");
         expect(tile("Rain").getAttribute("aria-checked")).toBe("true");
         expect(tile("Clear").getAttribute("aria-checked")).toBe("false");
-        click(tile("Snow"));
-        expect(tile("Snow").getAttribute("aria-checked")).toBe("true");
+        // A rain says that the cold turns it to snow.
+        expect(target.textContent).toContain("fixed rain hint");
+        click(tile("Storm"));
+        expect(tile("Storm").getAttribute("aria-checked")).toBe("true");
         expect(tile("Rain").getAttribute("aria-checked")).toBe("false");
+    });
+
+    it("shows a map saved with a snow as the rain it now is, with nothing to save", () => {
+        wamSettings.value = { weather: "snow", weatherAuto: { frequency: "normal", include: ["rain", "snow"] } };
+        render();
+        expect(tile("Rain").getAttribute("aria-checked")).toBe("true");
+        expect(tried.value).toBeUndefined();
+        expect(target.querySelector('[data-testid="map-weather-preview-hint"]')).toBeNull();
     });
 
     it("shows the auto settings only for Auto", () => {
         wamSettings.value = { weather: "automatic" };
         render();
         expect(target.querySelector('[data-testid="map-weather-frequency"]')).not.toBeNull();
-        // Rain, storm, snow, fog, and the clouds.
-        expect(target.querySelectorAll('[data-testid^="map-weather-include-"]')).toHaveLength(5);
+        // Rain, storm, fog, and the clouds: the snow is no weather to pick.
+        expect(target.querySelectorAll('[data-testid^="map-weather-include-"]')).toHaveLength(4);
+        expect(target.querySelector('[data-testid="map-weather-include-snow"]')).toBeNull();
         click(tile("Clear"));
         expect(target.querySelector('[data-testid="map-weather-frequency"]')).toBeNull();
         expect(target.querySelectorAll('[data-testid^="map-weather-include-"]')).toHaveLength(0);
@@ -213,7 +225,7 @@ describe("WeatherSettings", () => {
             updateWeatherSettingMessage: {
                 weather: "automatic",
                 autoFrequency: "calm",
-                autoInclude: ["rain", "snow", "fog"],
+                autoInclude: ["rain", "fog"],
                 autoClouds: true,
             },
         });
@@ -312,7 +324,7 @@ describe("WeatherSettings, live preview and place", () => {
         );
         click(tile("Clear"));
         expect(tried.value).toBeUndefined();
-        click(tile("Snow"));
+        click(tile("Fog"));
         const mounted = component;
         component = undefined;
         if (mounted) await unmount(mounted);

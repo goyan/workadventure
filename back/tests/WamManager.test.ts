@@ -82,6 +82,26 @@ describe("WamManager", () => {
         expect(wam?.lastCommandId).toBe("cmd-update-settings");
     });
 
+    it("applies the energy saving of the lamps sent by the map editor", async () => {
+        const manager = new WamManager(createInitialWam());
+        await manager.applyCommand({
+            id: "cmd-energy-saving",
+            editMapMessage: {
+                message: {
+                    $case: "updateWAMSettingsMessage",
+                    updateWAMSettingsMessage: {
+                        message: {
+                            $case: "updateLightingSettingMessage",
+                            updateLightingSettingMessage: { energySaving: true },
+                        },
+                    },
+                },
+            },
+        });
+        expect(manager.getWam()?.settings?.lighting).toEqual({ energySaving: true });
+        expect(manager.getWam()?.lastCommandId).toBe("cmd-energy-saving");
+    });
+
     it("preserves area properties when modifyProperties is false", async () => {
         const manager = new WamManager(createInitialWam());
 

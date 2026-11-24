@@ -71,7 +71,7 @@ const prefab = (overrides: Partial<EntityPrefab>): EntityPrefab => ({
 function entity(id: string, x: number, y: number, model: EntityPrefab): Entity {
     return Object.assign(
         { entityId: id, x, y },
-        { getPrefab: () => model, getProperties: () => [] },
+        { getPrefab: () => model, getProperties: () => [], getElevation: () => 0 },
     ) as unknown as Entity;
 }
 
@@ -127,7 +127,16 @@ describe("Torches", () => {
         expect(light).toEqual({ x: 645, y: 638, radius: 176, direction: 90, angle: 360 });
         expect(isLit(polygon, { x: 645, y: 760 })).toBe(true);
         expect(get(torchLightsStore)).toEqual([
-            { id: "torch:7", x: 469, y: 462, size: 352, textureKey: "rgb-lamp:torch:7", revision: 1, intensity: 1 },
+            {
+                id: "torch:7",
+                x: 469,
+                y: 462,
+                size: 352,
+                textureKey: "rgb-lamp:torch:7",
+                revision: 1,
+                intensity: 1,
+                elevation: 0,
+            },
         ]);
     });
 

@@ -1,0 +1,95 @@
+import { describe, expect, it } from "vitest";
+import { cellKey, withHeights } from "@workadventure/map-editor";
+import { avatarDrop, surfaceDropAt, waterDepthAtPoint } from "../../../../../src/front/Phaser/Game/Terrain/AvatarDrop";
+import { AIRPLANE_AREA_LEVEL } from "../../../../../src/front/Phaser/Vehicle/Vehicle";
+
+/** A hollow 128 px deep: cells 10 to 13 across and 10 to 21 down (its floor from x 168 to 216, y 168 to 344). */
+const hollow = withHeights(
+    undefined,
+    new Map(
+        Array.from({ length: 4 * 12 }, (_, index): [string, number] => [
+            cellKey(10 + (index % 4), 10 + Math.floor(index / 4)),
+            -128,
+        ]),
+    ),
+);
+const floor = { x: 192, y: 250 };
+/** A mount raised 128 px on the same cells: its top drawn 64 px higher. */
+const mount = withHeights(
+    undefined,
+    new Map(
+        Array.from({ length: 4 * 12 }, (_, index): [string, number] => [
+            cellKey(10 + (index % 4), 10 + Math.floor(index / 4)),
+            128,
+        ]),
+    ),
+);
+
+describe("how much lower an avatar is drawn", () => {
+    it("as much as the ground under its feet: half its depth", () => {
+        expect(avatarDrop(hollow, floor, 0, 0, false, false)).toBe(64);
+        expect(avatarDrop(hollow, { x: 192, y: 100 }, 0, 0, false, false)).toBe(0);
+    });
+
+    it("at the surface of the water it swims in", () => {
+        // 20 px of water over a floor 128 px deep: its surface is 108 px down, drawn 54 px lower.
+        expect(avatarDrop(hollow, floor, 20, 0, false, false)).toBe(54);
+    });
+
+    it("not at all on a raised floor, nor while the map editor is open", () => {
+        expect(avatarDrop(hollow, floor, 0, 52, false, false)).toBe(0);
+        expect(avatarDrop(hollow, floor, 0, 0, true, false)).toBe(0);
+        expect(avatarDrop(undefined, floor, 0, 0, false, false)).toBe(0);
+    });
+
+    it("not at all in a plane flying over a hollow (its floor is the level of the air)", () => {
+        expect(avatarDrop(hollow, floor, 0, AIRPLANE_AREA_LEVEL, false, false)).toBe(0);
+    });
+
+    it("not at all on the deck of a bridge over a hollow: it walks at the level of the deck", () => {
+        expect(avatarDrop(hollow, floor, 0, 0, false, true)).toBe(0);
+    });
+
+    it("goes down smoothly from the shore into a lake, as the lake is drawn", () => {
+        // 100 px of water over the cells of the hollow (rows 10 to 21), dry ground around: the depth of a cell.
+        const cellDepth = (x: number, y: number): number => {
+            const cellX = Math.floor(x / 16);
+            const cellY = Math.floor(y / 16);
+            return cellX >= 10 && cellX <= 13 && cellY >= 10 && cellY <= 21 ? 100 : 0;
+        };
+        let previous = 0;
+        for (let y = 120; y <= 240; y++) {
+            const feet = { x: 192, y };
+            const drop = avatarDrop(hollow, feet, waterDepthAtPoint(cellDepth, feet.x, feet.y), 0, false, false);
+            expect(Math.abs(drop - previous)).toBeLessThanOrEqual(2);
+            previous = drop;
+        }
+    });
+});
+
+describe("how much higher an avatar is drawn on a mount", () => {
+    it("as much as the top of the mount: half its height", () => {
+        expect(avatarDrop(mount, floor, 0, 0, false, false)).toBe(-64);
+    });
+
+    it("not at all on a raised floor, on a bridge, nor while the map editor is open", () => {
+        expect(avatarDrop(mount, floor, 0, 52, false, false)).toBe(0);
+        expect(avatarDrop(mount, floor, 0, 0, true, false)).toBe(0);
+        expect(avatarDrop(mount, floor, 0, 0, false, true)).toBe(0);
+    });
+
+    it("at the surface of a lake in a crater at its top, for what lies on it", () => {
+        // 20 px of water over a top 128 px high: its surface is 148 px up, drawn 74 px higher.
+        expect(surfaceDropAt(mount, 20, floor.x, floor.y, false, false)).toBe(-74);
+    });
+});
+
+describe("how much lower the surface of the water is drawn", () => {
+    it("as low as the surface of a lake at the bottom of a hollow, not at all on a bridge nor in the editor", () => {
+        // 20 px of water over a floor 128 px deep: its surface is 108 px down, drawn 54 px lower.
+        expect(surfaceDropAt(hollow, 20, floor.x, floor.y, false, false)).toBe(54);
+        expect(surfaceDropAt(hollow, 20, floor.x, floor.y, true, false)).toBe(0);
+        expect(surfaceDropAt(hollow, 20, floor.x, floor.y, false, true)).toBe(0);
+        expect(surfaceDropAt(undefined, 20, floor.x, floor.y, false, false)).toBe(0);
+    });
+});

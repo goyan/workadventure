@@ -1,19 +1,25 @@
+import type { FireConditionsMessage } from "@workadventure/messages";
 import Debug from "debug";
 import { WeatherLocation, WeatherType } from "@workadventure/map-editor";
+import type { Hurricane, RealWeatherSlot } from "@workadventure/map-editor";
 import { derived, writable } from "svelte/store";
 import type { Readable } from "svelte/store";
 import { z } from "zod";
+import { REAL_WEATHER_POLL_MS, roundedCoordinate } from "@wa/common/RealWeather";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { ABSOLUTE_PUSHER_URL } from "../../../Enum/ComputedConst";
 import { nightDateStore } from "../../../Stores/NightStore";
-import { REAL_WEATHER_POLL_MS, RealWeatherForecast, roundedCoordinate } from "../../../../common/RealWeather";
 import type { MapPlace } from "../../../../common/RealWeather";
-import { realWeatherStateAt, withRealWeather, withWeatherPreview } from "./RealWeather";
+import { fetchRealWeather } from "./RealWeatherFetch";
+import { realWeatherStateAt, withRealWeather, withRealWind, withWeatherPreview } from "./RealWeather";
 import type { RealForecastState, RealWeatherState, WeatherPreview } from "./RealWeather";
 import type { MapSnowSettings } from "./SnowCover";
 import { weatherForecast } from "./WeatherForecast";
 import { AUTO_CLOUDINESS, cloudinessAt } from "./WeatherSchedule";
 import type { ForecastCell } from "./WeatherForecast";
+import { withManualWind } from "./ManualConditions";
+import { chosenWeatherNow } from "./ChosenPlaceWeather";
+import { withHurricane } from "./HurricaneSky";
 
 const debug = Debug("front:real-weather");
 
@@ -40,18 +46,7 @@ function set(next: RealForecastState): void {
 async function poll(): Promise<void> {
     const asked = generation;
     try {
-        const url = new URL("real-weather", ABSOLUTE_PUSHER_URL);
-        if (followed) {
-            url.searchParams.set("latitude", String(followed.latitude));
-            url.searchParams.set("longitude", String(followed.longitude));
-        }
-        const response = await fetch(url, {
-            cache: "no-store",
-            headers: { Authorization: localUserStore.getAuthToken() ?? "" },
-            signal: AbortSignal.timeout(10_000),
-        });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const forecast = RealWeatherForecast.parse(await response.json());
+        const forecast = await fetchRealWeather(followed);
         // The place changed while asking: this answer is for the old one.
         if (asked !== generation) return;
         answered = true;
@@ -92,6 +87,18 @@ function knownFor(place: MapPlace | undefined): RealForecastState {
     return placeKey(place) === followedKey || state.status === "known" ? state : { status: "pending" };
 }
 
+/**
+ * The weather timeline of the place of the map (Paris when absent, as the server reads it), followed from now on
+ * whatever weather the map shows: the air the server pours its water through. Undefined until it answers, none when
+ * it failed (the air is then unknown, mild).
+ */
+export function mapPlaceSlotsNow(place: MapPlace | undefined): readonly RealWeatherSlot[] | undefined {
+    follow(place);
+    const known = knownFor(place);
+    if (known.status === "known") return known.slots;
+    return known.status === "unavailable" ? [] : undefined;
+}
+
 /** The weather at the place followed, at the clock of the game (ticking each second), for the settings panel. */
 export const realWeatherStore: Readable<RealWeatherState> = derived([store, nightDateStore], ([forecast, date]) =>
     realWeatherStateAt(forecast, date),
@@ -128,21 +135,175 @@ let memo:
 /**
  * The map weather settings as they are shown to this person at `date` (the game clock): the weather being tried in the
  * settings panel if any, then a map set to "real" gets the weather of its place at that date (withRealWeather). Only
- * such a map makes this browser ask.
+ * such a map, or one that has a place of its own (for its wind), makes this browser ask.
  */
 export function shownWeatherSettings(
+    settings: MapSnowSettings | undefined,
+    date: Date | undefined,
+): MapSnowSettings | undefined {
+    // The hurricane of the room last: it takes the place of every weather, the one of a city followed included.
+    return hurricaneOver(
+        withManualWind(
+            personalWeatherSettings(settings, date) ?? placeWeatherSettings(settings, date),
+            manualConditions,
+        ),
+        date,
+    );
+}
+
+/** The hurricane crossing the map, as the server last told it: its weather is computed from it (withHurricane). */
+let roomHurricane: Hurricane | undefined;
+export function setRoomHurricane(hurricane: Hurricane | undefined): void {
+    roomHurricane = hurricane;
+}
+
+export function getRoomHurricane(): Hurricane | undefined {
+    return roomHurricane;
+}
+
+// The weather last shown under the hurricane: the same object while neither it nor the second of the clock changed.
+let hurricaneMemo:
+    | {
+          settings: MapSnowSettings | undefined;
+          hurricane: Hurricane;
+          second: number;
+          cellX: number;
+          cellY: number;
+          shown: MapSnowSettings | undefined;
+      }
+    | undefined;
+
+/**
+ * Where this player looks (map pixels, the middle of their camera): the wind of a hurricane is not the same all over
+ * the map, the weather drawn for them is that of where they look. Undefined: where the hurricane was sent over.
+ */
+let viewpoint: { x: number; y: number } | undefined;
+export function setHurricaneViewpoint(x: number, y: number): void {
+    viewpoint = { x, y };
+}
+
+/** How far the viewpoint moves (map pixels) before the weather under the hurricane is worked out again. */
+const VIEWPOINT_STEP_PX = 32;
+
+/**
+ * A weather under the hurricane of the room, if one crosses the map, where this player looks: worked out again when
+ * the second of the clock changes or the viewpoint moves by a tile.
+ */
+function hurricaneOver(settings: MapSnowSettings | undefined, date: Date | undefined): MapSnowSettings | undefined {
+    const hurricane = roomHurricane;
+    if (!hurricane || !date) return settings;
+    const second = Math.floor(date.getTime() / 1000);
+    const cellX = Math.round((viewpoint?.x ?? hurricane.anchorX) / VIEWPOINT_STEP_PX);
+    const cellY = Math.round((viewpoint?.y ?? hurricane.anchorY) / VIEWPOINT_STEP_PX);
+    if (
+        hurricaneMemo &&
+        hurricaneMemo.settings === settings &&
+        hurricaneMemo.hurricane === hurricane &&
+        hurricaneMemo.second === second &&
+        hurricaneMemo.cellX === cellX &&
+        hurricaneMemo.cellY === cellY
+    ) {
+        return hurricaneMemo.shown;
+    }
+    const shown = withHurricane(
+        settings,
+        hurricane,
+        new Date(second * 1000),
+        cellX * VIEWPOINT_STEP_PX,
+        cellY * VIEWPOINT_STEP_PX,
+    );
+    hurricaneMemo = { settings, hurricane, second, cellX, cellY, shown };
+    return shown;
+}
+
+// The weather of the chosen place last shown: the same object while neither it nor the second of the clock changed.
+let personalMemo:
+    | {
+          settings: MapSnowSettings | undefined;
+          place: WeatherLocation;
+          state: RealForecastState;
+          second: number | undefined;
+          shown: MapSnowSettings | undefined;
+      }
+    | undefined;
+
+/**
+ * The weather of this player's own place (the city chosen on their clock, see ChosenPlaceWeather), drawn for them
+ * alone in place of the weather of the map: its rain, its snow, its clouds and its wind. None while they follow the
+ * server, or while a weather is tried in the map settings panel (the trial shows as it is).
+ */
+function personalWeatherSettings(
+    settings: MapSnowSettings | undefined,
+    date: Date | undefined,
+): MapSnowSettings | undefined {
+    if (!showsChosenPlaceWeather()) return undefined;
+    const { place, state: chosenState } = chosenWeatherNow();
+    if (!place) return undefined;
+    const second = date === undefined ? undefined : Math.floor(date.getTime() / 1000);
+    if (
+        personalMemo &&
+        personalMemo.settings === settings &&
+        personalMemo.place === place &&
+        personalMemo.state === chosenState &&
+        personalMemo.second === second
+    ) {
+        return personalMemo.shown;
+    }
+    const real = withRealWeather(
+        { ...settings, weather: WeatherType.Real, weatherLocation: place },
+        realWeatherStateAt(chosenState, date),
+    );
+    // While its real weather is not known yet, the automatic one shows, with its clouds.
+    const shown =
+        real?.weather === WeatherType.Automatic && date
+            ? { ...real, cloudiness: cloudinessAt(date, real.weatherAuto, real.weatherLocation) }
+            : real;
+    personalMemo = { settings, place, state: chosenState, second, shown };
+    return shown;
+}
+
+/**
+ * Whether the weather drawn for this player is that of their own place (personalWeatherSettings): they follow a city
+ * on their clock and no weather is being tried in the map settings panel. Otherwise it is the weather of the map.
+ */
+export function showsChosenPlaceWeather(): boolean {
+    return chosenWeatherNow().place !== undefined && !preview;
+}
+
+/** The conditions of the room, when a player set them by hand: their wind is the wind of the whole scene. */
+let manualConditions: FireConditionsMessage | undefined;
+export function setRoomConditions(conditions: FireConditionsMessage | undefined): void {
+    manualConditions = conditions;
+}
+
+/**
+ * The weather of the map itself at `date`, as everyone sees it (the trial of the settings panel aside): without the
+ * weather of the city a player follows on their clock.
+ */
+export function mapWeatherSettings(
+    settings: MapSnowSettings | undefined,
+    date: Date | undefined,
+): MapSnowSettings | undefined {
+    return hurricaneOver(placeWeatherSettings(settings, date), date);
+}
+
+/** The weather of the map at `date` without its hurricane (mapWeatherSettings). */
+function placeWeatherSettings(
     settings: MapSnowSettings | undefined,
     date: Date | undefined,
 ): MapSnowSettings | undefined {
     const tried = withWeatherPreview(settings, preview);
     if (tried?.weather === WeatherType.Cloudy) {
         // The Cloudy tile is a clear sky with clouds, at once like the other fixed tiles.
-        return { ...tried, weather: WeatherType.Clear, cloudiness: AUTO_CLOUDINESS };
+        return withPlaceWind({ ...tried, weather: WeatherType.Clear, cloudiness: AUTO_CLOUDINESS }, date);
     }
     if (tried?.weather === WeatherType.Automatic) {
-        return date ? { ...tried, cloudiness: cloudinessAt(date, tried.weatherAuto) } : tried;
+        return withPlaceWind(
+            date ? { ...tried, cloudiness: cloudinessAt(date, tried.weatherAuto, tried.weatherLocation) } : tried,
+            date,
+        );
     }
-    if (tried?.weather !== WeatherType.Real) return tried;
+    if (tried?.weather !== WeatherType.Real) return withPlaceWind(tried, date);
     follow(tried.weatherLocation);
     const second = date === undefined ? undefined : Math.floor(date.getTime() / 1000);
     if (
@@ -162,7 +323,7 @@ export function shownWeatherSettings(
     // While the real weather is unavailable, the automatic one shows, with its clouds.
     const shown =
         real?.weather === WeatherType.Automatic && date
-            ? { ...real, cloudiness: cloudinessAt(date, real.weatherAuto) }
+            ? { ...real, cloudiness: cloudinessAt(date, real.weatherAuto, real.weatherLocation) }
             : real;
     memo = {
         settings,
@@ -178,6 +339,33 @@ export function shownWeatherSettings(
     return shown;
 }
 
+// The fixed weather last shown with the wind of its place: the same object while neither it nor the wind changed.
+let windMemo:
+    | { settings: MapSnowSettings; windFrom: number | undefined; windSpeed: number | undefined; shown: MapSnowSettings }
+    | undefined;
+
+/**
+ * A weather that is not the real one, with the real wind of the place of the map when the map has a place: its
+ * clouds, its trees and its rain go the way the banner says the wind blows. Such a map makes this browser follow
+ * its place, as a map in Real does; a map without a place keeps the usual drift and asks nothing.
+ */
+function withPlaceWind(settings: MapSnowSettings | undefined, date: Date | undefined): MapSnowSettings | undefined {
+    if (!settings?.weatherLocation) return settings;
+    follow(settings.weatherLocation);
+    const windy = withRealWind(settings, realWeatherStateAt(knownFor(settings.weatherLocation), date));
+    if (!windy || windy === settings) return settings;
+    if (
+        windMemo &&
+        windMemo.settings === settings &&
+        windMemo.windFrom === windy.windFrom &&
+        windMemo.windSpeed === windy.windSpeed
+    ) {
+        return windMemo.shown;
+    }
+    windMemo = { settings, windFrom: windy.windFrom, windSpeed: windy.windSpeed, shown: windy };
+    return windy;
+}
+
 /**
  * The weather this person will see now, in one hour and in four hours (the weather banner), the tried one included,
  * with the real temperature of the place. Asked each second while the banner shows: it follows the place of the map
@@ -191,6 +379,17 @@ export function shownWeatherForecast(settings: MapSnowSettings | undefined, date
     const real: RealForecastState =
         shown?.weather === WeatherType.Real || known.status === "known" ? known : { status: "unavailable" };
     return weatherForecast(shown, date.getTime(), real);
+}
+
+/**
+ * The weather timeline at the place of the map as shown to this person (the one being tried, if any; Paris without
+ * one), whatever weather the map shows: its air says whether a rain falls as snow. Asking follows the place, as the
+ * banner and the frost of the ground do.
+ */
+export function shownPlaceTimeline(settings: MapSnowSettings | undefined): RealForecastState {
+    const shown = withWeatherPreview(settings, preview);
+    follow(shown?.weatherLocation);
+    return knownFor(shown?.weatherLocation);
 }
 
 /** The place of the map as shown to this person (the one being tried, if any): its day and night follow it. */

@@ -1,3 +1,4 @@
+import { isAtAreaLevel } from "@workadventure/map-editor";
 import * as Phaser from "phaser";
 import type { AreaData, AtLeast } from "@workadventure/map-editor";
 import { deepmergeIntoCustom, type DeepMergeLeafURI } from "deepmerge-ts";
@@ -97,8 +98,12 @@ export class Area extends Rectangle {
 
     private applyCollider() {
         if (this.areaCollider === undefined) {
-            this.areaCollider = this.scene.physics.add.collider(this.scene.CurrentPlayer, this, () =>
-                this.onCollideAction(),
+            // An area only stops the players of its floor: one walks over, or under, a closed area of another one.
+            this.areaCollider = this.scene.physics.add.collider(
+                this.scene.CurrentPlayer,
+                this,
+                () => this.onCollideAction(),
+                () => isAtAreaLevel(this.areaData, this.scene.CurrentPlayer.getFloorZ()),
             );
             // If the user is already inside the area when the collider is applied, we need to mark it so we don't
             // trigger the collide action until they leave and re-enter the area.

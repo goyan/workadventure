@@ -6,6 +6,7 @@ import { DEPTH_LAMP_LIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
 import { toggleHandTool } from "../../../Stores/HandToolStore";
 import { CHARACTER_BODY_OFFSET_Y } from "../../Entity/Character";
+import { isBasicActive } from "../../../Stores/BasicModeStore";
 import {
     TORCH_MARKED_VARIATION,
     startTorchFade,
@@ -148,9 +149,11 @@ export class TorchManager {
             bearers.push({
                 id,
                 x: character.x,
-                y: character.y,
+                // Its light is where its bearer is drawn: lower in a hollow of a relief seen in 3/4, higher on a mount.
+                y: character.y + (character.getGroundDrop?.() ?? 0),
                 direction: character.lastDirection,
                 seated: character.isSeated(),
+                floorZ: character.getFloorZ(),
                 intensity: glow.value,
                 // The night veil: the intensity set, lit up with the torch (one rise, no flicker nor gust).
                 strength: veil.value * torchIgnition(litForMs, REDUCED_MOTION),
@@ -164,7 +167,8 @@ export class TorchManager {
         // Gone players are forgotten: a player coming back with a lit torch shows it lit at once.
         for (const id of this.litAt.keys()) if (!seen.has(id)) this.litAt.delete(id);
         for (const id of this.fades.keys()) if (!seen.has(id)) this.fades.delete(id);
-        this.torches.update(time, bearers, get(mapEditorModeStore));
+        // Basique: no torch is lit, its flame nor its light.
+        this.torches.update(time, isBasicActive() ? [] : bearers, get(mapEditorModeStore));
         // The scene is only rendered when asked: a flame on the screen asks for it at each of its steps.
         if (flameSeen && !REDUCED_MOTION && flameStep !== this.flameStep) {
             this.flameStep = flameStep;

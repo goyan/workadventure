@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { poolSoilCode, TERRAIN_CELL, TERRAIN_CHUNK } from "@workadventure/map-editor";
+import type { TerrainData } from "@workadventure/map-editor";
 import {
     DIVE_DEPTH,
     DIVE_DISTANCE,
     findDiveTarget,
+    getWaterRectangles,
     intersectsWater,
+    isGroundUnderWater,
     isPointInWater,
+    isPoolAt,
     isWithinOneTileOfWater,
     segmentCrossesWater,
 } from "../../../../../src/front/Phaser/Game/Water/WaterZones";
@@ -53,5 +58,66 @@ describe("pool swimwear boundary", () => {
         expect(isWithinOneTileOfWater([pool], { x: 68, y: 84 }, { width: 32, height: 16 })).toBe(true);
         expect(isWithinOneTileOfWater([pool], { x: 68, y: 83 }, { width: 32, height: 16 })).toBe(false);
         expect(isWithinOneTileOfWater([], { x: 100, y: 100 }, { width: 32, height: 32 })).toBe(false);
+    });
+});
+
+describe("getWaterRectangles on a map with raised floors", () => {
+    let frame = 1000;
+    /** A map with one pool on the ground and one on a floor 52 px up, drawn at the same place. */
+    function sceneWithTwoPools() {
+        const pool = (elevation: number) => ({
+            x: 64,
+            y: 64,
+            getElevation: () => elevation,
+            getPrefab: () => ({ name: "pool", tags: [], water: [{ x: 0, y: 0, width: 32, height: 32 }] }),
+        });
+        frame += 1;
+        return {
+            game: { loop: { frame } },
+            wamFile: { settings: { categories: undefined } },
+            getGameMapFrontWrapper: () => ({
+                getEntitiesManager: () => ({
+                    getEntities: () =>
+                        new Map([
+                            ["ground", pool(0)],
+                            ["upstairs", pool(52)],
+                        ]),
+                }),
+            }),
+        } as unknown as Parameters<typeof getWaterRectangles>[0];
+    }
+
+    it("gives the water of the ground by default, and the water of a raised floor by its altitude", () => {
+        const scene = sceneWithTwoPools();
+        expect(getWaterRectangles(scene)).toHaveLength(1);
+        expect(getWaterRectangles(scene, 52)).toHaveLength(1);
+        expect(getWaterRectangles(scene, 52)[0]).not.toBe(getWaterRectangles(scene)[0]);
+    });
+
+    it("gives no water on a stair, nor on a floor without a pool", () => {
+        const scene = sceneWithTwoPools();
+        expect(getWaterRectangles(scene, 24)).toEqual([]);
+        expect(getWaterRectangles(scene, 116)).toEqual([]);
+    });
+
+    it("tells the ground under water: the relief from 2 px, or a pool of the ground", () => {
+        const scene = sceneWithTwoPools();
+        const lake = { walkerSettledDepthAt: (x: number) => (x < 0 ? 5 : x < 10 ? 1 : 0) };
+        expect(isGroundUnderWater(scene, lake, -20, 0)).toBe(true);
+        expect(isGroundUnderWater(scene, lake, 5, 0)).toBe(false);
+        expect(isGroundUnderWater(scene, lake, 70, 70)).toBe(true);
+        expect(isGroundUnderWater(scene, lake, 200, 200)).toBe(false);
+    });
+});
+
+describe("isPoolAt", () => {
+    it("tells the cells of a pool painted with the relief tool: no water for a canoe there", () => {
+        const codes = new Array<number>(TERRAIN_CHUNK * TERRAIN_CHUNK).fill(0);
+        codes[TERRAIN_CHUNK + 1] = poolSoilCode(0);
+        const terrain = { soil: { "0,0": codes } } as unknown as TerrainData;
+        const centre = (cell: number): number => (cell + 0.5) * TERRAIN_CELL;
+        expect(isPoolAt(terrain, { x: centre(1), y: centre(1) })).toBe(true);
+        expect(isPoolAt(terrain, { x: centre(2), y: centre(1) })).toBe(false);
+        expect(isPoolAt(undefined, { x: centre(1), y: centre(1) })).toBe(false);
     });
 });

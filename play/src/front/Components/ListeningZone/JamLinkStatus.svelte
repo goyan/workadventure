@@ -98,7 +98,7 @@
             class="m-0 text-xs {$ownJamLinkSaveStore.status === 'failed'
                 ? 'text-red-400'
                 : $ownJamLinkSaveStore.status === 'saved'
-                  ? 'text-[#1ed760]'
+                  ? 'text-[var(--jam-accent,#1ed760)]'
                   : 'text-white/70'}"
             role={$ownJamLinkSaveStore.status === "failed" ? "alert" : "status"}
             data-testid="jam-link-save"

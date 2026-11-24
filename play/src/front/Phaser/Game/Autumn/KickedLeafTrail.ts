@@ -8,6 +8,11 @@ export const KICK_FADE_MS = 2000;
 export const KICK_MAX = 120;
 const KICK_MIN_PX = 8;
 const KICK_MAX_PX = 14;
+/** The two wheels of a skateboard roll this far either side of its middle (as their tracks in the snow). */
+const WHEEL_SIDE_OFFSET_PX = 2;
+/** How far a wheel pushes a leaf aside. */
+const WHEEL_PUSH_MIN_PX = 3;
+const WHEEL_PUSH_MAX_PX = 6;
 
 /** A leaf kicked up at the feet: where it starts, and where it lands. */
 export interface KickedLeaf {
@@ -54,11 +59,15 @@ export class KickedLeafTrail {
             state.x = sample.x;
             state.y = sample.y;
             state.distance += moved;
-            const step = sample.running ? KICK_RUN_STEP_PX : KICK_WALK_STEP_PX;
+            const step = sample.running || sample.wheels ? KICK_RUN_STEP_PX : KICK_WALK_STEP_PX;
             if (state.distance < step) continue;
             state.distance -= step;
             const kick = state.kicks++;
             if (!this.isOutdoor(sample.x, sample.y)) continue;
+            if (sample.wheels) {
+                leaves.push(...wheelSpray(sample.x, sample.y, Math.atan2(dy, dx), sample.wheels, kick));
+                continue;
+            }
             const count = (sample.running ? 5 : 3) + (kick % 2);
             const heading = Math.atan2(dy, dx);
             for (let i = 0; i < count; i++) {
@@ -79,4 +88,27 @@ export class KickedLeafTrail {
         }
         return leaves;
     }
+}
+
+/**
+ * The leaves a wheel rolling through pushes aside: a leaf each side of its track, thrown across the way and a little
+ * back, so that one track (an electric unicycle) or two close ones (a skateboard) open in the leaves as it passes.
+ */
+function wheelSpray(x: number, y: number, heading: number, wheels: 1 | 2, kick: number): KickedLeaf[] {
+    const acrossX = -Math.sin(heading);
+    const acrossY = Math.cos(heading);
+    const offsets = wheels === 2 ? [-WHEEL_SIDE_OFFSET_PX, WHEEL_SIDE_OFFSET_PX] : [0];
+    return offsets.flatMap((offset, wheel) =>
+        ([-1, 1] as const).map((side, i) => {
+            const push = WHEEL_PUSH_MIN_PX + hash01(kick, wheel * 2 + i, 3) * (WHEEL_PUSH_MAX_PX - WHEEL_PUSH_MIN_PX);
+            const back = hash01(kick, wheel * 2 + i, 4) * 2;
+            return {
+                x: x + acrossX * offset,
+                y: y + acrossY * offset,
+                dx: acrossX * side * push - Math.cos(heading) * back,
+                dy: acrossY * side * push - Math.sin(heading) * back,
+                color: leafColor(hash01(kick, wheel * 2 + i, 5)),
+            };
+        }),
+    );
 }

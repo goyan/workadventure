@@ -1,6 +1,8 @@
+import { isAtAreaLevel } from "@workadventure/map-editor";
 import { isHomeJam, type AreaData } from "@workadventure/map-editor";
 import type { SpotifyListening } from "@workadventure/messages";
 import type { Unsubscriber } from "svelte/store";
+import { floorDepth } from "../MapEditor/MapLayer/FloorDepth";
 import { joinedJamStore, type JoinedJam } from "../../../ListeningZone/ListeningZoneStore";
 import { spotifyTrackUri } from "../../../../common/SpotifyListening";
 import { jamAudioSession } from "../../../ListeningZone/GameJamAudioSession";
@@ -17,11 +19,14 @@ import { lampDemoEnabledStore } from "../../../Stores/LampDemoStore";
 import { lampEffectsEnabledStore, partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import { LampMusicSource, lampMusicSourceStore } from "../../../Stores/LampMusicSourceStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
-import { lightableAreas } from "../Night/NightLights";
+import { nightInEditorStore } from "../../../Stores/NightStore";
 import type { Entity } from "../../ECS/Entity";
 import { DEPTH_LAMP_LIGHT_INDEX } from "../DepthIndexes";
 import { FLOOR_OBJECT_DEPTH } from "../../ECS/EntityLayerDepth";
 import type { GameScene } from "../GameScene";
+import { entityStatesManagerStore } from "../../../Stores/EntityStatesStore";
+import type { EntityStatesManager } from "../EntityStates/EntityStatesManager";
+import { unlessBasic } from "../../../Stores/BasicModeStore";
 import { SpotifyMusicSignal } from "./SpotifyMusicSignal";
 import {
     jamOfSpaces,
@@ -44,9 +49,11 @@ import { nextBrightness } from "./LampStyle";
 import type { LampFrame, LampSignalSource } from "./LampSignal";
 import { isSilentFrame, SpectrumSignalSource } from "./LampSignal";
 import { ensureLampTextures } from "./LampTextures";
+import { mapRoomAreas, raisedFloorZone } from "./RoomZones";
 import { StreamSpectrum } from "./StreamSpectrum";
 import { LampZoneLights, type RoomAmbience } from "./LampZoneLights";
 import { RgbLamps } from "./RgbLamps";
+import { EnergySavingClock, isLampSaved } from "./EnergySaving";
 import { syntheticSpectrum } from "./SyntheticBeat";
 import { createLamp, PALETTE, type LampKind, type LampVisual } from "./LampVisuals";
 
@@ -150,11 +157,17 @@ export class LampManager {
     private readonly frames = new Map<string, LampFrame>();
     // The RGB lamps live their own life (see RgbLamps): a steady light with shadows, that no music moves.
     private readonly rgbLamps: RgbLamps;
+    // The energy saving of the map: whether the daylight puts its lamps outdoors out, worked out once per image.
+    private readonly energySaving: EnergySavingClock;
+    private energySavingNow = false;
     private demoSignal: LampSignalSource | undefined;
     private demo: { bpm: number } | undefined;
     private readonly systemReducedMotion: boolean;
     private readonly unsubscribers: Unsubscriber[] = [];
+    private entityStates: EntityStatesManager | undefined;
     private editorOpen = false;
+    /** The editor shows the lighting of the game (its sun and moon button): the lamps shine there, so they can be set. */
+    private lightsInEditor = false;
     private effectsEnabled = true;
     private musicSource = LampMusicSource.Rooms;
     private lastReconcileAt: number | undefined;
@@ -201,9 +214,17 @@ export class LampManager {
         ensureLampTextures(scene);
         this.zoneLights = new LampZoneLights(scene, LAMP_DEPTH, ROOM_SHADE_DEPTH);
         this.systemReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-        this.rgbLamps = new RgbLamps(scene, LAMP_DEPTH, { reducedMotion: this.systemReducedMotion });
+        this.rgbLamps = new RgbLamps(scene, LAMP_DEPTH, {
+            reducedMotion: this.systemReducedMotion,
+            // The switches of the map: a lamp one of them put out gives no light.
+            isOn: (entityId) => this.entityStates?.isOn(entityId) ?? true,
+            // The energy saving of the map: a lamp outdoors gives no light by day either.
+            isSaved: (lamp) => this.isSavedNow(lamp),
+        });
+        this.energySaving = new EnergySavingClock((at) => scene.mapDaylightAt(at));
         this.unsubscribers = [
-            lampEffectsEnabledStore.subscribe((enabled) => {
+            entityStatesManagerStore.subscribe((states) => (this.entityStates = states)),
+            unlessBasic(lampEffectsEnabledStore).subscribe((enabled) => {
                 this.effectsEnabled = enabled;
                 this.watchJukeboxMusic();
                 this.scene.markDirty();
@@ -215,6 +236,10 @@ export class LampManager {
             }),
             mapEditorModeStore.subscribe((open) => {
                 this.editorOpen = open;
+            }),
+            nightInEditorStore.subscribe((shown) => {
+                this.lightsInEditor = shown;
+                this.scene.markDirty();
             }),
             // The demo follows the address (`?lampDemo`) and the setting of the menu, which can change while playing.
             lampDemoEnabledStore.subscribe((enabled) => this.setDemo(resolveLampDemo(options.demo, enabled))),
@@ -270,12 +295,7 @@ export class LampManager {
 
     /** The listening zones of the map, with their rectangle: a lamp inside one belongs to it. */
     private areas(): AreaData[] {
-        const areas = this.scene.getGameMap().getWamFile()?.getGameMapAreas()?.getAreas().values() ?? [];
-        const map = this.scene.getGameMapFrontWrapper().getMap();
-        const mapWidth = (map.width ?? 0) * (map.tilewidth ?? 32);
-        const mapHeight = (map.height ?? 0) * (map.tileheight ?? 32);
-        // As for the night lights: an area that covers most of the map is not a room.
-        return lightableAreas(areas, mapWidth, mapHeight);
+        return mapRoomAreas(this.scene);
     }
 
     /** The listening zones of the map: the Jam a lamp follows comes from the one it stands in. */
@@ -345,6 +365,11 @@ export class LampManager {
         });
     }
 
+    /** The raised floor a lamp stands on, as a zone its light stays in; undefined on the ground. */
+    private raisedFloorZoneOf(entity: Entity): LampZone | undefined {
+        return raisedFloorZone(this.scene, entity.getElevation(), lampSource(entity, entity.getPrefab().lamp?.anchor));
+    }
+
     private buildVisual(kind: LampKind, entity: Entity, zone: LampZone): LampVisual {
         const source = lampSource(entity, entity.getPrefab().lamp?.anchor);
         return createLamp(kind, {
@@ -383,13 +408,22 @@ export class LampManager {
         }
         // The light of a lamp stays in the smallest area of the map it stands in, of whatever kind: that is the room.
         const areas = this.areas();
-        const areaZones = areas.map(toLampZone);
+        // Among the areas of the floor of the map the lamp stands on.
+        const areasOf = (entity: Entity): AreaData[] =>
+            areas.filter((area) => isAtAreaLevel(area, entity.getElevation()));
+        const areaZonesOf = (entity: Entity): LampZone[] => {
+            const zones = areasOf(entity).map(toLampZone);
+            // On a raised floor the room is the floor itself: without it, a lamp upstairs standing in no area would
+            // light a square around it, over the walls and the outdoors.
+            const floor = this.raisedFloorZoneOf(entity);
+            return floor ? [...zones, floor] : zones;
+        };
         for (const { id, kind } of plan.create) {
             const entity = entities.get(id);
             if (!entity) {
                 continue;
             }
-            const zone = this.clipZoneOf(id, entity, areaZones);
+            const zone = this.clipZoneOf(id, entity, areaZonesOf(entity));
             this.placed.set(id, {
                 kind,
                 visual: this.buildVisual(kind, entity, zone),
@@ -406,7 +440,7 @@ export class LampManager {
         // A lamp that was moved into another zone (in the editor) draws in the container of that zone.
         const usedZones = new Map<string, LampZone>();
         for (const [id, lamp] of this.placed) {
-            const zone = this.clipZoneOf(id, lamp.entity, areaZones);
+            const zone = this.clipZoneOf(id, lamp.entity, areaZonesOf(lamp.entity));
             if (zone.areaId !== lamp.zoneId) {
                 lamp.visual.destroy();
                 lamp.visual = this.buildVisual(lamp.kind, lamp.entity, zone);
@@ -417,16 +451,16 @@ export class LampManager {
         this.zoneLights.sync(usedZones);
 
         // Which Jam each lamp follows: worked out the same way by every client, from what everyone shares.
-        const listeningZones = this.listeningZones(areas);
         const jams: LampJam[] = lampJamsOf(this.rooms, this.listeningByUuid, this.participants, this.liveSharesAudio);
         const listening = this.listenedJam();
         for (const lamp of this.placed.values()) {
             const source = lampSource(lamp.entity, lamp.entity.getPrefab().lamp?.anchor);
+            const listeningZones = this.listeningZones(areasOf(lamp.entity));
             const jam = resolveLampJam({ source, zones: listeningZones, jams, listening });
             // The host turned the effects of their room off: off for everyone, the room keeps its own light.
             lamp.jam = jam;
             // The room put out while it plays: the smallest area it stands in, as for its light.
-            lamp.room = zoneOf(source, areaZones);
+            lamp.room = zoneOf(source, areaZonesOf(lamp.entity));
         }
     }
 
@@ -444,7 +478,8 @@ export class LampManager {
             if (isDanceFloor(entity) && !this.floors.has(id)) {
                 this.floors.set(id, {
                     entity,
-                    visual: new DanceFloorVisual(this.scene, id, DANCE_FLOOR_DEPTH),
+                    // On a raised floor: over its slabs, under what stands on it.
+                    visual: new DanceFloorVisual(this.scene, id, floorDepth(entity.getElevation(), DANCE_FLOOR_DEPTH)),
                     engine: undefined,
                     grid: { cols: 0, rows: 0 },
                     jam: undefined,
@@ -456,10 +491,14 @@ export class LampManager {
             return;
         }
         // The same rule as the lamps, from the middle of the floor: every client follows the same Jam.
-        const listeningZones = this.listeningZones(this.areas());
+        const areas = this.areas();
         const jams: LampJam[] = lampJamsOf(this.rooms, this.listeningByUuid, this.participants, this.liveSharesAudio);
         const listening = this.listenedJam();
         for (const floor of this.floors.values()) {
+            // Among the listening zones of the floor of the map it stands on.
+            const listeningZones = this.listeningZones(
+                areas.filter((area) => isAtAreaLevel(area, floor.entity.getElevation())),
+            );
             const bounds = this.floorBounds(floor.entity);
             const source = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
             const jam = resolveLampJam({ source, zones: listeningZones, jams, listening });
@@ -586,6 +625,24 @@ export class LampManager {
         }
     }
 
+    /**
+     * Whether the energy saving puts the lamps outdoors out now: the map asks for it and its daylight is enough, at the
+     * time of the server (no lamp is put out until the server told it), ahead of it as the sky while this player speeds
+     * the day up.
+     */
+    private energySavingAt(): boolean {
+        if (this.scene.getGameMap().getWamFile()?.getWam().settings?.lighting?.energySaving !== true) return false;
+        const serverDate = this.scene.getSkyDate();
+        return serverDate !== undefined && this.energySaving.savingAt(serverDate.getTime());
+    }
+
+    /** Whether the energy saving puts this lamp out now: by day, standing outdoors on the ground of the map. */
+    private isSavedNow(lamp: Entity): boolean {
+        if (!this.energySavingNow) return false;
+        const grid = this.scene.getOutdoorGrid();
+        return isLampSaved(this.energySavingNow, grid && ((x, y) => grid.isOutdoorAt(x, y)), lamp);
+    }
+
     public update(now: number): void {
         if (this.lastReconcileAt === undefined || now - this.lastReconcileAt >= RECONCILE_INTERVAL_MS) {
             this.lastReconcileAt = now;
@@ -593,9 +650,10 @@ export class LampManager {
             this.dropUnusedMusic();
         }
         this.frames.clear();
+        this.energySavingNow = this.energySavingAt();
         // Before anything that returns early: an RGB lamp shines without music, and with the light effects turned off
         // (it is a steady light, not an effect); a turning one then stands still at its direction.
-        this.rgbLamps.update(this.editorOpen, this.effectsEnabled);
+        this.rgbLamps.update(this.editorOpen, this.effectsEnabled, this.lightsInEditor);
         const demoFrame = this.demoSignal?.read(now);
         // Read once per image so every lamp sees the same beat.
         const personalFrame =
@@ -638,11 +696,12 @@ export class LampManager {
                 }
             }
             const space = placed.jam && this.spaceNameOf(placed.jam);
-            // In the editor a lamp is always lit, steady, so that it can be placed; with a demo, lit by the demo.
-            const lit =
-                this.editorOpen ||
-                demoFrame !== undefined ||
-                (personalFrame !== undefined ? !isSilentFrame(personalFrame) : space !== undefined);
+            // In the editor a lamp is out, so that the map stays readable, unless the editor shows the lighting of the game:
+            // it is then lit, steady, so that it can be set. With a demo, lit by the demo.
+            const lit = this.editorOpen
+                ? this.lightsInEditor
+                : demoFrame !== undefined ||
+                  (personalFrame !== undefined ? !isSilentFrame(personalFrame) : space !== undefined);
             const elapsed = placed.lastUpdateAt === undefined ? 0 : now - placed.lastUpdateAt;
             placed.lastUpdateAt = now;
             placed.brightness = nextBrightness(placed.brightness, lit, elapsed);

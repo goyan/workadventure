@@ -1,0 +1,1279 @@
+import {
+    cellOf,
+    heightAt,
+    landWallsOf,
+    snowCover,
+    snowCoverOf,
+    SOILS,
+    soilAt,
+    DEFAULT_POOL_STYLE,
+    poolStyleAt,
+    poolStyleOf,
+    TERRAIN_CELL,
+    TERRAIN_CHUNK,
+    TILE_PX,
+} from "@workadventure/map-editor";
+import { Season } from "@workadventure/map-editor";
+import type { PoolStyle, TerrainData } from "@workadventure/map-editor";
+import type { OutdoorGrid } from "@wa/front/Phaser/Game/Outdoor/OutdoorGrid";
+import { waterCycleNow } from "@wa/front/Phaser/Game/Weather/Frost";
+import { meadowHoldsSnow } from "@wa/front/Phaser/Game/Weather/GroundSource";
+import type { WaterCycle } from "@wa/front/Phaser/Game/Weather/Frost";
+import type { WaterRing } from "@wa/front/Phaser/Game/Catastrophe/MeteorFall";
+import { GraphicsQuality, graphicsQualityStore } from "@wa/front/Stores/GraphicsSettingsStore";
+import type { GameScene } from "../GameScene";
+import { createBlockSurface } from "../Weather/BlockSurface";
+import type { BlockCanvasArea, BlockSnapshot, BlockSurface } from "../Weather/BlockSurface";
+import type { WeatherView } from "../Weather/WeatherFrame";
+import { isBasicActive } from "../../../Stores/BasicModeStore";
+import { isEffectShown } from "../../../Stores/EffectsStore";
+import type { IceBreak } from "../Ice/IceBreaks";
+import {
+    DEEP_WATER_COLOR,
+    deepWaterAlpha,
+    groundAlpha,
+    raisedAlpha,
+    SOIL_TINTS,
+    SHALLOW_WATER,
+    SHORE_PX,
+    SHORE_WATER,
+    slopeAlpha,
+    slopeShade,
+    SNOW_COLOR,
+    snowAlpha,
+} from "./TerrainShading";
+import {
+    ASH_COLOR,
+    ashAlpha,
+    FIRE_GLOW_COLOR,
+    fireGlowAlpha,
+    GRASS_COLOR,
+    grassAlpha,
+    mottledCover,
+    STRAW_COLOR,
+    strawAlpha,
+    strawLevel,
+} from "./MeadowState";
+import type { MeadowState } from "./MeadowState";
+import type { TerrainWater } from "./TerrainWater";
+import { GROUND_TEXTURES, TexturedGround, WATER_FRAMES } from "./TexturedGround";
+import type { WaterReflection } from "./WaterReflection";
+import { BasicPools } from "./BasicPools";
+import { BasicWater } from "./BasicWater";
+import type { GroundArea } from "./TexturedGround";
+import { GroundSplat } from "./GroundSplat";
+import { BreakingFoam, closedSidesOf, FOAM_VISITS_PER_FRAME } from "./BreakingFoam";
+import type { ClosedSide } from "./BreakingFoam";
+import { windHeading } from "./Whitecaps";
+import { SeaFetch } from "./WindSea";
+import { seaDrawing } from "./WindSeaShader";
+import type { SeaDrawing, SeaHurricane } from "./WindSeaShader";
+import { depthsSeen } from "./BuiltGround";
+import { heightsOver, nextDrawnArea, OBLIQUE_REACH_PX } from "./ObliqueView";
+import { classicPoolsShown, imagePoolCells, imagePoolsOf, signatureOf } from "./ImagePools";
+import { PoolLadders, topEdgesOf } from "./PoolLadders";
+import type { ImagePool, PlacedPool } from "./ImagePools";
+
+/** Over the grass of the seasons (0.6), under the puddles (0.7), the objects and the avatars. */
+const TERRAIN_DEPTH = 0.65;
+/** Relief drawn beyond each edge of the screen, in a share of its size: a scroll rarely asks for a new drawing. */
+const DRAW_MARGIN = 0.25;
+/**
+ * The ground is drawn this many cells past the edges of the map: the blur of the soils (GroundSplat.smoothWeights) and
+ * the colours of the pools read one cell around each, so the cells of the map are drawn as if nothing were cut.
+ */
+const GROUND_BORDER_CELLS = 2;
+const NO_SHIFT = { columns: 0, rows: 0 };
+/** The textured grounds, under the relief canvas (its slopes, straw, ashes and water are drawn over them). */
+const SOIL_GROUND_DEPTH = TERRAIN_DEPTH - 0.04;
+const GRASS_GROUND_DEPTH = TERRAIN_DEPTH - 0.03;
+const SNOW_GROUND_DEPTH = TERRAIN_DEPTH - 0.02;
+/** The snow of a player's own city is drawn in this many steps from none to a full cover. */
+const OWN_SNOW_STEPS = 20;
+/** The water over the relief canvas (its slopes show under it), under the puddles (0.7). */
+const WATER_DEPTH = TERRAIN_DEPTH + 0.01;
+/** Basique: the water of the relief under its pools (BasicPools, drawn at WATER_DEPTH). */
+const BASIC_WATER_DEPTH = TERRAIN_DEPTH + 0.005;
+const DEEP_WATER_DEPTH = TERRAIN_DEPTH + 0.02;
+/** What rises over the water of the relief and of its painted pools (the steam of a heated one): over all of it. */
+export const OVER_WATER_DEPTH = TERRAIN_DEPTH + 0.05;
+/** Each image of the twinkling water lasts this long (ms): the scene is drawn again for the next one. */
+const RIPPLE_MS = 170;
+/** The surface of the water drawn by its shader moves smoothly: the scene is drawn again this often for it. */
+const WATER_FRAME_MS = 50;
+
+/** The grounds of the relief drawn with their texture: each soil, the grass (green or autumn) and the snow. */
+interface Grounds {
+    soils: TexturedGround[];
+    grass: TexturedGround;
+    autumnGrass: TexturedGround;
+    snow: TexturedGround;
+    water: TexturedGround;
+    deepWater: TexturedGround;
+}
+
+/** While the relief is edited, the water is drawn this much fainter, so the bottom shows through. */
+const SEE_THROUGH = 0.45;
+
+/** The relief under a canvas, as layers to paint: kept from one drawing to the next. */
+interface ReliefLayers extends BlockCanvasArea {
+    terrain: TerrainData | undefined;
+    ground: Uint8Array;
+    /** The height of the cells raised over the ground. */
+    raised: Uint8Array;
+    /** The exact height of the ground of each cell, read at the first drawing of the relief in 3/4. */
+    heights?: Float32Array;
+    /** The snow of the heights over the canvas (0 to 255), and the season it was read for. */
+    snow: Uint8Array | undefined;
+    season: Season | undefined;
+    /** For each soil painted on the canvas (by its number in the map): 1 on its cells. */
+    soils: Map<number, Uint8Array>;
+    shaded: Uint8Array;
+    lit: Uint8Array;
+    /** Whether any cell of the canvas is dug or sloped: nothing to paint otherwise. */
+    dug: boolean;
+    /** The outdoors these layers were read for, and 1 on each outdoor cell (shaders only): indoors nothing freezes. */
+    outdoorGrid: OutdoorGrid | undefined;
+    outdoor: Uint8Array | undefined;
+    /** The styles of the pools these layers were read with: a pool drawn again when its colours change. */
+    poolStyles: readonly PoolStyle[] | undefined;
+    /** The ladders put by hand on the pools (cells "x,y"), as the map keeps them. */
+    poolLadders: readonly string[] | undefined;
+}
+
+/**
+ * The meadow over a canvas, as layers to paint. Kept apart from the relief: the server tells the meadow again every
+ * few seconds, and the relief, long to read on a wide view, must not be read again for it.
+ */
+interface MeadowLayers extends BlockCanvasArea {
+    /** The state of the meadow these layers were read from. */
+    version: number;
+    /** The grass of the meadow over the canvas; undefined where none grows. */
+    grass: Uint8Array | undefined;
+    /** The straw of the grass gone dry over the canvas (see strawLevel); undefined on a green meadow. */
+    straw: Uint8Array | undefined;
+    /** The ash and the fire of the meadow over the canvas; undefined where nothing burnt nor burns. */
+    ash: Uint8Array | undefined;
+    fire: Uint8Array | undefined;
+    /** The snow that fell, as it whitens the ground over the canvas (0 to 255); undefined where none lies. */
+    snow: Uint8Array | undefined;
+    /** The ice the server keeps over the water (iceByte); undefined where none is frozen. */
+    ice: Uint8Array | undefined;
+    /** The moisture of the soil the server keeps (0 to 255), outdoors; undefined where every soil is dry. */
+    moisture: Uint8Array | undefined;
+    /** Whether these layers show the snow of the server (GroundSource): read again when the player changes of weather. */
+    server: boolean;
+    /** Whether they were read under the winter theme of this player (all white outdoors). */
+    winter: boolean;
+    /** The snow of their own city these layers show to a player who follows one, in twentieths (0 for the server's). */
+    own: number;
+}
+
+/**
+ * Draws the relief of the ground and the water of its hollows: one small image, a pixel for each cell of the relief,
+ * painted again only when the relief, the water or the part of the map on the screen changed. A map without relief
+ * is not looked at.
+ */
+export class TerrainView {
+    private readonly surface: BlockSurface;
+    private drawn: WeatherView | undefined;
+    private lastKey: string | undefined;
+    private visible = false;
+    private seeThrough = false;
+    private relief: ReliefLayers | undefined;
+    private meadowLayers: MeadowLayers | undefined;
+    /** The ground once painted on the canvas (relief and meadow), kept while the water alone moves. */
+    private painted:
+        | {
+              relief: ReliefLayers;
+              meadow: MeadowLayers | undefined;
+              snapshot: BlockSnapshot;
+              imagePools: string;
+              oblique: boolean;
+              /** The relief seen in 3/4 it was painted with (flat under what is built). */
+              seen: TerrainData | undefined;
+          }
+        | undefined;
+    /** The relief seen in 3/4 at the last drawing, and how many times it changed (part of what is drawn again). */
+    private seenDrawn: TerrainData | undefined;
+    private seenChanges = 0;
+    /** Whether the shaders draw the relief in 3/4 now. */
+    private isOblique = false;
+    private depths = new Float32Array(0);
+    /** The depth of the water over each cell, unrounded: the slope of its surface is lit. */
+    private exactDepths = new Float32Array(0);
+    /** The pools placed as images, drawn by the shaders in their place (ImagePools.ts), and the ones hidden for it. */
+    private imagePools: { pools: ImagePool[]; signature: string } = { pools: [], signature: "" };
+    private poolSettingsSeen: { pools: unknown; ladders: unknown; version: number } = {
+        pools: undefined,
+        ladders: undefined,
+        version: 0,
+    };
+    private readonly hiddenPools = new Map<string, PlacedPool>();
+    /** The pools painted in the editor as Basique shows them: still water and a coping (BasicPools.ts). */
+    private basicPools: BasicPools | undefined;
+    /** The water of the relief as Basique shows it: flat, still, one image (BasicWater.ts). */
+    private basicWater: BasicWater | undefined;
+    /** The ladders of the pools drawn by the shaders. */
+    private readonly ladders: PoolLadders | undefined;
+    private everywhere = new Uint8Array(0);
+    /** The textured grounds; none with a surface of its own (tests): the soils are then flat tints. */
+    private readonly grounds: Grounds | undefined;
+    /** The grounds and the water drawn by shaders, where the graphics card runs them (the masked grounds otherwise). */
+    private readonly splat: GroundSplat | undefined;
+    /** The state of the ground its masks were worked out for: they are kept while it does not change. */
+    private groundStamp = 0;
+    private groundState: { terrain: TerrainData | undefined; meadow: number; season: Season | undefined } | undefined;
+    private lastRipple = 0;
+    private cycle: WaterCycle | undefined;
+    /** The snow of the map, laid on the ice too (in fiftieths: the scene is drawn again only when it shows). */
+    private snowOnIce = 0;
+    /** Whether the ice shown is the one the server keeps (GroundSource): the water shader is told when it changes. */
+    private serverIce = false;
+    private poolsOf: { terrain: TerrainData | undefined; any: boolean } | undefined;
+    private wet = new Uint8Array(0);
+    /** The foam of the waves that break and of the floods that advance, and what the shader is told of it. */
+    private readonly breaking = new BreakingFoam();
+    /** The sides the water cannot cross, for the foam, and the objects of the map they were read from. */
+    private foamWalls: ClosedSide | undefined;
+    private foamWallsOf: unknown;
+    private breakingVersion = -1;
+    private foam = new Uint8Array(0);
+    /** The sea the wind raises (WindSeaShader), for the wind it was made for, and the fetch of that wind. */
+    private sea: SeaDrawing | undefined;
+    /** The hurricane crossing the map, over the wind sea (seaWindHere); none while there is none. */
+    private seaHurricane: (() => SeaHurricane | undefined) | undefined;
+    private seaKey = "";
+    private readonly seaFetch = new SeaFetch();
+    /** The quality of the graphics this player chose: no wind sea in Low, fewer looks back for its foam in Medium. */
+    private quality: GraphicsQuality | undefined;
+    private readonly unsubscribeQuality = graphicsQualityStore.subscribe((quality) => {
+        this.quality = quality;
+    });
+    private seaBytes = new Uint8Array(0);
+    /** The cells the water was last drawn over: the fetch is told again over them when it is made anew. */
+    private drawnCanvas: { x: number; y: number; columns: number; rows: number } | undefined;
+    /** The current of the water over the canvas, two a cell (see currentOver). */
+    private current = new Float32Array(0);
+    private shore = new Uint8Array(0);
+
+    constructor(
+        private readonly scene: GameScene,
+        private readonly water: TerrainWater,
+        surface?: BlockSurface,
+        /** The meadow of the map: its grass is drawn on the ground, under the water. */
+        private readonly meadow?: MeadowState,
+        /** The season of the map: the snow holds on its heights, lower in winter. None: no snow is drawn. */
+        private readonly season?: () => Season | undefined,
+        /** The wind the player sees: how fast (km/h) and where from (degrees). It raises whitecaps on the water. */
+        private readonly wind?: () => { speed?: number; from?: number } | undefined,
+        /** Whether the other engine of the ground draws now (the blocks of ReliefTiles): nothing is drawn here. */
+        private readonly hidden?: () => boolean,
+        /** Whether the relief is to be seen in 3/4: drawn so by the shaders, where the graphics card runs them. */
+        private readonly oblique?: () => boolean,
+        /** Whether all the ground outdoors is under the snow for this player (the winter theme they chose). */
+        private readonly snowEverywhere?: () => boolean,
+        /**
+         * The relief as it is seen in 3/4 (BuiltGround.ts): flat under what is built, whose floors and walls are
+         * drawn at their place; and where the water is seen flat with it. The relief of the map without it.
+         */
+        private readonly seen?: {
+            terrain(): TerrainData | undefined;
+            isFlatAt(x: number, y: number): boolean;
+        },
+    ) {
+        // The shaders draw the soils and the grass: the canvas keeps only the shades of the relief, smooth. Without
+        // them the mottled grass and the soils are on the canvas: sharp cells, each keeps its own shade.
+        this.splat = surface ? undefined : GroundSplat.create(scene, SOIL_GROUND_DEPTH, WATER_DEPTH);
+        this.ladders = this.splat ? new PoolLadders(scene) : undefined;
+        this.surface = surface ?? createBlockSurface(scene, TERRAIN_DEPTH, this.splat !== undefined);
+        this.grounds = surface || this.splat ? undefined : createGrounds(scene);
+    }
+
+    /** Whether this engine can draw the relief in 3/4 (its shaders run, with what the 3/4 needs of the graphics card). */
+    /** Where the hurricane of the room is read for the wind sea, at each image. */
+    public seaHurricaneWith(read: () => SeaHurricane | undefined): void {
+        this.seaHurricane = read;
+    }
+
+    public canProject(): boolean {
+        return this.splat?.projects() === true;
+    }
+
+    /** While the relief is edited: the water fainter, so what is dug under it can be seen. */
+    public setSeeThrough(seeThrough: boolean): void {
+        this.seeThrough = seeThrough;
+    }
+
+    public update(now: number): void {
+        // Basique shows the ground of the map as it is, but its water: lakes and floods flat (BasicWater), pools still,
+        // no waves, no ice (BasicPools).
+        const basic = isBasicActive();
+        if (basic) {
+            this.basicWater ??= new BasicWater(this.scene, BASIC_WATER_DEPTH);
+            if (this.basicWater.show(this.water, now)) this.scene.markDirty();
+            // The pools placed as images too, hidden as in the shaders: every pool has the same look.
+            this.readImagePools();
+            const settings = this.scene.getGameMap?.()?.getWamFile()?.getWam().settings;
+            this.basicPools ??= new BasicPools(this.scene, WATER_DEPTH);
+            if (this.basicPools.show(this.water.relief(), settings?.pools, this.imagePools)) this.scene.markDirty();
+        } else {
+            const poolsHidden = this.basicPools?.hide() ?? false;
+            const waterHidden = this.basicWater?.hide() ?? false;
+            if (poolsHidden || waterHidden) this.scene.markDirty();
+        }
+        // Basique shows the ground of the map as it is: no relief, soils nor grass drawn over it, and its own water.
+        if (
+            basic ||
+            this.hidden?.() === true ||
+            (!this.water.hasAnything() && !this.meadowShows() && !this.hasPools())
+        ) {
+            // The pools placed as images get their image back while the blocks of the relief draw the ground.
+            if (this.hiddenPools.size > 0 && this.hidden?.() === true) this.readImagePools();
+            if (this.visible) {
+                this.surface.hide();
+                this.hideGrounds();
+                this.visible = false;
+                this.lastKey = undefined;
+                this.drawn = undefined;
+                this.scene.markDirty();
+            }
+            return;
+        }
+        this.ripple(now);
+        this.flowCycle();
+        this.readFoam(now);
+        const camera = this.scene.cameras.main.worldView;
+        const screen = { x: camera.x, y: camera.y, width: camera.width, height: camera.height };
+        this.readImagePools();
+        // Seen in 3/4 by the shaders, or flat.
+        const oblique = this.canProject() && this.oblique?.() === true;
+        this.isOblique = oblique;
+        this.splat?.setOblique(oblique);
+        // The foam left behind a wave fades: drawn again five times a second while any is left.
+        const foamKey = this.breaking.active(now) ? Math.floor(now / 200) : 0;
+        // The relief seen in 3/4 (flat under what is built): drawn again when a floor is laid or taken away.
+        const seen = oblique ? this.seen?.terrain() : undefined;
+        if (seen !== this.seenDrawn) {
+            this.seenDrawn = seen;
+            this.seenChanges++;
+        }
+        const key = `${foamKey}:${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}:${meadowHoldsSnow()}:${this.ownSnow()}:${oblique}:${this.snowEverywhere?.() === true}:${this.seenChanges}`;
+        // What was drawn reaches beyond the screen: while a scroll stays inside it, the same part of the map is
+        // drawn again (the water alone changed), so the relief read for it is kept. Reading the relief again at
+        // every drawing made the game stutter whenever the avatar walked.
+        const drawn = nextDrawnArea(
+            this.drawn,
+            screen,
+            oblique,
+            DRAW_MARGIN,
+            DRAW_MARGIN / 5,
+            this.groundBounds(oblique),
+        );
+        if (key === this.lastKey && drawn === this.drawn) return;
+        this.lastKey = key;
+        this.drawn = drawn;
+        this.draw(drawn, now);
+        this.visible = true;
+        this.scene.markDirty();
+    }
+
+    /**
+     * The part of the world the ground is drawn within: the map and a few cells around it. Past them nothing of the
+     * relief, the soils, the meadow nor the water is held, and painting the ground there cost as much as the map itself
+     * once the view was zoomed out. Undefined while the size of the map is not known.
+     */
+    private groundBounds(oblique: boolean): WeatherView | undefined {
+        // Not there in a scene still loading.
+        const map: { widthInPixels: number; heightInPixels: number } | undefined = this.scene.Map;
+        if (!map) return undefined;
+        const side = GROUND_BORDER_CELLS * TERRAIN_CELL;
+        // In 3/4 the shaders read the heights up to the reach above and under a pixel.
+        const reach = oblique ? OBLIQUE_REACH_PX : 0;
+        return {
+            x: -side,
+            y: -side - reach,
+            width: map.widthInPixels + 2 * side,
+            height: map.heightInPixels + 2 * (side + reach),
+        };
+    }
+
+    /** A number that changes whenever the styles or the hand ladders of the pools of the map change: drawn again then. */
+    private poolSettingsVersion(): number {
+        const settings = this.scene.getGameMap?.()?.getWamFile()?.getWam().settings;
+        const seen = this.poolSettingsSeen;
+        if (seen.pools !== settings?.pools || seen.ladders !== settings?.poolLadders) {
+            this.poolSettingsSeen = {
+                pools: settings?.pools,
+                ladders: settings?.poolLadders,
+                version: seen.version + 1,
+            };
+        }
+        return this.poolSettingsSeen.version;
+    }
+
+    /**
+     * The foam of the waves, read from each new state of the water, and the whitecaps of the wind: both drawn by the
+     * water shader. None for a player who turned the moving water off.
+     */
+    /**
+     * The sides the water of the map cannot cross (its walls, its doors taken closed): the foam does not read a wave
+     * between two waters a wall keeps apart. Read again when the objects of the map change.
+     */
+    private closedSides(): ClosedSide | undefined {
+        const wam = this.scene.getGameMap?.()?.getWamFile()?.getWam();
+        if (wam?.entities !== this.foamWallsOf) {
+            this.foamWallsOf = wam?.entities;
+            this.foamWalls = wam ? closedSidesOf(landWallsOf(wam)) : undefined;
+        }
+        return this.foamWalls;
+    }
+
+    private readFoam(now: number): void {
+        if (!this.splat) return;
+        const shown = isEffectShown("waterFlow");
+        const version = this.water.version();
+        if (!shown) {
+            if (this.breakingVersion !== -1) this.breaking.clear();
+            this.breakingVersion = -1;
+        } else if (version !== this.breakingVersion) {
+            this.breakingVersion = version;
+            // Worked out over the next images, a little at each (BreakingFoam.advance): all at once, it held an
+            // image for a tenth of a second at each state on a large map.
+            this.breaking.begin(this.water.settled(), this.water.relief(), now, this.closedSides());
+        }
+        if (shown) this.breaking.advance(FOAM_VISITS_PER_FRAME, now);
+        const drawn = shown && this.splat.drawsSea() && this.quality !== GraphicsQuality.Low;
+        // Under a hurricane the waves are drawn for its strongest wind, each point raising them to its own wind.
+        const hurricane = drawn ? this.seaHurricane?.() : undefined;
+        const asked = drawn ? this.wind?.() : undefined;
+        const wind = hurricane && asked ? { speed: hurricane.maxMs * 3.6, from: asked.from } : asked;
+        // Made again when the wind changes by a tenth of a km/h or a degree: its waves, and where they go.
+        const key = wind?.speed === undefined ? "" : `${Math.round(wind.speed * 10)}:${Math.round(wind.from ?? 0)}`;
+        if (key !== this.seaKey) {
+            this.seaKey = key;
+            this.sea = seaDrawing(wind?.speed, windHeading(wind?.from) ?? { x: 0, y: 1 });
+        }
+        // The hurricane over the sea, where it is now (its eye moves at each image).
+        if (this.sea && (hurricane || this.sea.hurricane)) this.sea = { ...this.sea, hurricane };
+        // The fetch of that wind over the water: the shader is told it when the water is drawn.
+        if (this.sea) {
+            this.seaFetch.update(this.water.settled(), version, this.sea.heading, now);
+            // A ray of the fetch at each image; once it is all made, only the fetch the shader reads is told again,
+            // over what is drawn: no redrawing of the ground.
+            if (this.seaFetch.advance() && this.drawnCanvas) this.splat.setFetch(this.fetchOver(this.drawnCanvas));
+        }
+        // The foam the crests leave, around the view, on the clock of the shaders; coarser in Medium graphics.
+        const view = this.scene.cameras.main.worldView;
+        this.splat.setSea(
+            this.sea,
+            this.scene.time.now,
+            { x: view.x, y: view.y, width: view.width, height: view.height },
+            this.quality === GraphicsQuality.Medium,
+        );
+    }
+
+    /** The fetch of the wind over the cells of a canvas, for the shader; undefined without a wind sea. */
+    private fetchOver(canvas: { x: number; y: number; columns: number; rows: number }): Uint8Array | undefined {
+        if (!this.sea) return undefined;
+        const size = canvas.columns * canvas.rows;
+        if (this.seaBytes.length !== size) this.seaBytes = new Uint8Array(size);
+        return this.seaFetch.over(
+            canvas.x / TERRAIN_CELL,
+            canvas.y / TERRAIN_CELL,
+            canvas.columns,
+            canvas.rows,
+            this.seaBytes,
+        );
+    }
+
+    private exactDepthsOver(
+        canvas: { x: number; y: number; columns: number; rows: number },
+        now: number,
+    ): Float32Array {
+        const size = canvas.columns * canvas.rows;
+        if (this.exactDepths.length !== size) this.exactDepths = new Float32Array(size);
+        this.water.depthsOver(
+            canvas.x / TERRAIN_CELL,
+            canvas.y / TERRAIN_CELL,
+            canvas.columns,
+            canvas.rows,
+            now,
+            this.exactDepths,
+        );
+        return this.exactDepths;
+    }
+
+    private draw(view: WeatherView, now: number): void {
+        const canvas = this.surface.begin(view, TERRAIN_CELL);
+        const size = canvas.columns * canvas.rows;
+        const relief = this.reliefOver(canvas);
+        const meadow = this.meadowOver(canvas);
+        if (this.everywhere.length !== size) {
+            this.everywhere = new Uint8Array(size).fill(1);
+            this.wet = new Uint8Array(size);
+            this.foam = new Uint8Array(size);
+            this.shore = new Uint8Array(size);
+        }
+        const { everywhere, wet, shore } = this;
+        // The ground changes seldom, the water five times a second while it moves: the ground is painted once for a
+        // relief, a meadow and a canvas, then laid back under the water.
+        const kept = this.painted;
+        if (
+            !kept ||
+            kept.relief !== relief ||
+            kept.meadow !== meadow ||
+            kept.imagePools !== this.imagePools.signature ||
+            // Turned to 3/4: the shaders are to be told the heights.
+            kept.oblique !== this.isOblique ||
+            kept.seen !== this.seenDrawn ||
+            !this.surface.restore?.(kept.snapshot)
+        ) {
+            // The soils first: the shades of the relief and the water are drawn over them.
+            if (this.splat) {
+                const imageCells = imagePoolCells(this.imagePools.pools, areaOf(canvas));
+                this.splat.setGround(areaOf(canvas), {
+                    soils: relief.soils,
+                    grass: meadow?.grass,
+                    snow: thickestSnow(relief.dug ? snowOf(relief.snow) : undefined, snowOf(meadow?.snow)),
+                    ice: meadow?.ice,
+                    moisture: meadow?.moisture,
+                    autumn: this.season?.() === Season.Autumn ? 1 : 0,
+                    dug: relief.ground,
+                    raised: relief.raised,
+                    // Read from the map only when the relief is seen in 3/4.
+                    heights: this.isOblique ? this.heightsSeen(relief, canvas) : undefined,
+                    straw: meadow?.straw,
+                    ash: meadow?.ash,
+                    fire: meadow?.fire,
+                    outdoor: relief.outdoor,
+                    poolStyles: relief.poolStyles,
+                    imagePools: imageCells,
+                });
+                this.ladders?.draw(
+                    areaOf(canvas),
+                    topEdgesOf(
+                        poolMaskOf(relief.soils, imageCells, relief.poolStyles, size),
+                        canvas.columns,
+                        canvas.rows,
+                    ),
+                    new Set(relief.poolLadders),
+                );
+            } else if (this.grounds) {
+                this.layGrounds(this.grounds, canvas, relief, meadow);
+            } else {
+                for (const [code, cells] of relief.soils) {
+                    const tint = SOIL_TINTS[SOILS[code - 1]];
+                    if (tint) {
+                        this.surface.paintField(canvas, cells, everywhere, NO_SHIFT, tint.color, () => tint.alpha);
+                    }
+                }
+                if (meadow?.grass) {
+                    this.surface.paintField(canvas, meadow.grass, everywhere, NO_SHIFT, GRASS_COLOR, grassAlpha);
+                }
+            }
+            // With the shaders, the straw, the ash and the fire are drawn by the ground shader, in clear patches.
+            if (meadow?.straw && !this.splat) {
+                // The grass gone dry under the heat and the wind: straw over the green.
+                this.surface.paintField(canvas, meadow.straw, everywhere, NO_SHIFT, STRAW_COLOR, strawAlpha);
+            }
+            if (meadow?.ash && !this.splat) {
+                // What a fire left: the ground blackened, until the grass grows back.
+                this.surface.paintField(canvas, meadow.ash, everywhere, NO_SHIFT, ASH_COLOR, ashAlpha);
+            }
+            if (meadow?.fire && !this.splat) {
+                // The tiles on fire glow on the ground, under their flames.
+                this.surface.paintField(canvas, meadow.fire, everywhere, NO_SHIFT, FIRE_GLOW_COLOR, fireGlowAlpha);
+            }
+            const fallen = meadow?.snow;
+            if (fallen && !relief.dug && !this.splat && !this.grounds) {
+                // The snow that fell on a map without relief, when neither shaders nor textures draw the ground.
+                this.surface.paintField(canvas, fallen, everywhere, NO_SHIFT, SNOW_COLOR, (level) =>
+                    snowAlpha(level / 255),
+                );
+            }
+            // With the shaders, the relief is shaded by the ground shader itself, in clear steps.
+            if (relief.dug && !this.splat) {
+                // Under textured grounds and water the depth and the slopes already show: the dark of the hollow and
+                // the shades of the slopes, made for bare ground, are halved, so that they do not spread a muddy blur.
+                const hollow = this.grounds ? 0.5 : 1;
+                this.surface.paintField(
+                    canvas,
+                    relief.ground,
+                    everywhere,
+                    NO_SHIFT,
+                    0x000000,
+                    (level) => groundAlpha(-level) * hollow,
+                );
+                this.surface.paintField(
+                    canvas,
+                    relief.raised,
+                    everywhere,
+                    NO_SHIFT,
+                    0xffffff,
+                    (level) => raisedAlpha(level) * hollow,
+                );
+                const snow = thickestSnow(relief.snow, meadow?.snow);
+                if (snow && !this.grounds) {
+                    this.surface.paintField(canvas, snow, everywhere, NO_SHIFT, SNOW_COLOR, (level) =>
+                        snowAlpha(level / 255),
+                    );
+                }
+                this.surface.paintField(
+                    canvas,
+                    relief.shaded,
+                    everywhere,
+                    NO_SHIFT,
+                    0x000000,
+                    (level) => slopeAlpha(level / 255) * hollow,
+                );
+                this.surface.paintField(
+                    canvas,
+                    relief.lit,
+                    everywhere,
+                    NO_SHIFT,
+                    0xffffff,
+                    (level) => slopeAlpha(level / 255) * hollow,
+                );
+            }
+            const snapshot = this.surface.snapshot?.();
+            this.painted = snapshot
+                ? {
+                      relief,
+                      meadow,
+                      snapshot,
+                      imagePools: this.imagePools.signature,
+                      oblique: this.isOblique,
+                      seen: this.seenDrawn,
+                  }
+                : undefined;
+        }
+        // Water lies in the hollows, and on flat ground where they overflow or where a source pours.
+        const anyWater = this.water.levelsOver(
+            canvas.x / TERRAIN_CELL,
+            canvas.y / TERRAIN_CELL,
+            canvas.columns,
+            canvas.rows,
+            now,
+            wet,
+        );
+        if (this.splat) {
+            let depths: Float32Array | undefined;
+            if (this.isOblique) {
+                // The surface of the water where it really is, however deep: seen in 3/4, it is drawn at its height.
+                if (this.depths.length !== size) this.depths = new Float32Array(size);
+                depths = this.depths;
+                this.water.depthsOver(
+                    canvas.x / TERRAIN_CELL,
+                    canvas.y / TERRAIN_CELL,
+                    canvas.columns,
+                    canvas.rows,
+                    now,
+                    depths,
+                );
+                // Over what is built the water is drawn at its place, like its ground.
+                const seen = this.seen;
+                if (seen) {
+                    depthsSeen(
+                        depths,
+                        (x, y) => seen.isFlatAt(x, y),
+                        canvas.x / TERRAIN_CELL,
+                        canvas.y / TERRAIN_CELL,
+                        canvas.columns,
+                        canvas.rows,
+                    );
+                }
+            }
+            const foamy = anyWater && this.breaking.active(now);
+            if (foamy) {
+                const cellX = canvas.x / TERRAIN_CELL;
+                const cellY = canvas.y / TERRAIN_CELL;
+                for (let row = 0; row < canvas.rows; row++) {
+                    for (let column = 0; column < canvas.columns; column++) {
+                        this.foam[row * canvas.columns + column] = Math.round(
+                            255 * this.breaking.foamAt(cellX + column, cellY + row, now),
+                        );
+                    }
+                }
+            }
+            this.splat.setWater(
+                anyWater ? wet : undefined,
+                this.seeThrough ? SEE_THROUGH : 1,
+                foamy ? this.foam : undefined,
+                anyWater ? this.currentOver(canvas, wet) : undefined,
+                depths,
+                anyWater ? this.fetchOver(canvas) : undefined,
+                anyWater ? this.exactDepthsOver(canvas, now) : undefined,
+            );
+            this.drawnCanvas = { x: canvas.x, y: canvas.y, columns: canvas.columns, rows: canvas.rows };
+        } else if (this.grounds) {
+            this.layWater(this.grounds, canvas, anyWater ? wet : undefined);
+        } else if (anyWater) {
+            for (let index = 0; index < size; index++) shore[index] = wet[index] > 0 && wet[index] < SHORE_PX ? 1 : 0;
+            const strength = this.seeThrough ? SEE_THROUGH : 1;
+            this.surface.paintField(
+                canvas,
+                wet,
+                everywhere,
+                NO_SHIFT,
+                SHALLOW_WATER.color,
+                () => SHALLOW_WATER.alpha * strength,
+            );
+            this.surface.paintField(
+                canvas,
+                wet,
+                everywhere,
+                NO_SHIFT,
+                DEEP_WATER_COLOR,
+                (level) => deepWaterAlpha(level) * strength,
+            );
+            this.surface.paintField(canvas, shore, everywhere, NO_SHIFT, SHORE_WATER.color, () => SHORE_WATER.alpha);
+        }
+        this.surface.end();
+    }
+
+    /**
+     * The current of the water over a canvas, as the server tells it (cells a second, east then south, two a cell), on
+     * the wet cells only: the water shader slides the ripples of a running film with it. Undefined without a current
+     * told (a water without inertia).
+     */
+    private currentOver(canvas: BlockCanvasArea, wet: Uint8Array): Float32Array | undefined {
+        const size = canvas.columns * canvas.rows;
+        if (this.current.length !== size * 2) this.current = new Float32Array(size * 2);
+        const current = this.current;
+        current.fill(0);
+        let any = false;
+        for (let row = 0; row < canvas.rows; row++) {
+            for (let column = 0; column < canvas.columns; column++) {
+                const index = row * canvas.columns + column;
+                if (wet[index] === 0) continue;
+                const speed = this.water.speedAt(
+                    canvas.x + (column + 0.5) * TERRAIN_CELL,
+                    canvas.y + (row + 0.5) * TERRAIN_CELL,
+                );
+                if (!speed) return undefined;
+                current[index * 2] = speed.x;
+                current[index * 2 + 1] = speed.y;
+                if (speed.x !== 0 || speed.y !== 0) any = true;
+            }
+        }
+        return any ? current : undefined;
+    }
+
+    /**
+     * The relief under a canvas: how deep each cell is dug and how its slope takes the light. Read from the map once
+     * for a relief and a canvas (the costly part of a drawing), then kept while the water alone moves; only the
+     * chunks of the relief that hold something are looked at.
+     */
+    /**
+     * The exact heights of the ground over the canvas, for the shaders that draw the relief in 3/4: those of the
+     * relief seen (flat under what is built) when the scene tells it, else of the map, read once for a relief.
+     */
+    private heightsSeen(relief: ReliefLayers, canvas: BlockCanvasArea): Float32Array {
+        const read = (terrain: TerrainData | undefined): Float32Array =>
+            heightsOver(terrain, canvas.x / TERRAIN_CELL, canvas.y / TERRAIN_CELL, canvas.columns, canvas.rows);
+        return this.seen ? read(this.seenDrawn) : (relief.heights ??= read(relief.terrain));
+    }
+
+    private reliefOver(canvas: BlockCanvasArea): ReliefLayers {
+        const terrain: TerrainData | undefined = this.water.relief();
+        const kept = this.relief;
+        if (
+            kept &&
+            kept.terrain === terrain &&
+            kept.season === this.season?.() &&
+            kept.x === canvas.x &&
+            kept.y === canvas.y &&
+            kept.columns === canvas.columns &&
+            kept.rows === canvas.rows &&
+            kept.outdoorGrid === this.scene.getOutdoorGrid?.() &&
+            kept.poolStyles === this.scene.getGameMap?.()?.getWamFile()?.getWam().settings?.pools &&
+            kept.poolLadders === this.scene.getGameMap?.()?.getWamFile()?.getWam().settings?.poolLadders
+        ) {
+            return kept;
+        }
+        const size = canvas.columns * canvas.rows;
+        const season = this.season?.();
+        const outdoors = this.scene.getOutdoorGrid?.();
+        const layers: ReliefLayers = {
+            terrain,
+            x: canvas.x,
+            y: canvas.y,
+            columns: canvas.columns,
+            rows: canvas.rows,
+            ground: new Uint8Array(size),
+            raised: new Uint8Array(size),
+            snow: undefined,
+            season,
+            soils: new Map(),
+            shaded: new Uint8Array(size),
+            lit: new Uint8Array(size),
+            dug: false,
+            outdoorGrid: outdoors,
+            outdoor: undefined,
+            poolStyles: this.scene.getGameMap?.()?.getWamFile()?.getWam().settings?.pools,
+            poolLadders: this.scene.getGameMap?.()?.getWamFile()?.getWam().settings?.poolLadders,
+        };
+        const left = canvas.x / TERRAIN_CELL;
+        const top = canvas.y / TERRAIN_CELL;
+        if (this.splat && outdoors) {
+            const outdoor = new Uint8Array(size);
+            for (let row = 0; row < canvas.rows; row++) {
+                for (let column = 0; column < canvas.columns; column++) {
+                    const x = (left + column + 0.5) * TERRAIN_CELL;
+                    const y = (top + row + 0.5) * TERRAIN_CELL;
+                    outdoor[row * canvas.columns + column] = outdoors.isOutdoorAt(x, y) ? 1 : 0;
+                }
+            }
+            layers.outdoor = outdoor;
+        }
+        for (const key of Object.keys(terrain?.soil ?? {})) {
+            const chunk = cellOf(key);
+            const firstColumn = Math.max(0, chunk.x * TERRAIN_CHUNK - left);
+            const lastColumn = Math.min(canvas.columns, (chunk.x + 1) * TERRAIN_CHUNK - left);
+            const firstRow = Math.max(0, chunk.y * TERRAIN_CHUNK - top);
+            const lastRow = Math.min(canvas.rows, (chunk.y + 1) * TERRAIN_CHUNK - top);
+            for (let row = firstRow; row < lastRow; row++) {
+                for (let column = firstColumn; column < lastColumn; column++) {
+                    const code = soilAt(terrain, left + column, top + row);
+                    if (code === 0) continue;
+                    let cells = layers.soils.get(code);
+                    if (!cells) {
+                        cells = new Uint8Array(size);
+                        layers.soils.set(code, cells);
+                    }
+                    cells[row * canvas.columns + column] = 1;
+                }
+            }
+        }
+        for (const key of Object.keys(terrain?.chunks ?? {})) {
+            const chunk = cellOf(key);
+            // The cells of the chunk and one more around: a slope shows on the rim of a hollow too.
+            const firstColumn = Math.max(0, chunk.x * TERRAIN_CHUNK - 1 - left);
+            const lastColumn = Math.min(canvas.columns, (chunk.x + 1) * TERRAIN_CHUNK + 1 - left);
+            const firstRow = Math.max(0, chunk.y * TERRAIN_CHUNK - 1 - top);
+            const lastRow = Math.min(canvas.rows, (chunk.y + 1) * TERRAIN_CHUNK + 1 - top);
+            for (let row = firstRow; row < lastRow; row++) {
+                for (let column = firstColumn; column < lastColumn; column++) {
+                    const index = row * canvas.columns + column;
+                    const height = heightAt(terrain, left + column, top + row);
+                    if (height < 0) {
+                        layers.ground[index] = Math.min(255, -height);
+                        layers.dug = true;
+                    } else if (height > 0) {
+                        layers.raised[index] = Math.min(255, height);
+                        layers.dug = true;
+                        // The snow of the heights, outdoors only (a roof drawn in the map keeps it off).
+                        const cover = season ? snowCover(height, season) : 0;
+                        const cellX = left + column;
+                        const cellY = top + row;
+                        if (
+                            cover > 0 &&
+                            (!outdoors ||
+                                outdoors.isOutdoorAt((cellX + 0.5) * TERRAIN_CELL, (cellY + 0.5) * TERRAIN_CELL))
+                        ) {
+                            layers.snow ??= new Uint8Array(size);
+                            layers.snow[index] = Math.round(cover * 255);
+                        }
+                    }
+                    const shade = slopeShade(terrain, left + column, top + row);
+                    layers.shaded[index] = shade < 0 ? Math.round(-shade * 255) : 0;
+                    layers.lit[index] = shade > 0 ? Math.round(shade * 255) : 0;
+                    if (shade !== 0) layers.dug = true;
+                }
+            }
+        }
+        this.relief = layers;
+        return layers;
+    }
+
+    /**
+     * The meadow under a canvas: read again for each state the server tells, tile by tile (a tile with nothing on it,
+     * most of a map, costs one look), on the cells of the tile that are outdoors for this browser (a roof drawn in
+     * the map keeps the grass off).
+     */
+    /** Whether the meadow has anything to draw for this player: grass, a dry ground, or the snow of the server. */
+    private meadowShows(): boolean {
+        const meadow = this.meadow;
+        if (meadow === undefined) return false;
+        if (meadow.hasGrass() || meadow.hasMoisture()) return true;
+        // The winter theme of this player: all white outdoors.
+        if (this.snowEverywhere?.() === true) return true;
+        return meadowHoldsSnow() ? meadow.hasSnow() || meadow.hasIce() : this.ownSnow() > 0;
+    }
+
+    /**
+     * The snow of their own city on the ground of a player who follows one, in steps of a twentieth: the ground is
+     * painted again when it moves by one, not at each image. 0 for a player who follows the server.
+     */
+    private ownSnow(): number {
+        if (meadowHoldsSnow()) return 0;
+        return Math.round((this.scene.getMapSnowCoverage?.() ?? 0) * OWN_SNOW_STEPS);
+    }
+
+    private meadowOver(canvas: BlockCanvasArea): MeadowLayers | undefined {
+        const meadow = this.meadow;
+        if (!meadow || !this.meadowShows()) {
+            this.meadowLayers = undefined;
+            return undefined;
+        }
+        // The snow of the server is for those who follow its weather (GroundSource).
+        const server = meadowHoldsSnow();
+        // The winter theme of this player: all white outdoors, whatever fell.
+        const winter = this.snowEverywhere?.() === true;
+        const own = this.ownSnow();
+        const kept = this.meadowLayers;
+        if (
+            kept &&
+            kept.version === meadow.version() &&
+            kept.server === server &&
+            kept.winter === winter &&
+            kept.own === own &&
+            kept.x === canvas.x &&
+            kept.y === canvas.y &&
+            kept.columns === canvas.columns &&
+            kept.rows === canvas.rows
+        ) {
+            return kept;
+        }
+        const size = canvas.columns * canvas.rows;
+        const layers: MeadowLayers = {
+            x: canvas.x,
+            y: canvas.y,
+            columns: canvas.columns,
+            rows: canvas.rows,
+            version: meadow.version(),
+            grass: undefined,
+            straw: undefined,
+            ash: undefined,
+            fire: undefined,
+            snow: undefined,
+            ice: undefined,
+            moisture: undefined,
+            server,
+            winter,
+            own,
+        };
+        const outdoor = this.scene.getOutdoorGrid?.();
+        const cellsATile = TILE_PX / TERRAIN_CELL;
+        const left = canvas.x / TERRAIN_CELL;
+        const top = canvas.y / TERRAIN_CELL;
+        const lastTileX = Math.floor((left + canvas.columns - 1) / cellsATile);
+        const lastTileY = Math.floor((top + canvas.rows - 1) / cellsATile);
+        for (let tileY = Math.floor(top / cellsATile); tileY <= lastTileY; tileY++) {
+            for (let tileX = Math.floor(left / cellsATile); tileX <= lastTileX; tileX++) {
+                const cover = meadow.grassAt(tileX, tileY);
+                const dryness = meadow.drynessAt(tileX, tileY);
+                const ashes = meadow.ashAt(tileX, tileY);
+                const flames = meadow.fireAt(tileX, tileY);
+                // The snow of the server tile by tile, or the snow of their own city, the same everywhere outdoors.
+                const white = winter
+                    ? 255
+                    : server
+                      ? Math.round(snowCoverOf(meadow.snowAt(tileX, tileY)) * 255)
+                      : Math.round((own / OWN_SNOW_STEPS) * 255);
+                const frozen = server ? meadow.iceByteAt(tileX, tileY) : 0;
+                const moist = meadow.moistureByteAt(tileX, tileY);
+                if (
+                    cover === 0 &&
+                    dryness === 0 &&
+                    ashes === 0 &&
+                    flames === 0 &&
+                    white === 0 &&
+                    frozen === 0 &&
+                    moist === 0
+                ) {
+                    continue;
+                }
+                const firstRow = Math.max(0, tileY * cellsATile - top);
+                const lastRow = Math.min(canvas.rows, (tileY + 1) * cellsATile - top);
+                const firstColumn = Math.max(0, tileX * cellsATile - left);
+                const lastColumn = Math.min(canvas.columns, (tileX + 1) * cellsATile - left);
+                for (let row = firstRow; row < lastRow; row++) {
+                    for (let column = firstColumn; column < lastColumn; column++) {
+                        const cellX = left + column;
+                        const cellY = top + row;
+                        if (
+                            outdoor &&
+                            !outdoor.isOutdoorAt((cellX + 0.5) * TERRAIN_CELL, (cellY + 0.5) * TERRAIN_CELL)
+                        ) {
+                            continue;
+                        }
+                        const index = row * canvas.columns + column;
+                        const drawn = cover === 0 ? 0 : mottledCover(cover, cellX, cellY);
+                        if (drawn > 0) (layers.grass ??= new Uint8Array(size))[index] = drawn;
+                        if (ashes > 0) (layers.ash ??= new Uint8Array(size))[index] = ashes;
+                        if (flames > 0) (layers.fire ??= new Uint8Array(size))[index] = flames;
+                        if (white > 0) (layers.snow ??= new Uint8Array(size))[index] = white;
+                        if (frozen > 0) (layers.ice ??= new Uint8Array(size))[index] = frozen;
+                        if (moist > 0) (layers.moisture ??= new Uint8Array(size))[index] = moist;
+                        // A dry ground yellows with or without grass on it.
+                        if (dryness > 0) (layers.straw ??= new Uint8Array(size))[index] = strawLevel(drawn, dryness);
+                    }
+                }
+            }
+        }
+        this.meadowLayers = layers;
+        return layers;
+    }
+
+    /**
+     * Lays the textured grounds over the canvas: each soil where it is painted, the grass as thick as it grows (autumn
+     * grass in autumn), the snow of the heights as it holds.
+     */
+    private layGrounds(
+        grounds: Grounds,
+        canvas: BlockCanvasArea,
+        relief: ReliefLayers,
+        meadow: MeadowLayers | undefined,
+    ): void {
+        const stamp = this.stampOfGround(relief.terrain, meadow);
+        const area: GroundArea = {
+            x: canvas.x,
+            y: canvas.y,
+            columns: canvas.columns,
+            rows: canvas.rows,
+            cell: TERRAIN_CELL,
+        };
+        grounds.soils.forEach((ground, index) => {
+            const cells = relief.soils.get(index + 1);
+            if (cells) ground.show(area, (cell) => cells[cell] ?? 0, stamp);
+            else ground.hide();
+        });
+        const autumn = this.season?.() === Season.Autumn;
+        const grass = meadow?.grass;
+        (autumn ? grounds.grass : grounds.autumnGrass).hide();
+        if (grass) (autumn ? grounds.autumnGrass : grounds.grass).show(area, (cell) => (grass[cell] ?? 0) / 255, stamp);
+        else (autumn ? grounds.autumnGrass : grounds.grass).hide();
+        const snow = thickestSnow(relief.dug ? relief.snow : undefined, meadow?.snow);
+        if (snow) grounds.snow.show(area, (cell) => snowAlpha((snow[cell] ?? 0) / 255), stamp);
+        else grounds.snow.hide();
+    }
+
+    /**
+     * The state of the ground, as a number that changes with it (the relief, the meadow, the season): the masks of the
+     * grounds are worked out once for each, then kept while the view moves.
+     */
+    private stampOfGround(terrain: TerrainData | undefined, meadow: MeadowLayers | undefined): number {
+        const state = { terrain, meadow: meadow ? (this.meadow?.version() ?? 0) : -1, season: this.season?.() };
+        const last = this.groundState;
+        if (!last || last.terrain !== state.terrain || last.meadow !== state.meadow || last.season !== state.season) {
+            this.groundState = state;
+            this.groundStamp++;
+        }
+        return this.groundStamp;
+    }
+
+    /**
+     * The water, textured: its shore bends as the edges of the grounds do, and the deep water darkens as deep as it
+     * is. It moves with the water: its mask is worked out at each drawing of the water.
+     */
+    private layWater(grounds: Grounds, canvas: BlockCanvasArea, wet: Uint8Array | undefined): void {
+        if (!wet) {
+            grounds.water.hide();
+            grounds.deepWater.hide();
+            return;
+        }
+        const area: GroundArea = {
+            x: canvas.x,
+            y: canvas.y,
+            columns: canvas.columns,
+            rows: canvas.rows,
+            cell: TERRAIN_CELL,
+        };
+        const strength = this.seeThrough ? SEE_THROUGH : 1;
+        grounds.water.show(area, (cell) => ((wet[cell] ?? 0) > 0 ? 1 : 0), undefined, 0.9 * strength);
+        // The dark of deep water stays inside the water: on a cell of the shore (a neighbour dry), the shallow water
+        // alone draws the edge, sharp and uneven like the other grounds.
+        const columns = canvas.columns;
+        const inside = (cell: number): boolean =>
+            (wet[cell] ?? 0) > 0 &&
+            (wet[cell - 1] ?? 0) > 0 &&
+            (wet[cell + 1] ?? 0) > 0 &&
+            (wet[cell - columns] ?? 0) > 0 &&
+            (wet[cell + columns] ?? 0) > 0;
+        grounds.deepWater.show(
+            area,
+            (cell) => (inside(cell) ? deepWaterAlpha(wet[cell] ?? 0) : 0),
+            undefined,
+            strength,
+        );
+    }
+
+    /**
+     * The pools placed as images, drawn by the shaders in their place: their images hidden while they are, shown again
+     * to compare (classicPoolsShown) or without the shaders.
+     */
+    private readImagePools(): void {
+        const replace = this.splat !== undefined && !classicPoolsShown();
+        const entities = replace
+            ? (this.scene.getGameMapFrontWrapper?.()?.getEntitiesManager?.()?.getEntities().values() ?? [])
+            : [];
+        const placed = [...entities].filter((entity) => (entity.getPrefab().water?.length ?? 0) > 0);
+        const pools = imagePoolsOf(placed);
+        const signature = signatureOf(pools);
+        const kept = new Set(pools.map((pool) => pool.entityId));
+        for (const [id, entity] of this.hiddenPools) {
+            if (kept.has(id)) continue;
+            entity.setVisible(true);
+            this.hiddenPools.delete(id);
+        }
+        for (const entity of placed) {
+            if (!kept.has(entity.entityId)) continue;
+            // Hidden again when its image showed up: an object is shown once its image is loaded, after this.
+            if (entity.visible) {
+                entity.setVisible(false);
+                this.scene.markDirty();
+            }
+            this.hiddenPools.set(entity.entityId, entity);
+        }
+        if (signature !== this.imagePools.signature) this.imagePools = { pools, signature };
+    }
+
+    /** Whether the map has pools painted (cells kept as soils of a pool style): drawn even with no water nor grass. */
+    private hasPools(): boolean {
+        if (!this.splat) return false;
+        if (this.imagePools.pools.length > 0) return true;
+        const terrain = this.water.relief();
+        if (this.poolsOf && this.poolsOf.terrain === terrain) return this.poolsOf.any;
+        const any = Object.values(terrain?.soil ?? {}).some((codes) =>
+            codes.some((code) => poolStyleOf(code) !== undefined),
+        );
+        this.poolsOf = { terrain, any };
+        return any;
+    }
+
+    /** The frost, the ice and the wet ground of now, for the shaders: the scene is drawn again when they move. */
+    private flowCycle(): void {
+        if (!this.splat) return;
+        const snow = Math.round((this.scene.getMapSnowCoverage?.() ?? 0) * 50) / 50;
+        if (snow !== this.snowOnIce) {
+            this.snowOnIce = snow;
+            this.splat.setSnow(snow);
+            this.scene.markDirty();
+        }
+        const server = meadowHoldsSnow();
+        if (server !== this.serverIce) {
+            this.serverIce = server;
+            this.splat.setServerIce(server);
+            this.scene.markDirty();
+        }
+        const cycle = waterCycleNow(this.scene.getGameMap().getWamFile()?.getWam().settings);
+        if (cycle === this.cycle) return;
+        this.cycle = cycle;
+        this.splat.setCycle(cycle);
+        this.scene.markDirty();
+    }
+
+    /** The ripples of the water twinkle in place: the next image of the water, a few times a second. */
+    /**
+     * The fronts of the waves of the comets fallen into the water, drawn by the water shader. False without it: the
+     * meteors draw their circles then.
+     */
+    /** Whether the water shader draws the waves of the comets. */
+    public drawsWaterRings(): boolean {
+        return this.splat !== undefined;
+    }
+
+    /** The cracks and the holes of the ice (IceBreaks.ts): read by the water shader at its next drawing. */
+    public setIceBreaks(breaks: readonly IceBreak[]): void {
+        this.splat?.setBreaks(breaks);
+    }
+
+    /** What the water reflects (sky, clouds, sun, lamps): read by the water shader at its next drawing. */
+    public setWaterReflection(reflection: WaterReflection): void {
+        this.splat?.setReflection(reflection);
+    }
+
+    public setWaterRings(rings: readonly WaterRing[]): boolean {
+        if (!this.splat) return false;
+        if (rings.length > 0 || this.splat.hasRings()) this.scene.markDirty();
+        this.splat.setRings(rings);
+        return true;
+    }
+
+    private ripple(now: number): void {
+        if (this.splat) {
+            if (this.splat.hasWater() && now - this.lastRipple >= WATER_FRAME_MS) {
+                this.lastRipple = now;
+                this.scene.markDirty();
+            }
+            return;
+        }
+        const grounds = this.grounds;
+        if (!grounds?.water.isVisible() || now - this.lastRipple < RIPPLE_MS) return;
+        this.lastRipple = now;
+        const frame = WATER_FRAMES[Math.floor(now / RIPPLE_MS) % WATER_FRAMES.length];
+        if (frame) grounds.water.setImage(frame);
+        this.scene.markDirty();
+    }
+
+    private hideGrounds(): void {
+        this.splat?.hide();
+        this.ladders?.hide();
+        if (!this.grounds) return;
+        for (const ground of allGrounds(this.grounds)) ground.hide();
+    }
+
+    public destroy(): void {
+        this.unsubscribeQuality();
+        this.basicPools?.destroy();
+        this.basicWater?.destroy();
+        this.surface.destroy();
+        this.splat?.destroy();
+        this.ladders?.destroy();
+        if (this.grounds) for (const ground of allGrounds(this.grounds)) ground.destroy();
+    }
+}
+
+function areaOf(canvas: BlockCanvasArea): GroundArea {
+    return { x: canvas.x, y: canvas.y, columns: canvas.columns, rows: canvas.rows, cell: TERRAIN_CELL };
+}
+
+/** The snow of the heights as the shader reads it: how much of the ground it covers, 0 to 255. */
+/** The snow of the heights and the snow that fell, cell by cell: the thicker of the two. */
+function thickestSnow(heights: Uint8Array | undefined, fallen: Uint8Array | undefined): Uint8Array | undefined {
+    if (!heights || !fallen) return heights ?? fallen;
+    return heights.map((level, cell) => Math.max(level, fallen[cell] ?? 0));
+}
+
+function snowOf(snow: Uint8Array | undefined): Uint8Array | undefined {
+    if (!snow) return undefined;
+    return snow.map((level) => Math.round(snowAlpha(level / 255) * 255));
+}
+
+function createGrounds(scene: GameScene): Grounds {
+    return {
+        soils: SOILS.map((name) => new TexturedGround(scene, GROUND_TEXTURES[name], SOIL_GROUND_DEPTH)),
+        grass: new TexturedGround(scene, GROUND_TEXTURES.grass, GRASS_GROUND_DEPTH, true),
+        autumnGrass: new TexturedGround(scene, GROUND_TEXTURES.autumnGrass, GRASS_GROUND_DEPTH, true),
+        snow: new TexturedGround(scene, GROUND_TEXTURES.snow, SNOW_GROUND_DEPTH),
+        water: new TexturedGround(scene, GROUND_TEXTURES.water, WATER_DEPTH),
+        deepWater: new TexturedGround(scene, GROUND_TEXTURES.deepWater, DEEP_WATER_DEPTH, true),
+    };
+}
+
+function allGrounds(grounds: Grounds): TexturedGround[] {
+    return [...grounds.soils, grounds.grass, grounds.autumnGrass, grounds.snow, grounds.water, grounds.deepWater];
+}
+
+/**
+ * The pools of a canvas, cell by cell, for their ladders: the number of ladders their pool asks for plus one (0: no
+ * pool). The pools painted (soils of a pool style) and the pools placed as images (the default style).
+ */
+function poolMaskOf(
+    soils: ReadonlyMap<number, Uint8Array>,
+    images: Uint8Array | undefined,
+    styles: readonly PoolStyle[] | undefined,
+    size: number,
+): Uint8Array {
+    const mask = new Uint8Array(size);
+    for (const [code, cells] of soils) {
+        const style = poolStyleOf(code);
+        if (style === undefined) continue;
+        const ladders = poolStyleAt(styles, style).ladders;
+        for (let cell = 0; cell < size; cell++) if (cells[cell]) mask[cell] = ladders + 1;
+    }
+    if (images) for (let cell = 0; cell < size; cell++) if (images[cell]) mask[cell] = DEFAULT_POOL_STYLE.ladders + 1;
+    return mask;
+}

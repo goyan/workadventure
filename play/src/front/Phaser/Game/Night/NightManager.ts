@@ -1,15 +1,47 @@
-import type { Unsubscriber } from "svelte/store";
+import { derived, get, type Unsubscriber } from "svelte/store";
 import type { AreaData } from "@workadventure/map-editor";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
-import { NightMode, nightModeStore, nightDateStore } from "../../../Stores/NightStore";
+import {
+    NightMode,
+    ambienceFullShareStore,
+    mapTimeZoneStore,
+    nightDarknessStore,
+    nightDateStore,
+    nightInEditorStore,
+    effectiveNightModeStore,
+    worldCityStore,
+    worldCustomMinutesStore,
+    worldMomentStore,
+    worldPointStore,
+    realFalloffStore,
+    realisticNightStore,
+    shownAmbienceStrengthStore,
+    shownLightBounceStore,
+    shownLightSoftEdgeStore,
+    shownSecondBounceStore,
+} from "../../../Stores/NightStore";
+import { skyLightSettingsStore } from "../../../Stores/SkyLightStore";
 import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import { rgbLampLightsStore, type RgbLampLight } from "../../../Stores/RgbLampStore";
+import { skyWindowLightsStore } from "../../../Stores/SkyWindowLightStore";
 import { torchLightsStore } from "../../../Stores/TorchStore";
+import { iceShackLightsStore } from "../../../Stores/IceShackStore";
+import { worldFallStore } from "../../../Stores/WorldFallStore";
+import { fastDayOnStore, fastDaySkyStore, fastDaySpeedStore } from "../../../Stores/FastDayStore";
 import type { GameScene } from "../GameScene";
 import { shownMapPlace } from "../Weather/RealWeatherClient";
 import {
+    setLightBounceStrength,
+    setLightRealFalloff,
+    setLightSecondBounce,
+    setLightSoftEdgePx,
+} from "../Lamps/LightSoftEdge";
+import {
+    forcedSunMinutes,
+    NIGHT_MAX_OPACITY,
     nightOpacityAt,
+    nightOpacityWith,
     parisCalendarDay,
     parisWallClockToInstant,
     parseNightAt,
@@ -18,16 +50,26 @@ import {
     sunPositionAt,
 } from "./NightClock";
 import type { SunPosition } from "./NightClock";
-import { NightHalos } from "./NightHalos";
-import { coversMostly, isInLightableArea, lightableAreas, NightLights } from "./NightLights";
-import type { NightRect } from "./NightLights";
+import { roomAmbience, type AmbienceSettings } from "./AmbientLight";
+import { moonPhaseAt, moonPositionAt } from "./MoonClock";
+import { halosWhereDrawn, NightHalos } from "./NightHalos";
+import { cityPlace, placeOfPoint, worldCityOf } from "./WorldDaylight";
+import type { WorldPlace } from "./WorldDaylight";
+import { pointWords } from "./PointWords";
+import { coversMostly, isInLightableArea, lightableAreas, NightLights, roomsThatLightUp } from "./NightLights";
+import type { LitArea, NightRect } from "./NightLights";
 import { NightOverlay } from "./NightOverlay";
-import { nightRenderAction } from "./NightRenderDecision";
+import { nightHiddenInEditor, nightRenderAction } from "./NightRenderDecision";
 import type { NightFrame } from "./NightRenderDecision";
 import { ServerNightClock } from "./ServerNightClock";
+import { FastDayClock } from "./FastDayClock";
+import { moonlitNightOpacity, skyLightAt } from "./SkyLight";
+import type { SkyLight, SkyLightSettings } from "./SkyLight";
 
 /** The sun only moves the veil during dusk and dawn, over half an hour or more: once a second is plenty. */
 const CLOCK_INTERVAL_MS = 1000;
+/** With the day sped up (FastDayClock), up to ten minutes of sky a second: the sun and the shadows move in small steps. */
+const FAST_CLOCK_INTERVAL_MS = 100;
 
 /**
  * Night mode of the map: darkens the scene in the evening, lights the areas where someone is and carries a halo of
@@ -39,30 +81,72 @@ export class NightManager {
     private readonly lights = new NightLights();
     private readonly halos = new NightHalos();
     private readonly clock = new ServerNightClock();
+    /** The day sped up for this player alone: how far ahead of the real sky the one shown is. */
+    private readonly fastDay = new FastDayClock();
+    private fastDayOn = false;
+    private fastDaySpeed = 1;
+    private readonly unsubscribeFastDay: Unsubscriber;
+    /** How far ahead of the real sky the one shown is, in ms (0 unless the day is sped up). */
+    private skyAhead = 0;
     // Halo id of the local player; remote players use their MapPlayersByKey key.
     private readonly localId = localUserStore.getLocalUser()?.uuid ?? "local";
     // Development override of the clock (`?nightAt=HH:MM`), fixed for the life of the scene.
     private readonly forcedMinutes: number | undefined;
     private readonly unsubscribeEditor: Unsubscriber;
     private readonly unsubscribeMode: Unsubscriber;
+    private readonly unsubscribeWorld: Unsubscriber;
+    /** The city whose sky is shown (NightMode.World), kept while it stays near the moment chosen. */
+    private worldCity: WorldPlace | undefined;
     private readonly unsubscribeParty: Unsubscriber;
     private readonly unsubscribeLamps: Unsubscriber;
     private readonly unsubscribeTorches: Unsubscriber;
+    private readonly unsubscribeShacks: Unsubscriber;
+    private readonly unsubscribeSkyLight: Unsubscriber;
+    private skyLightSettings: SkyLightSettings | undefined;
+    private readonly unsubscribeWindows: Unsubscriber;
     private partyRooms: readonly NightRect[] = [];
     // The lights of the RGB lamps and of the torches, each written by its own owner, and both together.
     private rgbLamps: readonly RgbLampLight[] = [];
     private torches: readonly RgbLampLight[] = [];
+    private shacks: readonly RgbLampLight[] = [];
+    // The moonlight that comes in through the windows (SkyWindowLightManager).
+    private windows: readonly RgbLampLight[] = [];
     private lamps: readonly RgbLampLight[] = [];
     private areas: AreaData[] = [];
     private editorOpen = false;
+    private keptInEditor = false;
+    private readonly unsubscribeKeptInEditor: Unsubscriber;
     private mode = NightMode.Server;
     private disabled = false;
+    private realistic = false;
+    private readonly unsubscribeRealistic: Unsubscriber;
+    private readonly unsubscribeDarkness: Unsubscriber;
+    private readonly unsubscribeIndirect: Unsubscriber;
+    private ambienceSettings: AmbienceSettings = { strength: 0, fullShare: 1 };
+    // The light bounced around the rooms, worked out again only when the lights, the rooms or the setting changed.
+    private ambience:
+        | {
+              lamps: readonly RgbLampLight[];
+              areas: readonly AreaData[];
+              settings: AmbienceSettings;
+              lit: readonly LitArea[];
+          }
+        | undefined;
+    private darkness = NIGHT_MAX_OPACITY;
     private opacity = 0;
     private lastClockAt: number | undefined;
     private sun: SunPosition | undefined;
+    private light: SkyLight | undefined;
     private previous: NightFrame | undefined;
 
-    constructor(private readonly scene: GameScene) {
+    /**
+     * `skyWeather`: the share of the direct light of the sky the weather lets through (skyWeatherFactor), 1 by
+     * default.
+     */
+    constructor(
+        private readonly scene: GameScene,
+        private readonly skyWeather: () => number = () => 1,
+    ) {
         this.overlay = new NightOverlay(scene);
         this.forcedMinutes = parseNightAt(window.location.search, import.meta.env.DEV);
         this.readAreas();
@@ -73,46 +157,180 @@ export class NightManager {
             }
             this.editorOpen = open;
         });
+        this.unsubscribeKeptInEditor = nightInEditorStore.subscribe((kept) => {
+            this.keptInEditor = kept;
+            this.scene.markDirty();
+        });
         this.unsubscribeParty = partyRoomsStore.subscribe((rooms) => {
             this.partyRooms = rooms;
             this.scene.markDirty();
         });
         this.unsubscribeLamps = rgbLampLightsStore.subscribe((lamps) => {
             this.rgbLamps = lamps;
-            this.lamps = [...this.rgbLamps, ...this.torches];
+            this.lamps = [...this.rgbLamps, ...this.torches, ...this.windows, ...this.shacks];
+            this.scene.markDirty();
+        });
+        this.unsubscribeShacks = iceShackLightsStore.subscribe((shacks) => {
+            this.shacks = shacks;
+            this.lamps = [...this.rgbLamps, ...this.torches, ...this.windows, ...this.shacks];
             this.scene.markDirty();
         });
         this.unsubscribeTorches = torchLightsStore.subscribe((torches) => {
             this.torches = torches;
-            this.lamps = [...this.rgbLamps, ...this.torches];
+            this.lamps = [...this.rgbLamps, ...this.torches, ...this.windows, ...this.shacks];
             this.scene.markDirty();
         });
-        this.unsubscribeMode = nightModeStore.subscribe((mode) => {
+        this.unsubscribeWindows = skyWindowLightsStore.subscribe((windows) => {
+            this.windows = windows;
+            this.lamps = [...this.rgbLamps, ...this.torches, ...this.windows, ...this.shacks];
+            this.scene.markDirty();
+        });
+        this.unsubscribeSkyLight = skyLightSettingsStore.subscribe((settings) => {
+            this.skyLightSettings = settings;
+            // A setting changed: the light is computed again at the next image, not at the next second.
+            this.lastClockAt = undefined;
+            this.scene.markDirty();
+        });
+        const unsubscribeStrength = shownAmbienceStrengthStore.subscribe((strength) => {
+            // A new object: the bounced light is worked out again, and the veil drawn again.
+            this.ambienceSettings = { ...this.ambienceSettings, strength };
+            this.scene.markDirty();
+        });
+        const unsubscribeFullShare = ambienceFullShareStore.subscribe((fullShare) => {
+            this.ambienceSettings = { ...this.ambienceSettings, fullShare };
+            this.scene.markDirty();
+        });
+        const unsubscribeSoftEdge = shownLightSoftEdgeStore.subscribe((px) => {
+            // The lights are drawn again with their new edge.
+            setLightSoftEdgePx(px);
+            this.scene.markDirty();
+        });
+        const unsubscribeBounce = shownLightBounceStore.subscribe((strength) => {
+            // The lamps are cast again with what their walls send back.
+            setLightBounceStrength(strength);
+            this.scene.markDirty();
+        });
+        const unsubscribeSecondBounce = shownSecondBounceStore.subscribe((on) => {
+            setLightSecondBounce(on);
+            this.scene.markDirty();
+        });
+        const unsubscribeRealFalloff = realFalloffStore.subscribe((on) => {
+            setLightRealFalloff(on);
+            this.scene.markDirty();
+        });
+        this.unsubscribeIndirect = () => {
+            unsubscribeRealFalloff();
+            unsubscribeSecondBounce();
+            unsubscribeBounce();
+            unsubscribeStrength();
+            unsubscribeFullShare();
+            unsubscribeSoftEdge();
+        };
+        this.unsubscribeDarkness = nightDarknessStore.subscribe((darkness) => {
+            this.darkness = darkness;
+            // The veil is worked out again at the next image, not at the next second.
+            this.lastClockAt = undefined;
+            this.scene.markDirty();
+        });
+        this.unsubscribeRealistic = realisticNightStore.subscribe((realistic) => {
+            this.realistic = realistic;
+            // The rooms fade in or out at the next image.
+            this.previous = undefined;
+            this.scene.markDirty();
+        });
+        // Basique is the diffuse light of day, whatever the night chosen.
+        this.unsubscribeMode = effectiveNightModeStore.subscribe((mode) => {
             this.mode = mode;
             this.disabled = mode === NightMode.Disabled;
+            this.lastClockAt = undefined;
+            this.scene.markDirty();
+        });
+        // The day sped up, or back to the real sky: at once.
+        this.unsubscribeFastDay = derived([fastDayOnStore, fastDaySpeedStore], (values) => values).subscribe(
+            ([on, speed]) => {
+                this.fastDayOn = on;
+                this.fastDaySpeed = speed;
+                this.lastClockAt = undefined;
+                this.scene.markDirty();
+            },
+        );
+        // Another moment of the sky of the world: its city and its light at once.
+        this.unsubscribeWorld = derived(
+            [worldMomentStore, worldCustomMinutesStore, worldPointStore, worldFallStore],
+            (values) => values,
+        ).subscribe(() => {
+            this.worldCity = undefined;
             this.lastClockAt = undefined;
             this.scene.markDirty();
         });
     }
 
     public update(now: number): void {
-        if (this.lastClockAt === undefined || now - this.lastClockAt >= CLOCK_INTERVAL_MS) {
+        const interval = this.fastDayOn ? FAST_CLOCK_INTERVAL_MS : CLOCK_INTERVAL_MS;
+        if (this.lastClockAt === undefined || now - this.lastClockAt >= interval) {
             this.lastClockAt = now;
             const date = this.mode === NightMode.Computer ? new Date() : this.clock.now();
             nightDateStore.set(date);
-            const sunAt = this.sunInstant(date);
+            // The one place the day sped up acts on: the instant of the sky. The sun, the moon, the night, the shadows
+            // of the sky and the lamps that go on follow it; the time and the weather of the map stay real.
+            const realSunAt = this.sunInstant(date);
+            const ahead = this.fastDay.ahead(now, this.fastDayOn, this.fastDaySpeed);
+            const sunAt = realSunAt === undefined ? undefined : new Date(realSunAt.getTime() + ahead);
+            this.skyAhead = ahead;
+            fastDaySkyStore.set(this.fastDayOn ? sunAt : undefined);
             // The sun of the place of the map (Paris when it has none), shared with its real weather.
-            const place = sunPlaceOf(
-                this.mode === NightMode.Computer || this.forcedMinutes !== undefined,
-                shownMapPlace(this.scene.getGameMap().getWamFile()?.getWam().settings),
-            );
-            this.opacity = sunAt === undefined ? 0 : nightOpacityAt(sunAt, place);
+            const mapPlace = shownMapPlace(this.scene.getGameMap().getWamFile()?.getWam().settings);
+            // The sky of the world: the point chosen on its map, the place picked where it rains or snows, or the city
+            // where it is now the moment chosen (the height of its sun for the morning, noon and the evening, its solar
+            // time for an hour chosen).
+            const point = get(worldPointStore);
+            const fall = get(worldFallStore);
+            this.worldCity =
+                this.mode !== NightMode.World || !date
+                    ? undefined
+                    : point
+                      ? placeOfPoint(point, pointWords())
+                      : cityPlace(
+                            fall
+                                ? fall.place
+                                : worldCityOf(
+                                      date,
+                                      get(worldMomentStore),
+                                      get(worldCustomMinutesStore),
+                                      this.worldCity,
+                                  ),
+                            pointWords(),
+                        );
+            worldCityStore.set(this.worldCity);
+            // The clock shown follows the time of the place of the map (of the city of the world).
+            mapTimeZoneStore.set(this.worldCity?.timezone ?? mapPlace?.timezone);
+            const place =
+                this.worldCity ??
+                sunPlaceOf(this.mode === NightMode.Computer || this.sunMinutes() !== undefined, mapPlace);
             // The same sun lights the clouds and casts their shadows (WeatherManager).
             this.sun = sunAt === undefined ? undefined : sunPositionAt(sunAt, place);
+            // The light of the sky, at the same instant and place: the sun, or the moon at night. With the night
+            // turned off the map stays in daylight: the sun alone, while it is up, as for the clouds.
+            this.light =
+                sunAt === undefined
+                    ? undefined
+                    : skyLightAt(
+                          sunForClouds(this.sun, this.disabled),
+                          this.disabled ? undefined : moonPositionAt(sunAt, place),
+                          moonPhaseAt(sunAt).illuminated,
+                          this.skyWeather(),
+                          this.skyLightSettings,
+                      );
+            // A bright moon takes a little of the veil away.
+            this.opacity =
+                sunAt === undefined
+                    ? 0
+                    : moonlitNightOpacity(nightOpacityWith(nightOpacityAt(sunAt, place), this.darkness), this.light);
         }
 
         // By day, in the editor or when turned off, nothing else is computed.
-        if (this.opacity === 0 || this.editorOpen || this.disabled) {
+        const hiddenInEditor = nightHiddenInEditor(this.editorOpen, this.keptInEditor);
+        if (this.opacity === 0 || hiddenInEditor || this.disabled) {
             if (this.previous !== undefined) {
                 this.overlay.hide();
                 this.previous = undefined;
@@ -127,18 +345,26 @@ export class NightManager {
 
         const players = this.players();
         const putOut = (area: NightRect): boolean => this.partyRooms.some((room) => coversMostly(area, room));
-        const lit = this.lights.update(now, this.areas, players, putOut);
+        // With the realistic lighting no room lights up on its own: only the lamps pierce the veil.
+        const rooms = roomsThatLightUp(this.areas, this.realistic);
+        const lit = this.lights.update(now, rooms, players, putOut);
         // No halo in a lit area: the area already lights the player. In a room put out for a party, the player
         // keeps their halo: they stay visible under the effects.
-        const lightingAreas = this.areas.filter((area) => !putOut(area));
-        const halos = this.halos.update(
-            now,
-            players.map((player) => ({ ...player, sheltered: isInLightableArea(player, lightingAreas) })),
+        const lightingAreas = rooms.filter((area) => !putOut(area));
+        // The rooms are lit by where the players are; their halos are drawn where they are drawn (lower in a hollow of
+        // a relief seen in 3/4, higher on a mount).
+        const drops = new Map(players.map((player) => [player.id, player.drop]));
+        const halos = halosWhereDrawn(
+            this.halos.update(
+                now,
+                players.map((player) => ({ ...player, sheltered: isInLightableArea(player, lightingAreas) })),
+            ),
+            (id) => drops.get(id) ?? 0,
         );
         const camera = this.scene.cameras.main;
         const frame: NightFrame = {
             opacity: this.opacity,
-            editorOpen: this.editorOpen,
+            editorOpen: hiddenInEditor,
             disabled: this.disabled,
             view: {
                 x: camera.worldView.x,
@@ -147,7 +373,8 @@ export class NightManager {
                 height: camera.worldView.height,
                 zoom: camera.zoom,
             },
-            lit,
+            // A room a light comes into is lit faintly all over, unless it was put out for a party.
+            lit: [...lit, ...this.roomAmbience().filter((area) => !putOut(area))],
             halos,
             lamps: this.lamps,
             fading: this.lights.isFading() || this.halos.isAnimating(),
@@ -162,6 +389,11 @@ export class NightManager {
         this.previous = frame;
     }
 
+    /** The night veil for the water that reflects the light of the lamps (NightOverlay); undefined by day. */
+    public lampReflection(): ReturnType<NightOverlay["reflected"]> {
+        return this.overlay.reflected();
+    }
+
     public isNight(): boolean {
         return this.opacity > 0 && !this.disabled;
     }
@@ -171,18 +403,71 @@ export class NightManager {
         return sunForClouds(this.sun, this.disabled);
     }
 
+    /** The light bounced around the rooms the lights come into (see roomAmbience), as areas to cut out of the veil. */
+    private roomAmbience(): readonly LitArea[] {
+        const { ambience } = this;
+        if (
+            ambience !== undefined &&
+            ambience.lamps === this.lamps &&
+            ambience.areas === this.areas &&
+            ambience.settings === this.ambienceSettings
+        ) {
+            return ambience.lit;
+        }
+        const lit = roomAmbience(
+            this.areas,
+            this.lamps.map((lamp) => ({
+                polygon: lamp.polygon,
+                intensity: lamp.ambient ?? lamp.intensity,
+                elevation: lamp.elevation,
+            })),
+            this.ambienceSettings,
+        );
+        this.ambience = { lamps: this.lamps, areas: this.areas, settings: this.ambienceSettings, lit };
+        return lit;
+    }
+
+    /**
+     * The light of the sky that casts the shadows (SkyLight), at the instant and place of the night (updated once a
+     * second); undefined without one.
+     */
+    public skyLight(): SkyLight | undefined {
+        return this.light;
+    }
+
     public serverDate(): Date | undefined {
         return this.clock.now();
+    }
+
+    /**
+     * The time of the server, ahead of it as the sky shown while this player speeds the day up (updated with it): for
+     * what lights up with the sky. The weather and the seasons of the map keep the server's time.
+     */
+    public skyDate(): Date | undefined {
+        const date = this.clock.now();
+        return date === undefined || this.skyAhead === 0 ? date : new Date(date.getTime() + this.skyAhead);
     }
 
     public destroy(): void {
         this.clock.destroy();
         nightDateStore.set(undefined);
+        fastDaySkyStore.set(undefined);
+        this.unsubscribeFastDay();
+        mapTimeZoneStore.set(undefined);
         this.unsubscribeEditor();
         this.unsubscribeMode();
+        this.unsubscribeWorld();
+        worldCityStore.set(undefined);
+        this.unsubscribeRealistic();
+        this.unsubscribeDarkness();
+        this.unsubscribeKeptInEditor();
+        this.unsubscribeIndirect();
         this.unsubscribeParty();
         this.unsubscribeLamps();
         this.unsubscribeTorches();
+        this.unsubscribeShacks();
+        this.unsubscribeSkyLight();
+        this.unsubscribeWindows();
         this.overlay.destroy();
     }
 
@@ -193,15 +478,20 @@ export class NightManager {
      * `?nightAt=HH:MM` (development): that Paris time, on today's date in Paris, for the sun of Paris too.
      */
     private sunInstant(date: Date | undefined): Date | undefined {
-        if (this.forcedMinutes !== undefined) {
+        const forced = this.sunMinutes();
+        if (forced !== undefined) {
             const { year, month, day } = parisCalendarDay(date ?? new Date());
-            return parisWallClockToInstant(year, month, day, this.forcedMinutes);
+            return parisWallClockToInstant(year, month, day, forced);
         }
         if (date === undefined || this.mode !== NightMode.Computer) {
             return date;
         }
         const minutes = date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60;
         return parisWallClockToInstant(date.getFullYear(), date.getMonth() + 1, date.getDate(), minutes);
+    }
+
+    private sunMinutes(): number | undefined {
+        return forcedSunMinutes(this.forcedMinutes, this.mode === NightMode.Always);
     }
 
     private readAreas(): void {
@@ -212,12 +502,22 @@ export class NightManager {
         this.areas = lightableAreas(areas, mapWidth, mapHeight);
     }
 
-    private players(): { id: string; x: number; y: number }[] {
+    private players(): { id: string; x: number; y: number; z: number; drop: number }[] {
         // Raw sprite positions, as given to GameMapFrontWrapper.setPosition: NightLights adds the feet offset, the
         // halos are centred on them (the body). Animals are not players: they carry no light.
-        const players = [{ id: this.localId, x: this.scene.CurrentPlayer.x, y: this.scene.CurrentPlayer.y }];
+        // With the floor each one stands on: an area is lit by the players of its floor.
+        const local = this.scene.CurrentPlayer;
+        const players = [
+            { id: this.localId, x: local.x, y: local.y, z: local.getFloorZ(), drop: local.getGroundDrop?.() ?? 0 },
+        ];
         for (const [key, player] of this.scene.MapPlayersByKey) {
-            players.push({ id: String(key), x: player.x, y: player.y });
+            players.push({
+                id: String(key),
+                x: player.x,
+                y: player.y,
+                z: player.getFloorZ(),
+                drop: player.getGroundDrop?.() ?? 0,
+            });
         }
         return players;
     }

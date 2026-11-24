@@ -18,7 +18,7 @@ function fakeShape() {
     return shape;
 }
 
-function setup() {
+function setup(dropAt?: (x: number, y: number) => number) {
     const shapes: ReturnType<typeof fakeShape>[] = [];
     const scene = {
         add: {
@@ -29,12 +29,22 @@ function setup() {
             }),
         },
     } as unknown as Phaser.Scene;
-    return { shapes, layer: new KickedLeafLayer(scene) };
+    return { shapes, layer: new KickedLeafLayer(scene, dropAt) };
 }
 
 const leaf = { x: 0, y: 0, dx: 10, dy: 0, color: 0xaa5500 };
 
 describe("KickedLeafLayer", () => {
+    it("flies where the feet that kicked it are drawn on a relief seen in 3/4, sorted by its place", () => {
+        // On a mount drawn 40 px higher.
+        const { shapes, layer } = setup(() => -40);
+        layer.add([{ ...leaf, x: 100, y: 200 }], 0);
+        layer.update(KICK_FALL_MS);
+        // Landed: 10 px further, on the ground as it is drawn.
+        expect(shapes[0].setPosition).toHaveBeenLastCalledWith(110, 160);
+        expect(shapes[0].setDepth).toHaveBeenCalledWith(200 - 16);
+    });
+
     it("multiplies the fade of each leaf by the layer alpha", () => {
         const { shapes, layer } = setup();
         layer.add([leaf], 0);

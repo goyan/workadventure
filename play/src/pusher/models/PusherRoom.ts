@@ -207,6 +207,120 @@ export class PusherRoom {
                             }
                             break;
                         }
+                        case "entityStateMessage": {
+                            // The state of an object (a lamp on or off) is the same for every player of the room
+                            const entityStateMessage = message.message.entityStateMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "entityStateMessage",
+                                        entityStateMessage: entityStateMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
+                        case "terrainWaterMessage": {
+                            // The water of the relief is the same for every player of the room
+                            const terrainWaterMessage = message.message.terrainWaterMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "terrainWaterMessage",
+                                        terrainWaterMessage: terrainWaterMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
+                        case "fireConditionsMessage": {
+                            // The conditions the fire goes by are the same for every player of the room
+                            const fireConditionsMessage = message.message.fireConditionsMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "fireConditionsMessage",
+                                        fireConditionsMessage: fireConditionsMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
+                        case "treeFireMessage": {
+                            // The fire of the trees of the map is the same for every player of the room
+                            const treeFireMessage = message.message.treeFireMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "treeFireMessage",
+                                        treeFireMessage: treeFireMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
+                        case "meadowMessage": {
+                            // The meadow of the map is the same for every player of the room
+                            const meadowMessage = message.message.meadowMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "meadowMessage",
+                                        meadowMessage: meadowMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
+                        case "aquaticLifeMessage": {
+                            // The animals of the water of the relief are the same for every player of the room
+                            const aquaticLifeMessage = message.message.aquaticLifeMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "aquaticLifeMessage",
+                                        aquaticLifeMessage: aquaticLifeMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
+                        case "fishingMessage": {
+                            // The fishing lines are the same for every player of the room
+                            const fishingMessage = message.message.fishingMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "fishingMessage",
+                                        fishingMessage: fishingMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
+                        case "iceShacksMessage": {
+                            // The ice fishing shacks are the same for every player of the room
+                            const iceShacksMessage = message.message.iceShacksMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: { $case: "iceShacksMessage", iceShacksMessage },
+                                });
+                            }
+                            break;
+                        }
+                        case "catastropheMessage": {
+                            // A catastrophe on its way is the same for every player of the room
+                            const catastropheMessage = message.message.catastropheMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "catastropheMessage",
+                                        catastropheMessage: catastropheMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
                         case "entityMessage": {
                             // Entity events are room-wide: a sound carries further than a zone
                             const entityMessage = message.message.entityMessage;

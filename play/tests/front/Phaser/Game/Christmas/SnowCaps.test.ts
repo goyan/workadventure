@@ -58,12 +58,27 @@ describe("SnowCaps", () => {
         expect(scene.add.image.mock.calls[0].slice(0, 2)).toEqual([0, 0]);
     });
 
+    it("caps an object where it is drawn on a relief seen in 3/4, outdoors by where it stands", () => {
+        const { scene, caps } = setup();
+        // On a mount, drawn 40 px higher than its place.
+        caps.rebuild([{ ...entity(0, 64), getGroundDrop: () => -40 }], grid);
+        expect(scene.add.image.mock.calls[0].slice(0, 2)).toEqual([0, 24]);
+    });
+
     it("skips walls and doors", () => {
         const { scene, caps } = setup();
         caps.rebuild(
             [entity(0, 0, "Carte Murs"), entity(0, 0, "Carte Portes"), entity(0, 0, "Infogène Murs fins")],
             grid,
         );
+        expect(scene.add.image.mock.calls).toHaveLength(0);
+        expect(scene.add.rectangle.mock.calls).toHaveLength(0);
+    });
+
+    it("skips the slabs, the stairs and the walls of the raised floors", () => {
+        // A slab is drawn north of the tile it covers: over the outdoors, it is still not an object standing there.
+        const { scene, caps } = setup();
+        caps.rebuild([entity(0, 0, "Carte Paliers"), entity(0, 0, "Carte Murs Paliers")], grid);
         expect(scene.add.image.mock.calls).toHaveLength(0);
         expect(scene.add.rectangle.mock.calls).toHaveLength(0);
     });

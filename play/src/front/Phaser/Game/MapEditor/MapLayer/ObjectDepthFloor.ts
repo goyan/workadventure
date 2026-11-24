@@ -41,6 +41,38 @@ export function applyWallDepthFloor(naturalDepth: number, object: DepthBox, wall
     return depth;
 }
 
+/** The south face of a wall piece, where something can hang: its image without its cap, with the depth of the piece. */
+export interface WallFaceBox extends DepthBox {
+    depth: number;
+}
+
+function contains(box: DepthBox, x: number, y: number): boolean {
+    return x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height;
+}
+
+/**
+ * An object above the ground whose whole image lies on the south faces of walls hangs on them (a painting, a clock, a
+ * shelf up a high wall): it is drawn over those walls. The caller only asks for objects given a level above the
+ * ground and without a slab under them: on the ground, the same image stands behind the wall, hidden by it. Sorted by its foot, north of the foot of the wall, it would be hidden behind
+ * them, where nobody places anything on purpose. An object that shows over the cap of the wall, or beside it, stands
+ * behind the wall and keeps its depth.
+ */
+export function applyHungOnWallDepth(depth: number, object: DepthBox, faces: readonly WallFaceBox[]): number {
+    const corners = [
+        { x: object.x, y: object.y },
+        { x: object.x + object.width, y: object.y },
+        { x: object.x, y: object.y + object.height },
+        { x: object.x + object.width, y: object.y + object.height },
+    ];
+    let hung = depth;
+    for (const corner of corners) {
+        const under = faces.filter((face) => contains(face, corner.x, corner.y));
+        if (under.length === 0) return depth;
+        hung = Math.max(hung, ...under.map((face) => face.depth + 0.5));
+    }
+    return hung;
+}
+
 export interface SupportDepthBox extends DepthBox {
     /** Depth actually applied to the support, possibly raised above its natural depth by a wall. */
     depth: number;
@@ -57,6 +89,15 @@ export interface SupportDepthBox extends DepthBox {
  * - its foot is inside the support's image and is naturally in front of the support. The support may have been raised
  *   above that natural depth (a shelf against a wall), which would otherwise hide the object behind it.
  */
+/**
+ * Whether a neighbour drawn over an object counts for what the object stands on, and for its manual stacking: only
+ * what stands on the same floor of the map. An object of another floor is only drawn there (a pool of a raised floor
+ * over a fireplace of the ground), and the slabs and stairs of the raised floors are the floor itself.
+ */
+export function standsOnSameFloor(elevation: number, neighbour: { elevation: number; floorPiece: boolean }): boolean {
+    return neighbour.elevation === elevation && !neighbour.floorPiece;
+}
+
 export function applySupportDepthFloor(
     naturalDepth: number,
     object: DepthBox,

@@ -164,7 +164,7 @@ describe("MapStorageServer entity edit permissions", () => {
             updateWAMSettingsMessage: {
                 message: {
                     $case: "updateWeatherSettingMessage",
-                    updateWeatherSettingMessage: { weather: WeatherType.Snow, startedAt: 999, autoInclude: [] },
+                    updateWeatherSettingMessage: { weather: WeatherType.Storm, startedAt: 999, autoInclude: [] },
                 },
             },
         });
@@ -176,6 +176,115 @@ describe("MapStorageServer entity edit permissions", () => {
                 message.updateWAMSettingsMessage.message.updateWeatherSettingMessage.startedAt,
         ).toBe(1_800_000);
         expect(addCommandToQueue).toHaveBeenCalledWith("map.wam", response);
+    });
+
+    describe("life in the water", () => {
+        const life: EditMapMessage = {
+            $case: "updateWAMSettingsMessage",
+            updateWAMSettingsMessage: {
+                message: {
+                    $case: "updateLifeSettingMessage",
+                    updateLifeSettingMessage: {
+                        enabled: true,
+                        reproductionDelay: 1,
+                        maxLifespan: 600,
+                        maxSpeed: 99,
+                        huntInterval: 20,
+                    },
+                },
+            },
+        };
+
+        it("lets a map editor set it, within its bounds", async () => {
+            await expectAccepted(MAP_EDITOR, life);
+            expect(wamFile.getWam().settings?.life).toEqual({
+                enabled: true,
+                reproductionDelay: 10,
+                maxLifespan: 600,
+                maxSpeed: 6,
+                huntInterval: 20,
+                dolphinReproductionDelay: 300,
+                dolphinMaxLifespan: 3600,
+                // Not told by the message: the default.
+                drinkInterval: 120,
+            });
+        });
+
+        it("refuses a visitor", async () => {
+            await expectRefused(VISITOR, life);
+            expect(wamFile.getWam().settings?.life).toBeUndefined();
+        });
+    });
+
+    describe("energy saving of the lamps", () => {
+        const saving: EditMapMessage = {
+            $case: "updateWAMSettingsMessage",
+            updateWAMSettingsMessage: {
+                message: {
+                    $case: "updateLightingSettingMessage",
+                    updateLightingSettingMessage: { energySaving: true },
+                },
+            },
+        };
+
+        it("lets a map editor turn it on, saves it and broadcasts the command (expectAccepted)", async () => {
+            await expectAccepted(MAP_EDITOR, saving);
+            expect(wamFile.getWam().settings?.lighting).toEqual({ energySaving: true });
+        });
+
+        it("refuses a visitor", async () => {
+            await expectRefused(VISITOR, saving);
+            expect(wamFile.getWam().settings?.lighting).toBeUndefined();
+        });
+    });
+
+    describe("relief", () => {
+        const dig = (cells: { x: number; y: number; height: number }[]): EditMapMessage => ({
+            $case: "modifyTerrainMessage",
+            modifyTerrainMessage: { cells, soils: [] },
+        });
+
+        it("lets a map editor dig, saves the relief and broadcasts the command", async () => {
+            await expectAccepted(MAP_EDITOR, dig([{ x: 3, y: 4, height: -24 }]));
+            expect(wamFile.getWam().terrain?.chunks["0,0"]?.[4 * 16 + 3]).toBe(-24);
+            expect(mapsManager.executeCommand).toHaveBeenCalledOnce();
+        });
+
+        it("refuses a visitor and a zone editor: the relief belongs to the whole map", async () => {
+            await expectRefused(VISITOR, dig([{ x: 3, y: 4, height: -24 }]));
+            await expectRefused(ZONE_EDITOR, dig([{ x: 1, y: 1, height: -24 }]));
+        });
+
+        it("answers an error to a command with too many cells, and changes nothing", async () => {
+            const cells = Array.from({ length: 20001 }, (_, index) => ({ x: index, y: 0, height: -1 }));
+            const response = await send(MAP_EDITOR, dig(cells));
+            expect(response.editMapMessage?.message?.$case).toBe("errorCommandMessage");
+            expect(wamFile.getWam().terrain).toBeUndefined();
+            expect(addCommandToQueue).not.toHaveBeenCalled();
+        });
+    });
+
+    it("stores a snow sent by an older client as a rain that starts now, like any weather", async () => {
+        wamFile.getWam().settings = { weather: WeatherType.Snow, weatherStartedAt: 600_000 };
+        vi.spyOn(Date, "now").mockReturnValue(1_800_000);
+        const response = await send(MAP_EDITOR, {
+            $case: "updateWAMSettingsMessage",
+            updateWAMSettingsMessage: {
+                message: {
+                    $case: "updateWeatherSettingMessage",
+                    updateWeatherSettingMessage: { weather: WeatherType.Snow, startedAt: 999, autoInclude: [] },
+                },
+            },
+        });
+        expect(wamFile.getWam().settings?.weather).toBe(WeatherType.Rain);
+        expect(wamFile.getWam().settings?.weatherStartedAt).toBe(1_800_000);
+        expect(wamFile.getWam().settings?.lastSnow).toBeUndefined();
+        const message = response.editMapMessage?.message;
+        expect(
+            message?.$case === "updateWAMSettingsMessage" &&
+                message.updateWAMSettingsMessage.message?.$case === "updateWeatherSettingMessage" &&
+                message.updateWAMSettingsMessage.message.updateWeatherSettingMessage.startedAt,
+        ).toBe(1_800_000);
     });
 
     describe("delete", () => {

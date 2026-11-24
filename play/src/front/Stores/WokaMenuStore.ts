@@ -16,6 +16,8 @@ export type WokaMenuAction = {
     icon?: PixelIconName;
     /** A short precision under the name, on the own-avatar wheel. */
     detail?: string;
+    /** Shown greyed on the own-avatar wheel, its `detail` telling why: choosing it does nothing. */
+    disabled?: boolean;
     testId?: string;
 };
 

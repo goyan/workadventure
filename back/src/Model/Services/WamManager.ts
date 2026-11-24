@@ -7,6 +7,7 @@ import {
     DeleteEntityCommand,
     UpdateAreaCommand,
     UpdateEntityCommand,
+    UpdateTerrainCommand,
     UpdateWAMMetadataCommand,
     UpdateWAMSettingCommand,
     WamFile,
@@ -101,7 +102,8 @@ export class WamManager {
                         previousArea.x !== updatedArea.x ||
                         previousArea.y !== updatedArea.y ||
                         previousArea.width !== updatedArea.width ||
-                        previousArea.height !== updatedArea.height,
+                        previousArea.height !== updatedArea.height ||
+                        (previousArea.elevation ?? 0) !== (updatedArea.elevation ?? 0),
                     propertiesChanged:
                         JSON.stringify(previousArea.properties) !== JSON.stringify(updatedArea.properties),
                 });
@@ -112,6 +114,7 @@ export class WamManager {
                 const { id, x, y, width, height, name } = message;
                 const properties = message.properties as AreaData["properties"];
                 const areaObjectConfig: AreaData = { id, x, y, width, height, name, properties, visible: true };
+                if (message.elevation) areaObjectConfig.elevation = message.elevation;
                 await new CreateAreaCommand(wamFile, areaObjectConfig, editMapCommandMessage.id).execute();
                 break;
             }
@@ -165,6 +168,7 @@ export class WamManager {
                         properties: message.properties as EntityDataProperties,
                         name: message.name,
                         depthStep: message.depthStep,
+                        elevation: message.elevation,
                     },
                     editMapCommandMessage.id,
                 ).execute();
@@ -185,6 +189,11 @@ export class WamManager {
                 const message = editMapMessage.modifiyWAMMetadataMessage;
                 const wam = wamFile.getWam();
                 await new UpdateWAMMetadataCommand(wam, message, editMapCommandMessage.id).execute();
+                break;
+            }
+            case "modifyTerrainMessage": {
+                const message = editMapMessage.modifyTerrainMessage;
+                await new UpdateTerrainCommand(wamFile.getWam(), message, editMapCommandMessage.id).execute();
                 break;
             }
             case "deleteCustomEntityMessage": {

@@ -40,7 +40,7 @@ const COPY_BIGGEST = 1.3;
 /** Copies are told apart over this many squares of the sky: far beyond any screen, and small numbers for the hash. */
 const COPY_CYCLE = 997;
 /** Farthest a puff reaches from the centre of its cloud, in radii: the main puff and its farthest lobe. */
-const CLOUD_REACH = 1.6;
+const CLOUD_REACH = 1.9;
 /**
  * Drift of the clouds without a wind (Automatic, or none given): 60 px a second, a screen crossed in about 30 s, from
  * the north-west.
@@ -101,26 +101,37 @@ export class SkyDrift {
     }
 }
 /**
- * Each cloud is a cumulus: a main puff and smaller ones around it, spread wider than tall, placed and sized its own way
- * for each cloud so that no two clouds have the same outline.
+ * Each cloud is a cumulus: a main puff and smaller ones around it, drawn at random for each copy of each cloud (from its
+ * seed: the same for everyone, the same as it drifts). The puffs go round the main one at uneven angles, near or far,
+ * small or big, and the whole cloud is stretched across and turned a little: a lump, a long bank, a cloud with a
+ * tower on one side, never twice the same outline.
  */
 export const CLOUD_PUFFS = 7;
-const PUFF_SPREAD_ACROSS = 0.72;
-const PUFF_SPREAD_DOWN = 0.35;
-const PUFF_SMALLEST = 0.5;
-const PUFF_BIGGEST = 0.75;
-
-function cloudPuffs(index: number): { dx: number; dy: number; scale: number }[] {
-    const puffs = [{ dx: 0, dy: 0, scale: 1 }];
-    for (let puff = 1; puff < CLOUD_PUFFS; puff++) {
-        const angle = ((puff - 1) / (CLOUD_PUFFS - 1) + (hash01(index, 43 + puff) - 0.5) * 0.1) * 2 * Math.PI;
-        puffs.push({
-            dx: Math.cos(angle) * PUFF_SPREAD_ACROSS,
-            dy: Math.sin(angle) * PUFF_SPREAD_DOWN,
-            scale: PUFF_SMALLEST + (PUFF_BIGGEST - PUFF_SMALLEST) * hash01(index, 53 + puff),
-        });
-    }
-    return puffs;
+const PUFF_NEAREST = 0.35;
+const PUFF_FARTHEST = 0.85;
+const PUFF_SMALLEST = 0.45;
+const PUFF_BIGGEST = 0.9;
+const CLOUD_ACROSS = [0.8, 1.15];
+const CLOUD_DOWN = [0.3, 0.5];
+const CLOUD_TURN = 0.3;
+function cloudPuffs(seed: number, row: number): { dx: number; dy: number; scale: number }[] {
+    const between = (range: number[], share: number): number => range[0] + (range[1] - range[0]) * share;
+    const across = between(CLOUD_ACROSS, hash01(seed, row, 61));
+    const down = between(CLOUD_DOWN, hash01(seed, row, 62));
+    const turn = (hash01(seed, row, 63) - 0.5) * 2 * CLOUD_TURN;
+    const phase = hash01(seed, row, 64);
+    const others = Array.from({ length: CLOUD_PUFFS - 1 }, (_, index) => {
+        const angle = ((index + phase + (hash01(seed, row, 70 + index) - 0.5) * 0.8) / (CLOUD_PUFFS - 1)) * 2 * Math.PI;
+        const distance = PUFF_NEAREST + (PUFF_FARTHEST - PUFF_NEAREST) * hash01(seed, row, 80 + index);
+        const x = Math.cos(angle) * distance * across;
+        const y = Math.sin(angle) * distance * down;
+        return {
+            dx: x * Math.cos(turn) - y * Math.sin(turn),
+            dy: x * Math.sin(turn) + y * Math.cos(turn),
+            scale: PUFF_SMALLEST + (PUFF_BIGGEST - PUFF_SMALLEST) * hash01(seed, row, 90 + index),
+        };
+    });
+    return [{ dx: 0, dy: 0, scale: 1 }, ...others];
 }
 
 /**
@@ -178,6 +189,19 @@ const RAIN_SHOWN_TO = 0.65;
 export function shownRainCover(cover: number): number {
     const share = clamp01((cover - RAIN_COVER_FROM) / (1 - RAIN_COVER_FROM));
     return RAIN_SHOWN_FROM + (RAIN_SHOWN_TO - RAIN_SHOWN_FROM) * share;
+}
+
+/**
+ * The tones of rain or storm clouds drawn by the graphics card (CloudLayer), which lights their billows: a cumulonimbus
+ * towers high, its tops in the sun are much lighter than its dark base. The flat tones of rainPalette would leave a
+ * storm cloud a dark blot with no relief.
+ */
+export function cumulonimbusPalette(color: number): CloudPalette {
+    return {
+        lit: mixColor(color, 0xffffff, 0.55),
+        mid: mixColor(color, 0xffffff, 0.12),
+        shade: mixColor(color, 0x000000, 0.3),
+    };
 }
 
 /** The tones of rain or storm clouds of a colour: that colour in the middle, lighter towards the light, darker away. */
@@ -257,6 +281,20 @@ export function cloudZoomFade(screenScale: number, height = 0): number {
     return 1 - clamp01((screenScale - ZOOM_WHOLE * higher) / ((ZOOM_GONE - ZOOM_WHOLE) * higher));
 }
 
+/**
+ * Seen from high above, the clouds pass over the buildings too: the camera is over them, and a roof is no shelter
+ * from a cloud that drifts between it and the eye. Not at all while a map pixel takes 0.7 screen pixel or more (the
+ * rooms stay clear when one plays in them), fully from 0.45 down.
+ */
+const ZOOM_OVER_ROOFS_START = 0.7;
+const ZOOM_OVER_ROOFS_FULL = 0.45;
+
+/** How much of a cloud is drawn over what is not outdoors (0: none, 1: as over the ground), by the zoom on screen. */
+export function cloudsOverRoofs(screenScale: number): number {
+    if (!Number.isFinite(screenScale)) return 0;
+    return clamp01((ZOOM_OVER_ROOFS_START - screenScale) / (ZOOM_OVER_ROOFS_START - ZOOM_OVER_ROOFS_FULL));
+}
+
 /** Height of the clouds and longest shadow, in tiles. */
 const CLOUD_HEIGHT_TILES = 3;
 const MAX_SHADOW_TILES = 6;
@@ -324,16 +362,21 @@ function cycled(value: number): number {
  * the last one fading in (its `weight`). `sky` is where the sky has drifted to (SkyDrift); by default, server time ×
  * the drift without wind.
  */
+export interface CloudPatch extends FogPatch {
+    rotation?: number;
+    stretch?: number;
+}
+
 export function cloudPatches(
     epoch: number,
     view: WeatherView,
     cloudiness: number,
     still: boolean,
     sky?: Vector,
-): FogPatch[] {
+): CloudPatch[] {
     const time = epoch / 1000;
     const drifted = still ? { x: 0, y: 0 } : (sky ?? { x: time * CLOUD_DRIFT.x, y: time * CLOUD_DRIFT.y });
-    const patches: FogPatch[] = [];
+    const patches: CloudPatch[] = [];
     for (let index = 0; index < MAX_CLOUDS; index++) {
         const weight = clamp01(cloudiness * MAX_CLOUDS - index);
         if (weight === 0) break;
@@ -345,7 +388,6 @@ export function cloudPatches(
             x: hash01(index, 37) * SKY_PERIOD + drifted.x,
             y: hash01(index, 41) * SKY_PERIOD + drifted.y,
         };
-        const lobes = cloudPuffs(index);
         // Far enough for a puff whose centre is out of the view, or moved off it, to still reach into it.
         const reach = CLOUD_REACH * radius * COPY_BIGGEST + COPY_SHIFT * SKY_PERIOD;
         for (const copy of repeatedOverView(square, SKY_PERIOD, view, reach)) {
@@ -358,12 +400,14 @@ export function cloudPatches(
                 y: copy.y + (hash01(seed, row, 2) - 0.5) * 2 * COPY_SHIFT * SKY_PERIOD,
             };
             const copyRadius = radius * (COPY_SMALLEST + (COPY_BIGGEST - COPY_SMALLEST) * hash01(seed, row, 3));
-            for (const lobe of lobes) {
+            for (const [puffIndex, lobe] of cloudPuffs(seed, row).entries()) {
                 patches.push({
                     x: centre.x + lobe.dx * copyRadius,
                     y: centre.y + lobe.dy * copyRadius,
                     radius: Math.round(copyRadius * lobe.scale),
                     weight,
+                    rotation: (hash01(seed, row, 4 + puffIndex * 3) - 0.5) * 1.1,
+                    stretch: 0.8 + hash01(seed, row, 5 + puffIndex * 3) * 0.45,
                 });
             }
         }

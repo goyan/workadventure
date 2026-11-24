@@ -1,0 +1,479 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { CELL_AREA_M2, CELL_LITRES_PER_PX, cellKey, withHeights } from "@workadventure/map-editor";
+import {
+    flowAtCell,
+    flowOverBlock,
+    flowSpeedColor,
+    FLOW_SPEED_SCALE,
+} from "../../../../../src/front/Phaser/Game/Terrain/WaterFlowField";
+import { waterMassesOf } from "../../../../../src/front/Phaser/Game/Terrain/WaterMasses";
+import type { SettledWater } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
+import { TerrainWater } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
+import { WaterTrend } from "../../../../../src/front/Phaser/Game/Terrain/WaterTrend";
+
+/** A state of the water over a grid of `width` by `height` cells from the cell 0,0. */
+function state(
+    width: number,
+    height: number,
+    depthOf: (x: number, y: number) => number,
+    beforeOf: (x: number, y: number) => number = depthOf,
+    seconds = 1,
+): SettledWater {
+    const depths = new Float32Array(width * height);
+    const before = new Float32Array(width * height);
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            depths[y * width + x] = depthOf(x, y);
+            before[y * width + x] = beforeOf(x, y);
+        }
+    }
+    return { x: 0, y: 0, width, height, depths, before, seconds };
+}
+
+describe("flowAtCell", () => {
+    it("runs down the slope of the surface, faster on a steeper one", () => {
+        // The water gets shallower towards the east on level ground: it runs east.
+        const gentle = flowAtCell(
+            state(20, 5, (x) => 20 - x * 0.2),
+            undefined,
+            10,
+            2,
+            true,
+        );
+        expect(gentle.x).toBeCloseTo(1, 5);
+        expect(gentle.y).toBeCloseTo(0, 5);
+        expect(gentle.speed).toBeGreaterThan(0);
+        const steep = flowAtCell(
+            state(20, 5, (x) => 20 - x * 0.6),
+            undefined,
+            10,
+            2,
+            true,
+        );
+        expect(steep.speed).toBeGreaterThan(gentle.speed);
+        // And south when it gets shallower towards the south.
+        const south = flowAtCell(
+            state(5, 20, (_x, y) => 20 - y * 0.2),
+            undefined,
+            2,
+            10,
+            true,
+        );
+        expect(south.y).toBeCloseTo(1, 5);
+    });
+
+    it("is still in a level lake, under a film and on dry ground", () => {
+        expect(
+            flowAtCell(
+                state(9, 9, () => 12),
+                undefined,
+                4,
+                4,
+                true,
+            ).speed,
+        ).toBe(0);
+        expect(
+            flowAtCell(
+                state(9, 9, () => 0.2),
+                undefined,
+                4,
+                4,
+                true,
+            ).depth,
+        ).toBe(0);
+        expect(
+            flowAtCell(
+                state(9, 9, () => 0),
+                undefined,
+                4,
+                4,
+                true,
+            ).speed,
+        ).toBe(0);
+    });
+
+    it("takes a dry bank for a shore, and a dry hollow for a drop", () => {
+        // Water in a basin dug 20 px deep, dry ground at its level all around: no flow towards the bank.
+        const dug = new Map<string, number>();
+        for (let y = 0; y < 9; y++) for (let x = 0; x < 5; x++) dug.set(cellKey(x, y), -20);
+        const basin = withHeights(undefined, dug);
+        const atBank = flowAtCell(
+            state(9, 9, (x) => (x < 5 ? 10 : 0)),
+            basin,
+            4,
+            4,
+            true,
+        );
+        expect(atBank.speed).toBe(0);
+        // Water on level ground next to a dry hollow: it runs into it.
+        const hollow = new Map<string, number>();
+        for (let y = 0; y < 9; y++) for (let x = 5; x < 9; x++) hollow.set(cellKey(x, y), -20);
+        const atDrop = flowAtCell(
+            state(9, 9, (x) => (x < 5 ? 10 : 0)),
+            withHeights(undefined, hollow),
+            4,
+            4,
+            true,
+        );
+        expect(atDrop.x).toBeCloseTo(1, 5);
+        expect(atDrop.speed).toBeGreaterThan(0);
+    });
+
+    it("tells how fast the level rises or falls", () => {
+        const rising = flowAtCell(
+            state(
+                9,
+                9,
+                () => 12,
+                () => 10,
+                2,
+            ),
+            undefined,
+            4,
+            4,
+            true,
+        );
+        expect(rising.rate).toBeCloseTo(1, 5);
+        const single = flowAtCell(
+            state(
+                9,
+                9,
+                () => 12,
+                () => 10,
+                Infinity,
+            ),
+            undefined,
+            4,
+            4,
+            true,
+        );
+        expect(single.rate).toBe(0);
+    });
+
+    it("runs slower without inertia in deep water, for the same slope", () => {
+        const water = state(20, 5, (x) => 60 - x * 0.2);
+        expect(flowAtCell(water, undefined, 10, 2, false).speed).toBeLessThan(
+            flowAtCell(water, undefined, 10, 2, true).speed,
+        );
+    });
+});
+
+describe("flowAtCell with the speeds the server tells", () => {
+    it("shows the speed of the water as it is, even where its surface is level", () => {
+        // A level lake whose water runs south at 4 cells a second: the slope would say it is still.
+        const lake = { ...state(9, 9, () => 12), speedAt: () => ({ x: 0, y: 4 }) };
+        const flow = flowAtCell(lake, undefined, 4, 4, true);
+        expect(flow.x).toBeCloseTo(0, 5);
+        expect(flow.y).toBeCloseTo(1, 5);
+        // 4 cells a second, a cell being 0.548 m wide.
+        expect(flow.speed).toBeCloseTo(2.19, 2);
+        // At rest for the server: no arrow, whatever the slope.
+        const still = { ...state(20, 5, (x) => 20 - x * 0.6), speedAt: () => ({ x: 0, y: 0 }) };
+        expect(flowAtCell(still, undefined, 10, 2, true).speed).toBe(0);
+    });
+});
+
+describe("flowOverBlock", () => {
+    it("is the flow of the cell for a block of one, and a mean over a larger one", () => {
+        const water = state(40, 40, (x) => 30 - x * 0.2);
+        expect(flowOverBlock(water, undefined, 10, 10, 1, true)).toEqual(flowAtCell(water, undefined, 10, 10, true));
+        const block = flowOverBlock(water, undefined, 8, 8, 8, true);
+        expect(block.x).toBeCloseTo(1, 5);
+        expect(block.speed).toBeGreaterThan(0);
+        expect(block.depth).toBeGreaterThan(0);
+    });
+
+    it("is nothing over a dry block, and leaves the dry cells out of a block half under water", () => {
+        expect(
+            flowOverBlock(
+                state(40, 40, () => 0),
+                undefined,
+                8,
+                8,
+                8,
+                true,
+            ).depth,
+        ).toBe(0);
+        const half = flowOverBlock(
+            state(40, 40, (x) => (x < 12 ? 10 : 0)),
+            undefined,
+            8,
+            8,
+            8,
+            true,
+        );
+        expect(half.depth).toBe(10);
+    });
+});
+
+describe("flowSpeedColor", () => {
+    it("goes along the scale, and stays at its ends beyond them", () => {
+        expect(flowSpeedColor(0)).toBe(FLOW_SPEED_SCALE[0].color);
+        expect(flowSpeedColor(-1)).toBe(FLOW_SPEED_SCALE[0].color);
+        expect(flowSpeedColor(0.5)).toBe(FLOW_SPEED_SCALE[1].color);
+        expect(flowSpeedColor(99)).toBe(FLOW_SPEED_SCALE[FLOW_SPEED_SCALE.length - 1].color);
+        const between = flowSpeedColor(1);
+        expect(between).not.toBe(FLOW_SPEED_SCALE[1].color);
+        expect(between).not.toBe(FLOW_SPEED_SCALE[2].color);
+    });
+});
+
+describe("waterMassesOf", () => {
+    it("tells each body of water apart, the largest first, with its volume, its surface and its mean depth", () => {
+        // A lake of 10 x 10 cells under 32 px, a pond of 4 x 4 under 16 px, a film between them.
+        const water = state(40, 20, (x, y) =>
+            x >= 2 && x < 12 && y >= 2 && y < 12 ? 32 : x >= 30 && x < 34 && y >= 5 && y < 9 ? 16 : 0.5,
+        );
+        const masses = waterMassesOf(water);
+        expect(masses.map((mass) => mass.cells)).toEqual([100, 16]);
+        expect(masses[0].volumeM3).toBeCloseTo((100 * 32 * CELL_LITRES_PER_PX) / 1000, 5);
+        expect(masses[0].areaM2).toBeCloseTo(100 * CELL_AREA_M2, 5);
+        // 32 px of altitude are one tile high: about 1.10 m.
+        expect(masses[0].meanDepthM).toBeCloseTo(1.095, 2);
+        // The label hangs in the lake, near its middle (cell 6 or 7 on each axis, 16 px a cell).
+        expect(masses[0].x).toBeGreaterThan(6 * 16);
+        expect(masses[0].x).toBeLessThan(8 * 16);
+        expect(masses[0].trendM3PerMinute).toBe(0);
+    });
+
+    it("leaves puddles out, and hangs the label of a ring of water on the water", () => {
+        expect(waterMassesOf(state(20, 20, (x, y) => (x < 3 && y < 3 ? 10 : 0)))).toEqual([]);
+        // A ring: water all around an island.
+        const ring = state(20, 20, (x, y) => (x >= 6 && x < 14 && y >= 6 && y < 14 ? 0 : 10));
+        const [mass] = waterMassesOf(ring);
+        const column = Math.floor(mass.x / 16);
+        const row = Math.floor(mass.y / 16);
+        expect(ring.depths[row * 20 + column]).toBe(10);
+    });
+
+    it("tells how fast a body fills, in cubic metres a minute", () => {
+        const water = state(
+            20,
+            20,
+            (x, y) => (x < 10 && y < 10 ? 12 : 0),
+            (x, y) => (x < 10 && y < 10 ? 10 : 0),
+            2,
+        );
+        // 100 cells gained 2 px in 2 s: 100 px over one cell a second.
+        expect(waterMassesOf(water)[0].trendM3PerMinute).toBeCloseTo(((100 * CELL_LITRES_PER_PX) / 1000) * 60, 5);
+    });
+});
+
+describe("TerrainWater.settled", () => {
+    const bytesOf = (depths: number[]): Uint8Array => {
+        const bytes = new Uint8Array(depths.length * 2);
+        depths.forEach((depth, index) => {
+            bytes[index * 2] = (depth * 8) & 255;
+            bytes[index * 2 + 1] = (depth * 8) >> 8;
+        });
+        return bytes;
+    };
+
+    it("keeps the state before the last one, and the time between the two", () => {
+        const water = new TerrainWater();
+        water.receive({ x: 3, y: 4, width: 2, height: 1, seq: 1, full: true, depths: bytesOf([10, 0]) }, 1000);
+        // A single state: nothing to compare it with.
+        expect(water.settled().seconds).toBe(Infinity);
+        expect([...water.settled().before]).toEqual([10, 0]);
+        water.receive({ x: 3, y: 4, width: 2, height: 1, seq: 2, full: true, depths: bytesOf([14, 2]) }, 3000);
+        const settled = water.settled();
+        expect(settled).toMatchObject({ x: 3, y: 4, width: 2, height: 1, seconds: 2 });
+        expect([...settled.depths]).toEqual([14, 2]);
+        expect([...settled.before]).toEqual([10, 0]);
+        // Another grid (the relief was edited): the comparison starts again.
+        water.receive({ x: 0, y: 0, width: 1, height: 1, seq: 3, full: true, depths: bytesOf([5]) }, 4000);
+        expect(water.settled().seconds).toBe(Infinity);
+    });
+
+    /**
+     * A pond of 4 by 4 cells, 40 px deep plus `level(seconds)`, told once a second for `seconds`; `slosh` sends its
+     * west half up while its east half goes down, as a wave does. The view of the flows reads it after each state
+     * while `watched` says so (by default, all along).
+     */
+    const pond = (
+        level: (seconds: number) => number,
+        seconds: number,
+        slosh = false,
+        watched: (second: number) => boolean = () => true,
+        water = new TerrainWater(),
+        from = 0,
+    ): TerrainWater => {
+        for (let second = from; second <= seconds; second++) {
+            const depthAt = (index: number): number =>
+                Math.round((40 + (slosh && index % 4 >= 2 ? -level(second) : level(second))) * 8) / 8;
+            const depths = bytesOf(Array.from({ length: 16 }, (_, index) => depthAt(index)));
+            water.receive({ x: 0, y: 0, width: 4, height: 4, seq: second, full: true, depths }, second * 1000);
+            if (watched(second)) water.settled(second * 1000);
+        }
+        return water;
+    };
+    const ripple = (second: number): number => 1.5 * Math.sin((2 * Math.PI * second) / 2.6);
+
+    it("tints neither a rise nor a fall where the water only ripples, and its body neither fills nor empties", () => {
+        const water = pond(ripple, 40, true);
+        const settled = water.settled(40_000);
+        expect(flowOverBlock(settled, undefined, 0, 0, 4, true).tint).toBe(0);
+        // The rate between the two last states is still there, as it is.
+        expect(Math.abs(flowAtCell(settled, undefined, 1, 1, true).rate)).toBeGreaterThan(0.5);
+        expect(Math.abs(waterMassesOf(settled)[0].trendM3PerMinute)).toBeLessThan(0.05);
+    });
+
+    it("tints a rise under the ripples, and lets it die when the server falls silent", () => {
+        const water = pond((second) => second * 0.3 + ripple(second) / 3, 30);
+        const rising = water.settled(30_000);
+        expect(flowOverBlock(rising, undefined, 0, 0, 4, true).tint).toBe(1);
+        expect(flowAtCell(rising, undefined, 1, 1, true).trend).toBeGreaterThan(0.2);
+        expect(waterMassesOf(rising)[0].trendM3PerMinute).toBeGreaterThan(0);
+        // Nothing more for 30 s: the water is still.
+        expect(flowAtCell(water.settled(60_000), undefined, 1, 1, true).tint).toBe(0);
+    });
+
+    describe("the trend, kept only while the view of the flows reads it", () => {
+        afterEach(() => {
+            vi.restoreAllMocks();
+        });
+        const rise = (second: number): number => second * 0.3 + ripple(second) / 3;
+
+        it("goes through no cell while nobody reads it, and holds no trend", () => {
+            const add = vi.spyOn(WaterTrend.prototype, "add");
+            const water = pond(rise, 30, false, () => false);
+            expect(add).not.toHaveBeenCalled();
+            // Read without the time of the game (the foam of the waves): still no trend.
+            const settled = water.settled();
+            expect(settled.trend).toBeUndefined();
+            expect(settled.trendShown).toBeUndefined();
+            expect(add).not.toHaveBeenCalled();
+        });
+
+        it("stops going through the grid once the view is closed", () => {
+            const add = vi.spyOn(WaterTrend.prototype, "add");
+            const water = pond(rise, 90, false, (second) => second <= 10);
+            const whileOpen = add.mock.calls.length;
+            expect(whileOpen).toBeGreaterThan(5);
+            // Closed at 10 s: kept half a minute for a quick reopening, then let go (not a state more).
+            expect(whileOpen).toBeLessThanOrEqual(41);
+            expect(water.settled().trend).toBeUndefined();
+        });
+
+        it("keeps its trend for a view closed then opened again soon: no new wait", () => {
+            const water = pond(rise, 20);
+            // Closed from 21 s to 30 s, the water going on rising.
+            pond(rise, 29, false, () => false, water, 21);
+            pond(rise, 30, false, () => true, water, 30);
+            expect(flowAtCell(water.settled(30_000), undefined, 1, 1, true).tint).toBe(1);
+            expect(waterMassesOf(water.settled(30_000))[0].measuring).toBe(false);
+        });
+
+        it("says its bodies of water are being measured while the trend is not known yet", () => {
+            const water = pond(rise, 2, false, () => false);
+            // The view opens at 2 s: the trend starts from nothing.
+            water.settled(2000);
+            expect(waterMassesOf(water.settled(2000))[0].measuring).toBe(true);
+            pond(rise, 8, false, () => true, water, 3);
+            expect(waterMassesOf(water.settled(8000))[0].measuring).toBe(false);
+            // Read without the trend (no view): nothing is being measured, the rate between two states is told.
+            expect(waterMassesOf(new TerrainWater().settled())).toEqual([]);
+        });
+
+        it("starts again from nothing when the view is opened again: no tint left from before", () => {
+            const water = pond(rise, 20);
+            expect(flowAtCell(water.settled(20_000), undefined, 1, 1, true).tint).toBe(1);
+            water.dropTrend();
+            // Closed for a while, the water goes on rising; opened again at 40 s.
+            pond(rise, 39, false, () => false, water, 21);
+            const reopened = water.settled(40_000);
+            expect(flowAtCell(reopened, undefined, 1, 1, true).tint).toBe(0);
+            expect(flowAtCell(reopened, undefined, 1, 1, true).trend).toBe(0);
+            // A few seconds of watching, and the rise shows again.
+            pond(rise, 50, false, () => true, water, 41);
+            expect(flowAtCell(water.settled(50_000), undefined, 1, 1, true).tint).toBe(1);
+        });
+    });
+});
+
+describe("TerrainWater speeds", () => {
+    const depths = new Uint8Array(8 * 8 * 2);
+
+    it("keeps the speeds of the last state, block by block, and none when the server tells none", () => {
+        const water = new TerrainWater();
+        // 8 by 8 cells from the cell 0, 0: 2 by 2 blocks. The block of the cells 4 to 7, 0 to 3 runs east at
+        // 2.5 cells a second, the one under it runs north at 1.
+        const speeds = Uint8Array.from([0, 0, 10, 0, 0, 0, 0, 252]);
+        water.receive({ x: 0, y: 0, width: 8, height: 8, seq: 1, full: true, depths, speeds }, 0);
+        expect(water.speedAt(5 * 16, 1 * 16)).toEqual({ x: 2.5, y: 0 });
+        expect(water.speedAt(6 * 16, 6 * 16)).toEqual({ x: 0, y: -1 });
+        expect(water.speedAt(1 * 16, 1 * 16)).toEqual({ x: 0, y: 0 });
+        expect(water.settled().speedAt?.(5, 1)).toEqual({ x: 2.5, y: 0 });
+        // Outside the grid: still.
+        expect(water.speedAt(-100, 0)).toEqual({ x: 0, y: 0 });
+        // The next state tells none (the map went back to the water that creeps): none is known any more.
+        water.receive({ x: 0, y: 0, width: 8, height: 8, seq: 2, full: true, depths }, 1000);
+        expect(water.speedAt(5 * 16, 1 * 16)).toBeUndefined();
+        expect(water.settled().speedAt).toBeUndefined();
+        // Speeds of another size than the grid are not trusted.
+        water.receive(
+            { x: 0, y: 0, width: 8, height: 8, seq: 3, full: true, depths, speeds: speeds.slice(0, 4) },
+            2000,
+        );
+        expect(water.speedAt(5 * 16, 1 * 16)).toBeUndefined();
+    });
+
+    it("reads the slow speeds where the speeds in quarters of a cell say nothing", () => {
+        const water = new TerrainWater();
+        // The first block runs east at 2.5 cells a second; the slow ones say 0.1 east and 0.02 north for each block.
+        const speeds = Uint8Array.from([10, 0, 0, 0, 0, 0, 0, 0]);
+        const slowSpeeds = Uint8Array.from([25, 251, 25, 251, 0, 0, 0, 0]);
+        water.receive({ x: 0, y: 0, width: 8, height: 8, seq: 1, full: true, depths, speeds, slowSpeeds }, 0);
+        expect(water.speedAt(1 * 16, 1 * 16)).toEqual({ x: 2.5, y: 0 });
+        const slow = water.speedAt(5 * 16, 1 * 16);
+        expect(slow?.x).toBeCloseTo(0.1, 5);
+        expect(slow?.y).toBeCloseTo(-0.02, 5);
+        expect(water.speedAt(1 * 16, 5 * 16)).toEqual({ x: 0, y: 0 });
+        // Slow speeds of another size are not trusted: the speeds alone are read.
+        water.receive(
+            { x: 0, y: 0, width: 8, height: 8, seq: 2, full: true, depths, speeds, slowSpeeds: slowSpeeds.slice(0, 2) },
+            1000,
+        );
+        expect(water.speedAt(5 * 16, 1 * 16)).toEqual({ x: 0, y: 0 });
+    });
+});
+
+describe("TerrainWater glide", () => {
+    const one = (depth: number): Uint8Array => Uint8Array.from([(depth * 8) & 255, (depth * 8) >> 8]);
+    const state = (seq: number, depth: number) => ({
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+        seq,
+        full: true,
+        depths: one(depth),
+    });
+
+    it("glides to a state for as long as the server took to send it: a second, or less when told more often", () => {
+        const slow = new TerrainWater();
+        slow.receive(state(1, 0), 0);
+        slow.receive(state(2, 10), 1000);
+        // A second apart: half way after half a second.
+        expect(slow.depthAt(8, 8, 1500)).toBeCloseTo(5, 5);
+        const fast = new TerrainWater();
+        fast.receive(state(1, 0), 0);
+        fast.receive(state(2, 10), 200);
+        // A fifth of a second apart: half way after a tenth, there after a fifth.
+        expect(fast.depthAt(8, 8, 300)).toBeCloseTo(5, 5);
+        expect(fast.depthAt(8, 8, 400)).toBe(10);
+    });
+
+    it("is drawn five times a second while it glides, however often the server tells it", () => {
+        const water = new TerrainWater();
+        water.receive(state(1, 0), 0);
+        water.receive(state(2, 10), 100);
+        const key = water.drawKey(110);
+        // Another state in the same fifth of a second: no drawing of its own.
+        water.receive(state(3, 12), 150);
+        expect(water.drawKey(160)).toBe(key);
+        expect(water.drawKey(210)).not.toBe(key);
+        // Once at rest, drawn a last time and no more.
+        expect(water.drawKey(5000)).toBe(water.drawKey(6000));
+    });
+});

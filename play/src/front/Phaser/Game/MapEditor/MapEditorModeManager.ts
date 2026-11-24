@@ -12,10 +12,12 @@ import type { GameScene } from "../GameScene";
 import {
     mapEditorAskToClaimPersonalAreaStore,
     mapEditorModeStore,
+    mapEditorPlacementLevelStore,
     mapEditorSnapEnabledStore,
     mapEditorSelectedToolStore,
     mapEditorWamSettingsEditorToolCurrentMenuItemStore,
 } from "../../../Stores/MapEditorStore";
+import { floorLevelCurrentStore, floorLevelViewedStore } from "../../../Stores/FloorLevelsStore";
 import { mapEditorActivated, mapEditorActivatedForThematics } from "../../../Stores/MenuStore";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import LL from "../../../../i18n/i18n-svelte";
@@ -23,12 +25,16 @@ import { gameManager } from "../GameManager";
 import { isInsidePersonalAreaStore, personalAreaDataStore } from "../../../Stores/PersonalDeskStore";
 import { analyticsClient } from "../../../Administration/AnalyticsClient";
 import { warningMessageStore } from "../../../Stores/ErrorStore";
+import { armedCatastropheStore, disarmCatastrophe } from "../../../Stores/CatastropheStore";
 import { isTextEditingTarget } from "./isTextEditingTarget";
+import { toolPauseFor } from "./CatastropheToolPause";
 import { EditorToolName } from "./EditorToolName";
 import { editorToolForKey } from "./EditorToolShortcuts";
 import { AreaEditorTool } from "./Tools/AreaEditorTool";
 import type { MapEditorTool } from "./Tools/MapEditorTool";
 import { MapLayerEditorTool } from "./Tools/MapLayerEditorTool";
+import { TerrainEditorTool } from "./Tools/TerrainEditorTool";
+import { LifeEditorTool } from "./Tools/LifeEditorTool";
 import { EntityEditorTool } from "./Tools/EntityEditorTool";
 import { WAMSettingsEditorTool } from "./Tools/WAMSettingsEditorTool";
 import type { FrontCommandInterface } from "./Commands/FrontCommandInterface";
@@ -103,10 +109,16 @@ export class MapEditorModeManager {
     private currentCommandIndex: number;
 
     private mapEditorModeUnsubscriber: Unsubscriber | undefined;
+    private armedCatastropheUnsubscriber: Unsubscriber | undefined;
+    /** The tool put aside while a catastrophe is armed in the editor: taken back when it is disarmed. */
+    private toolBeforeCatastrophe: EditorToolName | undefined;
 
     private readonly selectionEditorTool: SelectionEditorTool;
 
     private isReverting: Promise<void> = Promise.resolve();
+
+    /** Waiting for the commands sent by this player to be acknowledged (true) or refused (false) by the server. */
+    private settledListeners: ((accepted: boolean) => void)[] = [];
 
     private isHandlingIncomingCommand = false;
 
@@ -131,6 +143,8 @@ export class MapEditorModeManager {
             [EditorToolName.AreaEditor]: areaEditorTool,
             [EditorToolName.EntityEditor]: new EntityEditorTool(this),
             [EditorToolName.MapLayerEditor]: new MapLayerEditorTool(this),
+            [EditorToolName.TerrainEditor]: new TerrainEditorTool(this),
+            [EditorToolName.LifeEditor]: new LifeEditorTool(),
             [EditorToolName.WAMSettingsEditor]: new WAMSettingsEditorTool(this),
             [EditorToolName.SelectionEditor]: this.selectionEditorTool,
             [EditorToolName.ExploreTheRoom]: new ExplorerTool(this.scene),
@@ -140,6 +154,7 @@ export class MapEditorModeManager {
         this.lastlyUsedTool = undefined;
 
         this.subscribeToStores();
+        this.subscribeToArmedCatastrophe();
         this.subscribeToGameMapFrontWrapperEvents();
 
         this.currentRunningCommand = this.scene.getGameMapFrontWrapper().initializedPromise.promise;
@@ -572,6 +587,24 @@ export class MapEditorModeManager {
         });
     }
 
+    /**
+     * Resolves once every command this player sent is acknowledged by the server (true), or as soon as one is refused
+     * (false): for an action that must wait for the server before doing more (a weather card that makes the map
+     * follow a place, then takes its player back to the weather of the map).
+     */
+    public whenCommandsSettled(): Promise<boolean> {
+        if (this.pendingCommands.length === 0) return Promise.resolve(true);
+        return new Promise((resolve) => {
+            this.settledListeners.push(resolve);
+        });
+    }
+
+    private notifySettled(accepted: boolean): void {
+        const listeners = this.settledListeners;
+        this.settledListeners = [];
+        for (const listener of listeners) listener(accepted);
+    }
+
     private async handleIncomingCommandMessage(editMapCommandMessage: EditMapCommandMessage): Promise<void> {
         if (editMapCommandMessage.editMapMessage?.message?.$case === "errorCommandMessage") {
             const reason = editMapCommandMessage.editMapMessage.message.errorCommandMessage.reason;
@@ -586,6 +619,7 @@ export class MapEditorModeManager {
                 // The server refused the command, so the optimistic local state is now wrong. Nothing is
                 // reported to Sentry: map-storage already logged the cause, and a refusal is also the expected
                 // answer to a command the user was not allowed to run.
+                this.notifySettled(false);
                 await this.revertPendingCommands();
                 warningMessageStore.addWarningMessage(get(LL).mapEditor.map.editionFailed());
             }
@@ -600,6 +634,7 @@ export class MapEditorModeManager {
                 logger("removing command of pendingList : ", editMapCommandMessage.id);
                 const command = this.pendingCommands.shift();
                 const historyGroup = this.pendingCommandHistoryGroups.shift();
+                if (this.pendingCommands.length === 0) this.notifySettled(true);
                 if (historyGroup) {
                     historyGroup.group.everAcknowledgedCommandIndexes.add(historyGroup.commandIndex);
                     if (historyGroup.direction === "apply") {
@@ -729,6 +764,11 @@ export class MapEditorModeManager {
         if (this.activeTool === tool) {
             return;
         }
+        if (tool !== undefined) {
+            // Picking a tool takes the pointer back from an armed catastrophe.
+            this.toolBeforeCatastrophe = undefined;
+            disarmCatastrophe();
+        }
         if (tool === EditorToolName.WAMSettingsEditor) {
             this.toolBeforeWamSettings = this.activeTool;
         }
@@ -821,21 +861,43 @@ export class MapEditorModeManager {
         this.mapEditorModeUnsubscriber = mapEditorModeStore.subscribe((active) => {
             const wasActive = this.active;
             this.active = active;
+            if (active && !wasActive) {
+                mapEditorPlacementLevelStore.set(get(floorLevelViewedStore) ?? get(floorLevelCurrentStore));
+            }
             if (!active && wasActive) {
                 mapEditorSnapEnabledStore.set(true);
             }
             if (!this.active) {
-                this.lastlyUsedTool = get(mapEditorSelectedToolStore);
+                this.lastlyUsedTool = get(mapEditorSelectedToolStore) ?? this.toolBeforeCatastrophe;
+                this.toolBeforeCatastrophe = undefined;
                 this.equipTool(undefined);
                 return;
             }
             this.equipTool(
                 this.lastlyUsedTool && this.lastlyUsedTool != EditorToolName.CloseMapEditor
                     ? this.lastlyUsedTool
-                    : get(mapEditorActivated) || get(mapEditorActivatedForThematics)
-                      ? EditorToolName.EntityEditor
-                      : EditorToolName.ExploreTheRoom,
+                    : get(mapEditorActivated)
+                      ? EditorToolName.MapLayerEditor
+                      : get(mapEditorActivatedForThematics)
+                        ? EditorToolName.EntityEditor
+                        : EditorToolName.ExploreTheRoom,
             );
+        });
+    }
+
+    /** An armed catastrophe owns the click on the map: the tool is put aside meanwhile, and taken back after. */
+    private subscribeToArmedCatastrophe(): void {
+        this.armedCatastropheUnsubscriber = armedCatastropheStore.subscribe((armed) => {
+            if (!this.active) return;
+            const pause = toolPauseFor(armed !== undefined, this.activeTool, this.toolBeforeCatastrophe);
+            this.toolBeforeCatastrophe = pause.paused;
+            if (pause.equip === undefined) return;
+            if (pause.equip === null) {
+                this.equipTool(undefined);
+                return;
+            }
+            // equipTool forgets the tool put aside: this one is it.
+            this.equipTool(pause.equip);
         });
     }
 
@@ -847,6 +909,7 @@ export class MapEditorModeManager {
 
     private unsubscribeFromStores(): void {
         this.mapEditorModeUnsubscriber?.();
+        this.armedCatastropheUnsubscriber?.();
     }
 
     public get currentlyActiveTool(): MapEditorTool | undefined {

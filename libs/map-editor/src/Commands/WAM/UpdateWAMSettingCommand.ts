@@ -1,15 +1,52 @@
+import { validPoolStyles } from "../../Terrain/Pools";
 import type { UpdateWAMSettingsMessage } from "@workadventure/messages";
 import type { WAMFileFormat, WAMSettings } from "../../types";
 import {
+    AIR_LIFE_BOUNDS,
     AutoWeather,
     CategorySettings,
+    DEFAULT_AIR_LIFE_SETTINGS,
+    DEFAULT_FLOW_PACE,
+    DEFAULT_IMPACT_REACH,
+    DEFAULT_LAND_LIFE_SETTINGS,
+    DEFAULT_LIFE_SETTINGS,
+    DEFAULT_MEADOW_SETTINGS,
+    DEFAULT_WATER_SETTINGS,
+    DEFAULT_WAVE_SETTINGS,
+    FLOW_PACE_BOUNDS,
+    IMPACT_REACH_BOUNDS,
+    LAND_LIFE_BOUNDS,
+    LIFE_BOUNDS,
+    MAX_FREEZE_THAW_SPEED,
+    MAX_POOL_LADDERS,
+    MAX_WATER_CURRENT,
+    MAX_WATER_INDOOR_DRAIN,
+    MAX_WATER_MAX_SURFACE,
+    MAX_WATER_SPEED,
+    MEADOW_BOUNDS,
+    MIN_WATER_MAX_SURFACE,
+    POOL_LADDER_CELL,
     MegaphoneSettings,
+    precipitationWeather,
     PrefabOverride,
     RecordingSettings,
+    WATER_PACE_BOUNDS,
+    waterHasInertia,
+    WAVE_BOUNDS,
     Weather,
     WeatherLocation,
+    WeatherType,
 } from "../../types";
 import { Command } from "../Command";
+
+const AIR_LIFE_KEYS = ["gullHuntInterval", "gullReproductionDelay", "gullMaxLifespan"] as const;
+const LAND_LIFE_KEYS = [
+    "antelopeReproductionDelay",
+    "antelopeMaxLifespan",
+    "landHuntInterval",
+    "landPredatorReproductionDelay",
+    "landPredatorMaxLifespan",
+] as const;
 
 export class UpdateWAMSettingCommand extends Command {
     protected readonly oldConfig: WAMSettings | undefined;
@@ -70,8 +107,11 @@ export class UpdateWAMSettingCommand extends Command {
                 break;
             }
             case "updateWeatherSettingMessage": {
-                this.wam.settings.weather = Weather.parse(message.updateWeatherSettingMessage.weather);
-                this.wam.settings.weatherStartedAt = message.updateWeatherSettingMessage.startedAt;
+                // An older client may still send a snow: it is a rain (see precipitationWeather).
+                const weather = precipitationWeather(Weather.parse(message.updateWeatherSettingMessage.weather));
+                // The server stamps the change; a client applying its own change first uses its clock until then.
+                this.wam.settings.weatherStartedAt = message.updateWeatherSettingMessage.startedAt ?? Date.now();
+                this.wam.settings.weather = weather;
                 // Back to the default place on request. Otherwise older clients send no place: keep the existing one.
                 // A broken place is ignored.
                 const location = WeatherLocation.safeParse(message.updateWeatherSettingMessage.location);
@@ -85,11 +125,204 @@ export class UpdateWAMSettingCommand extends Command {
                 if (autoFrequency !== undefined && autoFrequency !== "") {
                     const auto = AutoWeather.safeParse({
                         frequency: autoFrequency,
-                        include: autoInclude,
+                        include: autoInclude.filter((included) => included !== WeatherType.Snow),
                         clouds: autoClouds ?? this.wam.settings.weatherAuto?.clouds,
                     });
                     if (auto.success) {
                         this.wam.settings.weatherAuto = auto.data;
+                    }
+                }
+                break;
+            }
+            case "updateWaterSettingMessage": {
+                const {
+                    runoff,
+                    evaporation,
+                    speed,
+                    absorption,
+                    current,
+                    maxSurface,
+                    indoorDrain,
+                    inertia,
+                    waveRoughness,
+                    waveDamping,
+                    waveBreaking,
+                    waveMomentum,
+                    precision,
+                    updates,
+                    flowPace,
+                    impactReach,
+                    freezeThawSpeed,
+                } = message.updateWaterSettingMessage;
+                const within = (value: number, min: number, max: number, fallback: number): number =>
+                    Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+                // An older client sends no speed: the one of the map is kept.
+                const keptSpeed = this.wam.settings.water?.speed ?? DEFAULT_WATER_SETTINGS.speed;
+                const keptAbsorption = this.wam.settings.water?.absorption ?? DEFAULT_WATER_SETTINGS.absorption;
+                const keptCurrent = this.wam.settings.water?.current ?? DEFAULT_WATER_SETTINGS.current;
+                const keptMaxSurface = this.wam.settings.water?.maxSurface ?? DEFAULT_WATER_SETTINGS.maxSurface;
+                const keptIndoorDrain = this.wam.settings.water?.indoorDrain ?? DEFAULT_WATER_SETTINGS.indoorDrain;
+                // The waves: what the client sends within its bounds, the rest as the map had it. A map that never
+                // set any, from a client that says nothing of them, keeps none.
+                const keptWaves = this.wam.settings.water?.waves;
+                const sentWaves = {
+                    roughness: waveRoughness,
+                    damping: waveDamping,
+                    breaking: waveBreaking,
+                    momentum: waveMomentum,
+                };
+                const wave = (key: keyof typeof DEFAULT_WAVE_SETTINGS): number => {
+                    const kept = keptWaves?.[key] ?? DEFAULT_WAVE_SETTINGS[key];
+                    const sent = sentWaves[key];
+                    return sent === undefined ? kept : within(sent, WAVE_BOUNDS[key][0], WAVE_BOUNDS[key][1], kept);
+                };
+                const waves =
+                    keptWaves || Object.values(sentWaves).some((sent) => sent !== undefined)
+                        ? {
+                              roughness: wave("roughness"),
+                              damping: wave("damping"),
+                              breaking: wave("breaking"),
+                              momentum: wave("momentum"),
+                          }
+                        : undefined;
+                // How finely the water is computed and how often it is told: whole numbers within their bounds, as
+                // the map had them when the client says nothing; nothing kept for a map that never set one.
+                const keptWater = this.wam.settings.water;
+                const paced = (key: keyof typeof WATER_PACE_BOUNDS, sent: number | undefined): number | undefined => {
+                    if (sent === undefined || !Number.isFinite(sent)) return keptWater?.[key];
+                    return Math.round(within(sent, WATER_PACE_BOUNDS[key][0], WATER_PACE_BOUNDS[key][1], sent));
+                };
+                const keptFlowPace =
+                    flowPace === undefined || !Number.isFinite(flowPace)
+                        ? keptWater?.flowPace
+                        : within(flowPace, FLOW_PACE_BOUNDS[0], FLOW_PACE_BOUNDS[1], DEFAULT_FLOW_PACE);
+                // What is not a number is no reach: an older client says nothing, the map keeps what it had.
+                const keptImpactReach =
+                    impactReach === undefined
+                        ? keptWater?.impactReach
+                        : Number.isFinite(impactReach)
+                          ? within(impactReach, IMPACT_REACH_BOUNDS[0], IMPACT_REACH_BOUNDS[1], DEFAULT_IMPACT_REACH)
+                          : keptWater?.impactReach;
+                // The speed of the freeze and the thaw: as the map had it when the client says nothing of it (none for a
+                // map that never set one), 1 for what is not a number.
+                const keptFreezeThawSpeed =
+                    freezeThawSpeed === undefined
+                        ? keptWater?.freezeThawSpeed
+                        : Number.isFinite(freezeThawSpeed)
+                          ? within(freezeThawSpeed, 1, MAX_FREEZE_THAW_SPEED, 1)
+                          : 1;
+                this.wam.settings.water = {
+                    runoff: within(runoff, 0, 100, DEFAULT_WATER_SETTINGS.runoff),
+                    evaporation: within(evaporation, 0, 10, DEFAULT_WATER_SETTINGS.evaporation),
+                    speed: speed === undefined ? keptSpeed : within(speed, 1, MAX_WATER_SPEED, keptSpeed),
+                    absorption: absorption === undefined ? keptAbsorption : within(absorption, 0, 100, keptAbsorption),
+                    current: current === undefined ? keptCurrent : within(current, 0, MAX_WATER_CURRENT, keptCurrent),
+                    maxSurface:
+                        maxSurface === undefined
+                            ? keptMaxSurface
+                            : within(maxSurface, MIN_WATER_MAX_SURFACE, MAX_WATER_MAX_SURFACE, keptMaxSurface),
+                    indoorDrain:
+                        indoorDrain === undefined
+                            ? keptIndoorDrain
+                            : within(indoorDrain, 0, MAX_WATER_INDOOR_DRAIN, keptIndoorDrain),
+                    // An older client says nothing of the inertia: the map keeps the water it had (with inertia when it
+                    // said nothing). Written either way: a map that turned it off keeps it off.
+                    inertia: inertia ?? waterHasInertia(this.wam.settings.water),
+                    ...(waves ? { waves } : {}),
+                    ...(paced("precision", precision) === undefined
+                        ? {}
+                        : { precision: paced("precision", precision) }),
+                    ...(paced("updates", updates) === undefined ? {} : { updates: paced("updates", updates) }),
+                    ...(keptFlowPace === undefined ? {} : { flowPace: keptFlowPace }),
+                    ...(keptImpactReach === undefined ? {} : { impactReach: keptImpactReach }),
+                    ...(keptFreezeThawSpeed === undefined ? {} : { freezeThawSpeed: keptFreezeThawSpeed }),
+                };
+                break;
+            }
+            case "updatePoolSettingMessage": {
+                const pools = validPoolStyles(message.updatePoolSettingMessage.pools);
+                this.wam.settings.pools = pools.length > 0 ? pools : undefined;
+                break;
+            }
+            case "updatePoolLaddersSettingMessage": {
+                const cells = [
+                    ...new Set(
+                        message.updatePoolLaddersSettingMessage.cells.filter((cell) => POOL_LADDER_CELL.test(cell)),
+                    ),
+                ].slice(0, MAX_POOL_LADDERS);
+                this.wam.settings.poolLadders = cells.length > 0 ? cells : undefined;
+                break;
+            }
+            case "updateMeadowSettingMessage": {
+                const sent = message.updateMeadowSettingMessage;
+                const kept = { ...DEFAULT_MEADOW_SETTINGS, ...this.wam.settings.meadow };
+                const within = (key: keyof typeof MEADOW_BOUNDS): number => {
+                    const [min, max] = MEADOW_BOUNDS[key];
+                    const value = sent[key];
+                    return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : kept[key];
+                };
+                this.wam.settings.meadow = {
+                    enabled: sent.enabled,
+                    growMinutes: within("growMinutes"),
+                    thirstMinutes: within("thirstMinutes"),
+                    moistureHold: within("moistureHold"),
+                };
+                break;
+            }
+            case "updateLightingSettingMessage": {
+                this.wam.settings.lighting = {
+                    energySaving: message.updateLightingSettingMessage.energySaving === true,
+                };
+                break;
+            }
+            case "updateLifeSettingMessage": {
+                const sent = message.updateLifeSettingMessage;
+                const kept = this.wam.settings.life;
+                const within = (key: keyof typeof LIFE_BOUNDS): number => {
+                    const [min, max] = LIFE_BOUNDS[key];
+                    const value = sent[key];
+                    // An older client sends neither the dolphin settings nor the drinks of the land animals: those of the map
+                    // are kept.
+                    if (value === undefined) return kept?.[key] ?? DEFAULT_LIFE_SETTINGS[key];
+                    return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : DEFAULT_LIFE_SETTINGS[key];
+                };
+                this.wam.settings.life = {
+                    enabled: sent.enabled === true,
+                    reproductionDelay: within("reproductionDelay"),
+                    maxLifespan: within("maxLifespan"),
+                    maxSpeed: within("maxSpeed"),
+                    huntInterval: within("huntInterval"),
+                    dolphinReproductionDelay: within("dolphinReproductionDelay"),
+                    dolphinMaxLifespan: within("dolphinMaxLifespan"),
+                    drinkInterval: within("drinkInterval"),
+                };
+                // The life of the land: what an older client does not send is kept as the map has it.
+                const land = this.wam.settings.life;
+                const landEnabled = sent.landEnabled ?? kept?.landEnabled;
+                if (landEnabled !== undefined) land.landEnabled = landEnabled;
+                for (const key of LAND_LIFE_KEYS) {
+                    const [min, max] = LAND_LIFE_BOUNDS[key];
+                    const value = sent[key];
+                    if (value === undefined) {
+                        if (kept?.[key] !== undefined) land[key] = kept[key];
+                    } else {
+                        land[key] = Number.isFinite(value)
+                            ? Math.min(max, Math.max(min, value))
+                            : DEFAULT_LAND_LIFE_SETTINGS[key];
+                    }
+                }
+                // The gulls, the same way.
+                const gullsEnabled = sent.gullsEnabled ?? kept?.gullsEnabled;
+                if (gullsEnabled !== undefined) land.gullsEnabled = gullsEnabled;
+                for (const key of AIR_LIFE_KEYS) {
+                    const [min, max] = AIR_LIFE_BOUNDS[key];
+                    const value = sent[key];
+                    if (value === undefined) {
+                        if (kept?.[key] !== undefined) land[key] = kept[key];
+                    } else {
+                        land[key] = Number.isFinite(value)
+                            ? Math.min(max, Math.max(min, value))
+                            : DEFAULT_AIR_LIFE_SETTINGS[key];
                     }
                 }
                 break;

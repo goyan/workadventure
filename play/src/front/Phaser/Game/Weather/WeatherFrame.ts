@@ -1,8 +1,7 @@
-import { WeatherType } from "@workadventure/map-editor";
-import type { AutoWeatherSettings } from "@workadventure/map-editor";
-import { snowPossibleAt } from "../Nature/SeasonClock";
+import { precipitationWeather, WeatherType } from "@workadventure/map-editor";
+import type { AutoWeatherSettings, SeasonPlace } from "@workadventure/map-editor";
+import { hash01 } from "../Autumn/LeafPalette";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
-import { hash01, leafColor } from "../Autumn/LeafPalette";
 import { autoWeatherAt, slotStart } from "./WeatherSchedule";
 
 export interface WeatherView {
@@ -35,62 +34,6 @@ export function wellInside(drawn: WeatherView, view: WeatherView, slack: number)
         drawn.x + drawn.width - (view.x + view.width) >= x &&
         drawn.y + drawn.height - (view.y + view.height) >= y
     );
-}
-
-export interface WeatherParticle {
-    x: number;
-    y: number;
-    length: number;
-}
-
-/** A field fixed to world coordinates, so camera movement never drags the rain along. */
-export function weatherParticles(weather: WeatherType, epoch: number, view: WeatherView): WeatherParticle[] {
-    if (weather === WeatherType.Clear) return [];
-    const cellSize = Math.max(64, Math.ceil(Math.sqrt((view.width * view.height) / 350)));
-    const snow = weather === WeatherType.Snow;
-    const speed = snow ? 18 : weather === WeatherType.Storm ? 210 : 150;
-    const time = epoch / 1000;
-    const particles: WeatherParticle[] = [];
-    for (let row = Math.floor(view.y / cellSize) - 1; row <= Math.ceil((view.y + view.height) / cellSize); row++) {
-        for (let col = Math.floor(view.x / cellSize) - 1; col <= Math.ceil((view.x + view.width) / cellSize); col++) {
-            const seed = Math.abs(Math.sin(col * 127.1 + row * 311.7) * 43758.5453) % 1;
-            particles[particles.length] = {
-                x: col * cellSize + seed * cellSize + (snow ? Math.sin(time + seed * 20) * 5 : 0),
-                y: row * cellSize + ((seed * cellSize + time * speed) % cellSize),
-                length: snow ? 2 : weather === WeatherType.Storm ? 13 : 9,
-            };
-        }
-    }
-    return particles;
-}
-
-export interface LeafParticle {
-    x: number;
-    y: number;
-    color: number;
-    /** 3×4 instead of 4×3: the leaf turns as it sways. */
-    vertical: boolean;
-}
-
-/** Leaves fall slower than snow, sway, and drift with a light wind; about three times fewer than snowflakes. */
-export function leafParticles(epoch: number, view: WeatherView): LeafParticle[] {
-    const snowCell = Math.max(64, Math.ceil(Math.sqrt((view.width * view.height) / 350)));
-    const cellSize = Math.round(snowCell * Math.sqrt(3));
-    const time = epoch / 1000;
-    const particles: LeafParticle[] = [];
-    for (let row = Math.floor(view.y / cellSize) - 1; row <= Math.ceil((view.y + view.height) / cellSize); row++) {
-        for (let col = Math.floor(view.x / cellSize) - 1; col <= Math.ceil((view.x + view.width) / cellSize); col++) {
-            const seed = hash01(col, row);
-            const sway = (time * 2 * Math.PI) / 3 + seed * 20;
-            particles[particles.length] = {
-                x: col * cellSize + ((seed * cellSize + time * 6) % cellSize) + Math.sin(sway) * 8,
-                y: row * cellSize + ((hash01(col, row, 1) * cellSize + time * 12) % cellSize),
-                color: leafColor(hash01(col, row, 2)),
-                vertical: Math.cos(sway) > 0,
-            };
-        }
-    }
-    return particles;
 }
 
 export interface StormStrike {
@@ -171,21 +114,39 @@ export function lightningBolt(
     return undefined;
 }
 
-/** The seasonal schedule is shared by every client: same Paris date and settings, same weather. */
+/** How hard the snow of the winter theme falls under a sky from which nothing falls: a light snow. */
+export const WINTER_SNOWFALL = 0.3;
+
+/**
+ * What falls on the screen of a player: what the map says, unless they chose the winter theme. Then it snows for them,
+ * whatever the weather of the map: all flakes, as hard as its rain or its storm, lightly under a sky from which nothing
+ * falls (`flakes`: how hard, where the rate of the rain of the map says nothing of it). A decor of their own: nobody
+ * else sees it, nothing of it lies on the ground of the map.
+ */
+export function themedFall(
+    theme: SeasonalTheme | undefined,
+    weather: WeatherType,
+    rain: number,
+    snow: number,
+): { weather: WeatherType; rain: number; snow: number; flakes?: number } {
+    if (theme !== SeasonalTheme.Christmas) return { weather, rain, snow };
+    if (weather === WeatherType.Rain || weather === WeatherType.Storm) return { weather, rain, snow: 1 };
+    return { weather: WeatherType.Rain, rain: WINTER_SNOWFALL, snow: 1, flakes: WINTER_SNOWFALL };
+}
+
+/** The seasonal schedule is shared by every client: same date, settings and place of the map, same weather. */
 export function weatherAtTime(
     configured: WeatherType,
     serverDate: Date | undefined,
     auto?: AutoWeatherSettings,
+    place?: SeasonPlace,
 ): WeatherType {
     // A cloudy sky is a clear one: its clouds are drawn apart (cloudiness), never as rain.
     if (configured === WeatherType.Cloudy) return WeatherType.Clear;
-    if (configured === WeatherType.Snow) {
-        if (!serverDate || !Number.isFinite(serverDate.getTime())) return WeatherType.Clear;
-        return snowPossibleAt(serverDate) ? WeatherType.Snow : WeatherType.Rain;
-    }
-    if (configured !== WeatherType.Automatic) return configured;
+    // A map saved with a snow: a rain, which the cold alone turns to snow (snowShare).
+    if (configured !== WeatherType.Automatic) return precipitationWeather(configured);
     if (!serverDate || !Number.isFinite(serverDate.getTime())) return WeatherType.Clear;
-    return autoWeatherAt(serverDate, auto);
+    return autoWeatherAt(serverDate, auto, place);
 }
 
 /** Weather only falls outdoors: particles above an indoor cell are not drawn. No grid means no filtering. */
@@ -194,11 +155,6 @@ export function keepOutdoorParticles<T extends { x: number; y: number }>(
     isOutdoor: ((x: number, y: number) => boolean) | undefined,
 ): T[] {
     return isOutdoor ? particles.filter((particle) => isOutdoor(particle.x, particle.y)) : particles;
-}
-
-/** The personal Christmas theme shows snow, whatever the map weather; autumn keeps the map weather. */
-export function effectiveWeather(weather: WeatherType, theme: SeasonalTheme | undefined): WeatherType {
-    return theme === SeasonalTheme.Christmas ? WeatherType.Snow : weather;
 }
 
 const SLOT_MS = 30 * 60 * 1000;
@@ -215,6 +171,7 @@ export function fogStrength(
     auto?: AutoWeatherSettings,
     startedAt?: number,
     endsAt?: number,
+    place?: SeasonPlace,
 ): number {
     if (configured === WeatherType.Fog) {
         if (startedAt === undefined || !Number.isFinite(date.getTime())) return 1;
@@ -225,13 +182,13 @@ export function fogStrength(
     }
     if (configured !== WeatherType.Automatic) return 0;
     const time = date.getTime();
-    if (!Number.isFinite(time) || autoWeatherAt(date, auto) !== WeatherType.Fog) return 0;
+    if (!Number.isFinite(time) || autoWeatherAt(date, auto, place) !== WeatherType.Fog) return 0;
     const start = slotStart(date).getTime();
     let strength = 1;
-    if (autoWeatherAt(new Date(start - 1), auto) !== WeatherType.Fog) {
+    if (autoWeatherAt(new Date(start - 1), auto, place) !== WeatherType.Fog) {
         strength = Math.min(strength, (time - start) / FOG_FADE_MS);
     }
-    if (autoWeatherAt(new Date(start + SLOT_MS), auto) !== WeatherType.Fog) {
+    if (autoWeatherAt(new Date(start + SLOT_MS), auto, place) !== WeatherType.Fog) {
         strength = Math.min(strength, (start + SLOT_MS - time) / FOG_FADE_MS);
     }
     return Math.max(0, Math.min(1, strength));
@@ -389,6 +346,31 @@ export function outdoorCells(area: CellArea, size: number, runs: readonly Weathe
             outdoor.fill(1, line * area.columns + left, line * area.columns + right);
     }
     return outdoor;
+}
+
+/**
+ * The cells of `area` the fog passes over once the map is seen from far (see WeatherManager): 1 for each cell that is
+ * not outdoors (rooms, walls, raised floors), but the cells of the room the avatar stands in, kept clear at every zoom.
+ * `roomAt` is read at the centre of each cell; `keptRoom` undefined (the avatar outdoors) covers the whole inside.
+ */
+export function farFogCells(
+    area: CellArea,
+    size: number,
+    outdoor: Uint8Array,
+    roomAt: (x: number, y: number) => number | undefined,
+    keptRoom: number | undefined,
+): Uint8Array {
+    const cells = new Uint8Array(area.columns * area.rows);
+    for (let line = 0; line < area.rows; line++) {
+        const centreY = area.y + (line + 0.5) * size;
+        for (let column = 0; column < area.columns; column++) {
+            const cell = line * area.columns + column;
+            if (outdoor[cell]) continue;
+            if (keptRoom !== undefined && roomAt(area.x + (column + 0.5) * size, centreY) === keptRoom) continue;
+            cells[cell] = 1;
+        }
+    }
+    return cells;
 }
 
 /**

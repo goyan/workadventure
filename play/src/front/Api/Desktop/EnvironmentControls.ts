@@ -1,6 +1,20 @@
 import { get } from "svelte/store";
 import { z } from "zod";
-import { AutoWeather, DEFAULT_AUTO_WEATHER, Weather, WeatherType } from "@workadventure/map-editor";
+import {
+    AutoWeather,
+    DEFAULT_AUTO_WEATHER,
+    precipitationWeather,
+    Weather,
+    WeatherType,
+} from "@workadventure/map-editor";
+import { desktopGraphicsMetricsRequestedStore, perfStatsStore } from "../../Stores/PerfStore";
+import {
+    applyGraphicsQuality,
+    GraphicsQuality,
+    graphicsQualityStore,
+    setTileAnimationsDisabled,
+    tileAnimationsDisabledStore,
+} from "../../Stores/GraphicsSettingsStore";
 import type {
     DesktopEnvironmentRequest,
     DesktopEnvironmentState,
@@ -11,7 +25,8 @@ import { cloudsShownStore, cloudsHeightStore, weatherEffectsEnabledStore } from 
 import { migrateChristmasMode, SeasonalThemeMode } from "../../Phaser/Game/Seasonal/SeasonalTheme";
 import { seasonalThemeModeStore } from "../../Stores/SeasonalThemeStore";
 import { gameSceneStore } from "../../Stores/GameSceneStore";
-import { mapEditorActivated } from "../../Stores/MenuStore";
+import { handleOpenMenuEvent, SubMenusInterface } from "../../Stores/MenuStore";
+import { canEditMapWeather } from "../../Phaser/Game/Weather/MapWeatherRights";
 import {
     DesktopAppearanceSetting,
     DesktopLightSetting,
@@ -38,6 +53,7 @@ import { RETRO_PALETTES, UI_FONTS, retroPaletteStore, uiFontStore } from "../../
 
 import { jungleEnabledStore } from "../../Stores/JungleStore";
 import { createSoundPreview, type PreviewedSoundFamily } from "../../Components/Menu/SoundPreview";
+import { applyDesktopLightControl, readDesktopLightControls } from "./DesktopLightControls";
 
 const soundPreview = createSoundPreview();
 const previewFamilies: Partial<Record<DesktopSoundSetting, PreviewedSoundFamily>> = {
@@ -51,17 +67,24 @@ const previewFamilies: Partial<Record<DesktopSoundSetting, PreviewedSoundFamily>
 };
 
 const soundStores = {
-    [DesktopSoundSetting.Footsteps]: footstepVolumeStore,
-    [DesktopSoundSetting.Skateboard]: skateboardVolumeStore,
-    [DesktopSoundSetting.Weather]: weatherVolumeStore,
-    [DesktopSoundSetting.Doors]: doorVolumeStore,
-    [DesktopSoundSetting.Nerf]: nerfVolumeStore,
-    [DesktopSoundSetting.Jungle]: jungleVolumeStore,
-    [DesktopSoundSetting.Map]: mapSoundsVolumeStore,
-    [DesktopSoundSetting.Notifications]: notificationSoundVolumeStore,
+    [DesktopSoundSetting.Footsteps]: footstepVolumeStore.setting,
+    [DesktopSoundSetting.Skateboard]: skateboardVolumeStore.setting,
+    [DesktopSoundSetting.Weather]: weatherVolumeStore.setting,
+    [DesktopSoundSetting.Doors]: doorVolumeStore.setting,
+    [DesktopSoundSetting.Nerf]: nerfVolumeStore.setting,
+    [DesktopSoundSetting.Jungle]: jungleVolumeStore.setting,
+    [DesktopSoundSetting.Map]: mapSoundsVolumeStore.setting,
+    [DesktopSoundSetting.Notifications]: notificationSoundVolumeStore.setting,
 };
 
 export const desktopEnvironmentRequestSchema = z.discriminatedUnion("setting", [
+    z.object({
+        setting: z.literal(DesktopVisualSetting.Quality),
+        value: z.enum([GraphicsQuality.Low, GraphicsQuality.Medium, GraphicsQuality.High, GraphicsQuality.Ultra]),
+    }),
+    z.object({ setting: z.literal(DesktopVisualSetting.Metrics), value: z.boolean() }),
+    z.object({ setting: z.literal(DesktopVisualSetting.OpenSettings), value: z.literal(true) }),
+    z.object({ setting: z.literal(DesktopVisualSetting.Animations), value: z.boolean() }),
     z.object({ setting: z.literal(DesktopVisualSetting.Jungle), value: z.boolean() }),
     z.object({ setting: z.literal(DesktopSoundsSetting.Preview), value: z.nativeEnum(DesktopSoundSetting) }),
     z.object({
@@ -85,11 +108,17 @@ export const desktopEnvironmentRequestSchema = z.discriminatedUnion("setting", [
         setting: z.literal(DesktopSoundsSetting.Sounds),
         value: z.object({ sound: z.nativeEnum(DesktopSoundSetting), volume: z.number().min(0).max(1) }),
     }),
+    z.object({
+        setting: z.literal("light"),
+        value: z.object({
+            name: z.string().min(1).max(100),
+            value: z.union([z.number().finite(), z.boolean(), z.string().max(100)]),
+        }),
+    }),
 ]);
 
 /** What an older desktop app shows in its three-choice Christmas control. */
 function legacyChristmasMode(mode: SeasonalThemeMode): LegacyChristmasMode {
-    if (mode === SeasonalThemeMode.Christmas) return "always";
     if (mode === SeasonalThemeMode.Auto) return "auto";
     return "never";
 }
@@ -98,7 +127,8 @@ function legacyChristmasMode(mode: SeasonalThemeMode): LegacyChristmasMode {
 export function desktopWeatherMode(weather: WeatherType | undefined): WeatherType {
     if (weather === WeatherType.Real) return WeatherType.Automatic;
     if (weather === WeatherType.Cloudy || weather === WeatherType.Fog) return WeatherType.Clear;
-    return weather ?? WeatherType.Clear;
+    // A map saved with a snow: the rain it now is.
+    return precipitationWeather(weather ?? WeatherType.Clear);
 }
 
 /** The same settings and editing rights as the web controls, read without opening their panels. */
@@ -106,12 +136,17 @@ export function readDesktopEnvironment(busy = false, error = ""): DesktopEnviron
     const scene = get(gameSceneStore);
     if (!scene) return null;
     return {
+        graphicsQuality: get(graphicsQualityStore),
+        canOpenSettings: true,
+        graphicsMonitoring: get(desktopGraphicsMetricsRequestedStore),
+        graphicsStats: get(perfStatsStore),
+        animations: !get(tileAnimationsDisabledStore),
         appearance: { palette: get(retroPaletteStore), font: get(uiFontStore) },
         // Keep the legacy values for older desktop clients; modern clients use the raw map fields below.
         weather: desktopWeatherMode(scene.getGameMap().getWamFile()?.getWam().settings?.weather),
-        displayWeather: desktopWeatherMode(scene.getDesktopWeather()),
+        displayWeather: desktopWeatherMode(scene.getMapWeather()),
         mapWeather: scene.getGameMap().getWamFile()?.getWam().settings?.weather ?? WeatherType.Clear,
-        mapDisplayWeather: scene.getDesktopWeather(),
+        mapDisplayWeather: scene.getMapWeather(),
         weatherAuto: scene.getGameMap().getWamFile()?.getWam().settings?.weatherAuto ?? DEFAULT_AUTO_WEATHER,
         clouds: get(cloudsShownStore),
         cloudsHeight: get(cloudsHeightStore),
@@ -126,21 +161,17 @@ export function readDesktopEnvironment(busy = false, error = ""): DesktopEnviron
         lampMusicSource: get(lampMusicSourceStore),
         jungle: get(jungleEnabledStore),
         sounds: {
-            footstepVolume: get(footstepVolumeStore),
-            skateboardVolume: get(skateboardVolumeStore),
-            weatherVolume: get(weatherVolumeStore),
-            doorVolume: get(doorVolumeStore),
-            nerfVolume: get(nerfVolumeStore),
-            jungleVolume: get(jungleVolumeStore),
-            mapSoundsVolume: get(mapSoundsVolumeStore),
-            notificationSoundVolume: get(notificationSoundVolumeStore),
+            footstepVolume: get(footstepVolumeStore.setting),
+            skateboardVolume: get(skateboardVolumeStore.setting),
+            weatherVolume: get(weatherVolumeStore.setting),
+            doorVolume: get(doorVolumeStore.setting),
+            nerfVolume: get(nerfVolumeStore.setting),
+            jungleVolume: get(jungleVolumeStore.setting),
+            mapSoundsVolume: get(mapSoundsVolumeStore.setting),
+            notificationSoundVolume: get(notificationSoundVolumeStore.setting),
         },
-        canEditWeather: Boolean(
-            get(mapEditorActivated) &&
-            scene.connection &&
-            scene.getMapEditorModeManager() &&
-            scene.getGameMap().getWamFile(),
-        ),
+        canEditWeather: canEditMapWeather(scene),
+        lightControls: readDesktopLightControls(),
         busy,
         error,
     };
@@ -152,6 +183,18 @@ export async function applyDesktopEnvironment(input: DesktopEnvironmentRequest):
     const state = readDesktopEnvironment();
     if (!state) throw new Error("No room is loaded");
     switch (request.setting) {
+        case DesktopVisualSetting.Quality:
+            applyGraphicsQuality(request.value);
+            return;
+        case DesktopVisualSetting.Metrics:
+            desktopGraphicsMetricsRequestedStore.set(request.value);
+            return;
+        case DesktopVisualSetting.Animations:
+            setTileAnimationsDisabled(!request.value);
+            return;
+        case DesktopVisualSetting.OpenSettings:
+            handleOpenMenuEvent(SubMenusInterface.settings);
+            return;
         case DesktopVisualSetting.Jungle:
             jungleEnabledStore.set(request.value);
             return;
@@ -228,6 +271,9 @@ export async function applyDesktopEnvironment(input: DesktopEnvironmentRequest):
             break;
         case DesktopSoundsSetting.Sounds:
             soundStores[request.value.sound].set(request.value.volume);
+            break;
+        case "light":
+            applyDesktopLightControl(request.value.name, request.value.value);
             break;
     }
 }

@@ -18,6 +18,11 @@ import {
     mapEditorSelectedEntityStore,
     mapEditorSelectedToolStore,
 } from "../../../../src/front/Stores/MapEditorStore";
+import {
+    armWaterLevelPipette,
+    disarmWaterLevelPipette,
+    noteWaterLevelPress,
+} from "../../../../src/front/Stores/WaterLevelPipetteStore";
 
 const pickedPrefab = {
     id: "lamp",
@@ -91,6 +96,16 @@ describe("Native entity clicks while selecting a group", () => {
         entity.getPrefab.mockReturnValue(prefab);
         entity.getCollisionGrid.mockReturnValue([[0]]);
         entity.getOverlappingEntities.mockReturnValue([]);
+        // On the ground: the collisions of an entity depend on the floor it stands on.
+        entity.getEntityData.mockReturnValue({
+            x: 32,
+            y: 32,
+            name: "",
+            properties: [],
+            depthStep: 0,
+            elevation: 0,
+            prefabRef: { id: prefab.id, collectionName: prefab.collectionName },
+        });
         entity.showPrefabTexture.mockReturnValue(entity);
         entityFactory.mockReturnValue(entity);
         entitiesManager = new EntitiesManager(scene, wrapper);
@@ -120,6 +135,28 @@ describe("Native entity clicks while selecting a group", () => {
         pointer.rightButtonDown.mockReturnValue(button === 2);
         entityEvents.emit(Phaser.Input.Events.POINTER_DOWN, pointer);
     }
+
+    it("leaves an object alone while the pipette of a source aims: neither picked nor dragged", () => {
+        mapEditorSelectedToolStore.set(EditorToolName.EntityEditor);
+        mapEditorEntityModeStore.set("EDIT");
+        armWaterLevelPipette(vi.fn());
+        try {
+            noteWaterLevelPress();
+            clickEntity();
+            const drag = mock<Phaser.Input.Pointer>({ worldX: 200, worldY: 200 });
+            entityEvents.emit(Phaser.Input.Events.DRAG, drag, 200, 200);
+            // Released (and so disarmed) before the end of its drag: that end is still the pipette's.
+            disarmWaterLevelPipette();
+            entityEvents.emit(Phaser.Input.Events.DRAG_END, drag, 200, 200);
+
+            expect(get(mapEditorSelectedEntityStore)).toBeUndefined();
+            expect(entity.setPosition.mock.calls).toEqual([]);
+            expect(get(mapEditorSelectedEntityDraggedStore)).not.toBe(true);
+        } finally {
+            disarmWaterLevelPipette();
+            noteWaterLevelPress();
+        }
+    });
 
     it("keeps the group tool active when a marquee starts over furniture", () => {
         clickEntity();
@@ -260,6 +297,7 @@ describe("Native entity clicks while selecting a group", () => {
                 properties: [],
                 name: "",
                 depthStep: 0,
+                elevation: 0,
             });
             copies = [];
             updates = [];
@@ -278,6 +316,15 @@ describe("Native entity clicks while selecting a group", () => {
             releaseDrag(modifiers);
 
             expect(copies).toHaveLength(1);
+            expect(updates).toHaveLength(0);
+        });
+
+        it("leaves an object that was only clicked where it is, on its level", () => {
+            entity.getPosition.mockReturnValue({ x: 32, y: 32 });
+
+            releaseDrag({});
+
+            expect(copies).toHaveLength(0);
             expect(updates).toHaveLength(0);
         });
 

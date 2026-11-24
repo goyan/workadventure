@@ -1,5 +1,6 @@
 import type { EntityPrefab } from "@workadventure/map-editor";
 import { MathUtils } from "@workadventure/math-utils";
+import { wallRise } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { getBlockingRectangles } from "../../../Utils/EntityHitbox";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
 import type { ObstacleRectangle } from "../../../Utils/RectangleObstacles";
@@ -30,16 +31,39 @@ function edgeSegment(edge: WallEdgeRef): Segment {
 /** The walls of the map layer as segments that stop the light. A closed door is a wall; an open one lets the light through. */
 export function wallSegments(model: MapLayerModel, isDoorOpen: (door: DoorRef) => boolean): Segment[] {
     const segments: Segment[] = [];
+    // The sides of the faces of the high walls, each once: two pieces side by side share one.
+    const sides = new Set<string>();
+    const push = (edge: WallEdgeRef): void => {
+        const segment = edgeSegment(edge);
+        const rise = edge.orientation === "h" ? wallRise(model.getWall("h", edge.x, edge.y)?.height ?? 1) : 0;
+        if (rise === 0) {
+            segments.push(segment);
+            return;
+        }
+        // A high horizontal wall is drawn up to its cap, above its foot: the light stops there, so that the whole
+        // face is lit from the south and none of it from the room behind.
+        segments.push({ ...segment, ay: segment.ay - rise, by: segment.by - rise });
+        // A side only where the face ends or where a wall leaves it towards the south: between two pieces of the
+        // same wall it would cast a shadow on the face, for a light close to the wall.
+        for (const [vertex, neighbour] of [
+            [edge.x, edge.x - 1],
+            [edge.x + 1, edge.x + 1],
+        ]) {
+            const sameWall = wallRise(model.getWall("h", neighbour, edge.y)?.height ?? 1) === rise;
+            if (sameWall && !model.getWall("v", vertex, edge.y)) continue;
+            const x = vertex * MAP_LAYER_TILE_SIZE;
+            const key = `${x},${segment.ay}`;
+            if (sides.has(key)) continue;
+            sides.add(key);
+            segments.push({ ax: x, ay: segment.ay - rise, bx: x, by: segment.ay });
+        }
+    };
     for (const wall of model.getWalls()) {
         // The walls stay in the model under a door: the door decides.
-        if (!model.getDoorOn(wall.orientation, wall.x, wall.y)) {
-            segments.push(edgeSegment(wall));
-        }
+        if (!model.getDoorOn(wall.orientation, wall.x, wall.y)) push(wall);
     }
     for (const door of model.getDoors()) {
-        if (!isDoorOpen(door)) {
-            segments.push(...doorEdges(door).map(edgeSegment));
-        }
+        if (!isDoorOpen(door)) doorEdges(door).forEach(push);
     }
     return segments;
 }

@@ -9,6 +9,7 @@ import { currentPositionMs, EMPTY_SPOTIFY_LISTENING, spotifyTrackUri } from "../
 import type { JamRoom } from "../ListeningZone/ListeningZoneController";
 import type { HomeJamContext } from "../Spotify/HomeJam";
 import { jukeboxQueuesStore } from "../Spotify/HomeJam";
+import { watchSpotifyPlayback } from "../Spotify/SpotifyPlaybackStore";
 import type { SpotifyAccount } from "../Spotify/SpotifyAccount";
 import { fetchSpotifyKaraoke, parseKaraokePlayback, parseKaraokeQueue } from "./SpotifyKaraokeApi";
 
@@ -391,7 +392,7 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
 
     const startHost = (): void => {
         const generation = hostGeneration;
-        stopPlayback = context.desktop?.watchSpotifyPlayback?.((playback) => {
+        stopPlayback = watchSpotifyPlayback((playback) => {
             if (!own || generation !== hostGeneration) return;
             desktopPlaying = playback?.track !== null && playback?.track !== undefined;
             if (!playback) {
@@ -437,7 +438,7 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
                 issue: undefined,
                 issueStatus: undefined,
             });
-        });
+        }, context.desktop);
         if (own && !isHomeJam(own.jam)) {
             stopQueue = context.desktop?.watchSpotifyQueue?.((queue) => {
                 if (!own || generation !== hostGeneration) return;

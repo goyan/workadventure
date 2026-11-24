@@ -82,7 +82,7 @@ describe("MaxUsersInAreaManager", () => {
             "area-1",
             "property-area-1",
             "maxUsersReached",
-            "true"
+            "true",
         );
 
         leaveSubject.next(area);
@@ -91,7 +91,7 @@ describe("MaxUsersInAreaManager", () => {
             "area-1",
             "property-area-1",
             "maxUsersReached",
-            "false"
+            "false",
         );
     });
 
@@ -109,7 +109,7 @@ describe("MaxUsersInAreaManager", () => {
             "area-b",
             "property-area-b",
             "maxUsersReached",
-            "true"
+            "true",
         );
 
         enterSubject.next(areaA);
@@ -118,7 +118,7 @@ describe("MaxUsersInAreaManager", () => {
             "area-a",
             "property-area-a",
             "maxUsersReached",
-            "true"
+            "true",
         );
 
         leaveSubject.next(areaB);
@@ -127,7 +127,7 @@ describe("MaxUsersInAreaManager", () => {
             "area-b",
             "property-area-b",
             "maxUsersReached",
-            "false"
+            "false",
         );
     });
 

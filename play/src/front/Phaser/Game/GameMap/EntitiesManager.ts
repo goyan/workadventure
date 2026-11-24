@@ -1,8 +1,8 @@
+import { isAtAreaLevel } from "@workadventure/map-editor";
 import * as Phaser from "phaser";
 import type { EntityData, WAMEntityData } from "@workadventure/map-editor";
 import {
     Season,
-    WeatherType,
     AreaDataProperties,
     EntityDataProperties,
     EntityDimensions,
@@ -17,12 +17,17 @@ import { get } from "svelte/store";
 import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
 import { treeSeasonAt } from "@wa/front/Phaser/Game/Nature/SeasonClock";
-import { weatherAtTime } from "../Weather/WeatherFrame";
-import { shownWeatherSettings } from "../Weather/RealWeatherClient";
-import { snowCoverage } from "../Weather/SnowCover";
+import { LL } from "../../../../i18n/i18n-svelte";
+import { floorLevelTiles } from "../MapEditor/MapLayer/MapLayerFloors";
+import { FLOOR_PREVIEW_DEPTH } from "../MapEditor/MapLayer/FloorDepth";
+import type { PlacedFloorPiece } from "../MapEditor/MapLayer/FloorModel";
+import { mapEditorPlacementLevelStore } from "../../../Stores/MapEditorStore";
+import { placementElevation } from "../Floors/FloorPlacement";
 import { entityPlacementBlockerStore } from "../../../Stores/MapEditorStore";
 import { getTileCollisionGrid, reverseCollisionGrid } from "../../../Utils/EntityHitbox";
 import { actionsMenuStore } from "../../../Stores/ActionsMenuStore";
+import { armedCatastropheStore } from "../../../Stores/CatastropheStore";
+import { waterLevelPipetteArmed, waterLevelPipetteOwnsPointer } from "../../../Stores/WaterLevelPipetteStore";
 import {
     mapEditorEntityEraserStore,
     mapEditorEntityModeStore,
@@ -32,8 +37,11 @@ import {
     mapEditorSelectedEntityStore,
     mapEditorSelectedToolStore,
     mapEditorSnapEnabledStore,
+    mapEditorSwitchWiringStore,
 } from "../../../Stores/MapEditorStore";
-import { isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
+import { entityStateKeysOf, switchPropertyOf } from "../Switches/SwitchTargets";
+import { toggleSwitchTarget } from "../Switches/SwitchWiring";
+import { MAP_LAYER_FLOOR_SLAB_COLLECTION, isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { isPlacementFree, shouldSnapToGrid } from "../MapEditor/EntityPlacementSnapping";
 import { Entity, EntityEvent } from "../../ECS/Entity";
 import { TexturesHelper } from "../../Helpers/TexturesHelper";
@@ -87,6 +95,8 @@ function isCopyModifier(event: MouseEvent | TouchEvent | WheelEvent | undefined)
 
 /** Opacity of the entities that are not the subject of the map editor tool in use. */
 const DIMMED_ENTITY_ALPHA = 0.4;
+/** How often the trees follow the ground while its snow settles or melts. */
+const SETTLING_CHECK_MS = 10_000;
 // Floors and walls are made of sprites that overlap: fading each of them with an alpha stacks the opacity where they
 // overlap and draws a grid. They are darkened with a tint instead, which stays uniform.
 const DIMMED_MAP_LAYER_TINT = 0x808080;
@@ -94,9 +104,10 @@ const DIMMED_MAP_LAYER_TINT = 0x808080;
 export class EntitiesManager extends EventEmitter {
     private season = Season.Summer;
     private nextSeasonCheck = 0;
-    private lastConfiguredWeather: WeatherType | undefined;
     private lastForcedSeason: Season | undefined;
-    private lastMapSnow = true;
+    private lastOutdoorVersion = -1;
+    /** How much the map snow covers the ground, which the trees under snow follow (Entity.setSeason). */
+    private snowCover = 1;
     private readonly erasingEntityIds = new Set<string>();
     private shouldDimEntity: ((entity: Entity) => boolean) | undefined;
     private scene: GameScene;
@@ -165,7 +176,7 @@ export class EntitiesManager extends EventEmitter {
 
         const entity = new Entity(this.scene, entityId, data, prefab);
         entity.setVisible(false);
-        entity.setSeason(this.season);
+        entity.setSeason(this.season, this.snowCover);
 
         TexturesHelper.loadEntityImage(
             this.scene,
@@ -185,7 +196,7 @@ export class EntitiesManager extends EventEmitter {
                                 .then(() => {
                                     // A load may complete after deletion or replacement of this entity.
                                     if (entity.active && this.entities.get(entityId) === entity) {
-                                        entity.setSeason(this.season);
+                                        entity.setSeason(this.season, this.snowCover);
                                         this.scene.markDirty();
                                     }
                                 })
@@ -238,54 +249,47 @@ export class EntitiesManager extends EventEmitter {
     }
 
     /**
-     * Follow shared weather each minute, and apply a live editor change immediately. The personal seasonal theme
-     * colours nature for this person only; shared snow cover takes priority over it, unless `mapSnow` is false
-     * (weather hidden, or a theme chosen rather than auto: see mapSnowShown).
+     * Follow the calendar each minute. The personal seasonal theme colours nature for this person only; a snow cover
+     * shared by the map takes priority over it.
      */
-    /** The season the seasonal trees show: the calendar, the snow of the map or the personal theme. */
+    /** The season the seasonal trees show: the calendar of the place of the map, its snow or the personal theme. */
     public getSeason(): Season {
         return this.season;
     }
 
-    public updateSeason(time: number, serverDate: Date | undefined, forcedSeason?: Season, mapSnow = true): void {
+    public updateSeason(time: number, serverDate: Date | undefined, forcedSeason?: Season): void {
         if (!serverDate || !Number.isFinite(serverDate.getTime())) return;
-        const settings = shownWeatherSettings(this.scene.getGameMap().getWamFile()?.getWam().settings, serverDate);
-        const configured = settings?.weather ?? WeatherType.Clear;
-        if (
-            time < this.nextSeasonCheck &&
-            configured === this.lastConfiguredWeather &&
-            forcedSeason === this.lastForcedSeason &&
-            mapSnow === this.lastMapSnow
-        )
-            return;
-        this.lastConfiguredWeather = configured;
+        const outdoorVersion = this.scene.getOutdoorVersion();
+        const outdoorsChanged = outdoorVersion !== this.lastOutdoorVersion;
+        if (time < this.nextSeasonCheck && forcedSeason === this.lastForcedSeason && !outdoorsChanged) return;
         this.lastForcedSeason = forcedSeason;
-        this.lastMapSnow = mapSnow;
-        this.nextSeasonCheck = time + 60_000 - (serverDate.getTime() % 60_000);
-        const weatherSeason = mapSnow
-            ? treeSeasonAt(
-                  serverDate,
-                  weatherAtTime(configured, serverDate, settings?.weatherAuto),
-                  snowCoverage(
-                      configured,
-                      serverDate.getTime(),
-                      settings?.weatherStartedAt,
-                      settings?.weatherAuto,
-                      settings?.snowMeltFrom,
-                  ),
-              )
-            : treeSeasonAt(serverDate, WeatherType.Clear, 0);
+        this.lastOutdoorVersion = outdoorVersion;
+        // The snow lying on the map (the one the server keeps, see GroundSource): the trees whiten with it.
+        const coverage = this.scene.getMapSnowCoverage?.() ?? 0;
+        // While the snow settles or melts, the trees follow the ground every few seconds rather than every minute.
+        this.nextSeasonCheck =
+            coverage > 0 && coverage < 1 ? time + SETTLING_CHECK_MS : time + 60_000 - (serverDate.getTime() % 60_000);
+        // The calendar of the place of the map: its seasons turn over in the south.
+        const place = this.scene.getGameMap().getWamFile()?.getWam().settings?.weatherLocation;
+        const weatherSeason = treeSeasonAt(serverDate, coverage, place);
         // Snow cover takes priority over autumn's personal colour palette, just as it does on the ground.
         const season = weatherSeason === Season.Winter ? Season.Winter : (forcedSeason ?? weatherSeason);
-        if (season === this.season) return;
+        // The trees whiten with the ground (a snow just begun leaves them green); a chosen winter theme, at once.
+        const snowCover = season === Season.Winter && weatherSeason === Season.Winter ? coverage : 1;
+        if (season === this.season && snowCover === this.snowCover && !outdoorsChanged) return;
         this.season = season;
-        for (const entity of this.entities.values()) entity.setSeason(season);
+        this.snowCover = snowCover;
+        for (const entity of this.entities.values()) entity.setSeason(season, snowCover);
         this.scene.markDirty();
     }
 
     /** The grid written to the tile collision layer for the entity (EntityHitbox); none without a blocking cell. */
     private getTileCollisionGrid(entity: Entity): number[][] | undefined {
         const prefab = entity.getPrefab();
+        // The tile layer is the ground's: an object on a raised floor blocks with rectangles, for its floor only.
+        if (entity.getElevation() > 0) {
+            return undefined;
+        }
         if (!prefab.collisionGrid?.some((row) => row.includes(1))) {
             return undefined;
         }
@@ -484,7 +488,8 @@ export class EntitiesManager extends EventEmitter {
             this.emit(EntitiesManagerEvent.UpdateEntity, data);
         });
         entity.on(Phaser.Input.Events.DRAG, (pointer: Pointer, dragX: number, dragY: number) => {
-            if (!entity.canEdit) {
+            // The pipette of a source aims: a drag moves the view, never the object under it.
+            if (!entity.canEdit || waterLevelPipetteOwnsPointer()) {
                 return;
             }
             if (
@@ -495,15 +500,50 @@ export class EntitiesManager extends EventEmitter {
                 const depthOffset = entity.getPrefab().depthOffset ?? 0;
                 const tileDim = this.scene.getGameMapFrontWrapper().getTileDimensions();
                 const snapToGrid = this.isSnappingToGrid();
+                // The object goes on the level under the pointer (or the one chosen in the panel): its grid is the
+                // one of that level, drawn its altitude further north.
+                this.dragFloorPieces ??= this.placedFloorPieces();
+                const level = placementElevation(
+                    this.dragFloorPieces,
+                    { x: pointer.worldX, y: pointer.worldY, width: 0, height: 1 },
+                    get(mapEditorPlacementLevelStore),
+                );
                 entity.x = snapToGrid ? Math.floor(dragX / tileDim.width) * tileDim.width : Math.floor(dragX);
-                entity.y = snapToGrid ? Math.floor(dragY / tileDim.height) * tileDim.height : Math.floor(dragY);
+                entity.y = snapToGrid
+                    ? Math.floor((dragY + level) / tileDim.height) * tileDim.height - level
+                    : Math.floor(dragY);
                 entity.updateDepth(depthOffset);
+                if (this.dragFloorPieces.length > 0) {
+                    // On a map with raised floors: the object stays in sight over them while it is dragged, with
+                    // the name of the level it would be dropped on next to the pointer.
+                    entity.setDepth(FLOOR_PREVIEW_DEPTH - 1);
+                    this.dragLevelLabel ??= this.scene.add.text(0, 0, "", {
+                        fontSize: "11px",
+                        color: "#ffffff",
+                        backgroundColor: "#1b2a41",
+                        padding: { x: 3, y: 1 },
+                    });
+                    this.dragLevelLabel.setDepth(FLOOR_PREVIEW_DEPTH);
+                    this.dragLevelLabel.setText(
+                        level === 0
+                            ? get(LL).mapEditor.mapLayer.floorLevel.ground()
+                            : get(LL).mapEditor.mapLayer.floorLevel.cursor({ height: floorLevelTiles(level) }),
+                    );
+                    this.dragLevelLabel.setPosition(pointer.worldX + 14, pointer.worldY + 14);
+                    this.dragLevelLabel.setVisible(true);
+                }
 
                 this.changeEntityTint(entity);
             }
         });
         entity.on(Phaser.Input.Events.DRAG_END, (pointer: Pointer, dragX: number, dragY: number) => {
+            // The end of a gesture of the pipette of a source: the object was never dragged.
+            if (waterLevelPipetteOwnsPointer()) {
+                return;
+            }
             entityPlacementBlockerStore.set(undefined);
+            this.dragFloorPieces = undefined;
+            this.dragLevelLabel?.setVisible(false);
             if (
                 get(mapEditorModeStore) &&
                 this.isEntityEditorToolActive() &&
@@ -511,28 +551,35 @@ export class EntitiesManager extends EventEmitter {
             ) {
                 mapEditorSelectedEntityDraggedStore.set(false);
                 if (
-                    !this.scene
-                        .getGameMapFrontWrapper()
-                        .canEntityBePlacedOnMap(
-                            entity.getTopLeft(),
-                            entity.displayWidth,
-                            entity.displayHeight,
-                            entity.getCollisionGrid(),
-                            entity.getOldPosition(),
-                            this.isFreePlacement(),
-                        )
+                    !this.scene.getGameMapFrontWrapper().canEntityBePlacedOnMap(
+                        entity.getTopLeft(),
+                        entity.displayWidth,
+                        entity.displayHeight,
+                        entity.getCollisionGrid(),
+                        entity.getOldPosition(),
+                        // On a raised floor, what stands on the ground under it is not in the way.
+                        this.isFreePlacement() || this.elevationAt(pointer.worldX, pointer.worldY) > 0,
+                        this.elevationAt(pointer.worldX, pointer.worldY),
+                    )
                 ) {
                     const oldPos = entity.getOldPosition();
                     entity.setPosition(oldPos.x, oldPos.y);
                     entity.clearTint();
                 } else {
+                    const oldPos = entity.getOldPosition();
                     if (this.ctrlKey?.isDown || isCopyModifier(pointer.event)) {
                         this.copyEntity(entity);
+                    } else if (entity.getPosition().x === oldPos.x && entity.getPosition().y === oldPos.y) {
+                        // A click, not a move: the object keeps its place and its level, whatever is drawn under
+                        // the pointer.
+                        entity.updateDepth(entity.getPrefab().depthOffset ?? 0);
                     } else {
                         const data: Partial<EntityData> = {
                             id: entity.entityId,
                             x: entity.x,
                             y: entity.y,
+                            // Dropped on a raised floor, the object stands on it; elsewhere on the ground.
+                            elevation: this.elevationAt(pointer.worldX, pointer.worldY),
                         };
                         this.emit(EntitiesManagerEvent.UpdateEntity, data);
                     }
@@ -547,6 +594,16 @@ export class EntitiesManager extends EventEmitter {
             }
             // A right click (Ctrl+click on a Mac) drops the object being placed: it does not open the one under it.
             if (pointer.button !== 0 || pointer.rightButtonDown()) {
+                return;
+            }
+
+            // An armed catastrophe takes the click, in the map editor too: the object under it is not picked.
+            if (get(armedCatastropheStore) !== undefined) {
+                return;
+            }
+
+            // So does the pipette of the level of a source: the object under it is neither picked nor dragged.
+            if (waterLevelPipetteArmed()) {
                 return;
             }
 
@@ -584,6 +641,10 @@ export class EntitiesManager extends EventEmitter {
             ) {
                 if (document.activeElement instanceof HTMLElement) {
                     document.activeElement.blur();
+                }
+
+                if (this.wireSwitchTo(entity)) {
+                    return;
                 }
 
                 if (get(mapEditorEntityEraserStore)) {
@@ -627,6 +688,49 @@ export class EntitiesManager extends EventEmitter {
                 }
             }
         });
+    }
+
+    /**
+     * Altitude an object gets where its image is placed: the one of the raised floor drawn under its foot, the ground
+     * otherwise, or when the editor is set to place under the floors.
+     */
+    /**
+     * Altitude of the raised floor drawn under a point of the screen: where an object pointed there goes. The ground
+     * where there is none, or when the editor is set to place under the floors.
+     */
+    public elevationAt(worldX: number, worldY: number): number {
+        // A point is the foot of an image one pixel high.
+        return this.placementElevation({ x: worldX, y: worldY, width: 0, height: 1 });
+    }
+
+    /** The slabs and stairs of the map, read once per drag of an object. */
+    private dragFloorPieces: PlacedFloorPiece[] | undefined;
+    /** The name of the level a dragged object would be dropped on, next to the pointer. */
+    private dragLevelLabel: Phaser.GameObjects.Text | undefined;
+
+    /** Altitude of the highest raised floor drawn under a point of the screen, whatever the editor is set to. */
+    public levelDrawnAt(worldX: number, worldY: number): number {
+        return placementElevation(this.placedFloorPieces(), { x: worldX, y: worldY, width: 0, height: 1 }, "auto");
+    }
+
+    public placementElevation(image: { x: number; y: number; width: number; height: number }): number {
+        return placementElevation(this.placedFloorPieces(), image, get(mapEditorPlacementLevelStore));
+    }
+
+    private placedFloorPieces(): PlacedFloorPiece[] {
+        const placed = [];
+        for (const entity of this.entities.values()) {
+            const prefab = entity.getPrefab();
+            if (prefab.collectionName !== MAP_LAYER_FLOOR_SLAB_COLLECTION) continue;
+            placed.push({
+                x: entity.x,
+                y: entity.y,
+                collectionName: prefab.collectionName,
+                prefabId: prefab.id,
+                elevation: entity.getEntityData().elevation,
+            });
+        }
+        return placed;
     }
 
     private copyEntity(entity: Entity): void {
@@ -701,6 +805,30 @@ export class EntitiesManager extends EventEmitter {
         return get(mapEditorSelectedToolStore) === EditorToolName.ExploreTheRoom;
     }
 
+    /**
+     * While a switch is being wired (see mapEditorSwitchWiringStore), a click on an object the switch can command
+     * adds it to its targets, or removes it. True when the click was used for that.
+     */
+    private wireSwitchTo(entity: Entity): boolean {
+        const switchId = get(mapEditorSwitchWiringStore);
+        const switchEntity = switchId === undefined ? undefined : this.entities.get(switchId);
+        const property = switchEntity ? switchPropertyOf(switchEntity) : undefined;
+        if (!switchEntity || !property) {
+            mapEditorSwitchWiringStore.set(undefined);
+            return false;
+        }
+        // The switch itself may be one of its targets: a lamp made a switch turns itself on and off.
+        if (!entityStateKeysOf(entity.getPrefab()).includes(property.key)) {
+            return false;
+        }
+        // One update of the switch: a single step to undo.
+        switchEntity.setProperty(toggleSwitchTarget(property, entity.entityId));
+        // The panel of the switch shows its targets: it reads them again.
+        mapEditorSelectedEntityStore.set(switchEntity);
+        this.scene.markDirty();
+        return true;
+    }
+
     public getEntities(): Map<string, Entity> {
         return this.entities;
     }
@@ -714,7 +842,9 @@ export class EntitiesManager extends EventEmitter {
         }
 
         this.entities.forEach((entity, entityId) => {
+            // Only what stands on the floor of the area: the objects of another floor are drawn there, not in it.
             if (
+                isAtAreaLevel(area, entity.getElevation()) &&
                 gameMapFrontWrapper.isInsideAreaByCoordinates(
                     { x: area.x, y: area.y, width: area.width, height: area.height },
                     {

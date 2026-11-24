@@ -12,9 +12,17 @@ import { Season, GameMapProperties } from "@workadventure/map-editor";
 import { deepmergeInto } from "deepmerge-ts";
 import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
+import { SNOW_STEPS, seedOf, snowyTreeTexture, treeSnowStep } from "../Game/Nature/SnowyTreeTexture";
+import { charredTreeTexture } from "../Game/Nature/CharredTreeTexture";
+import { growingTreeTexture, growStep, uprootedTexture } from "../Game/Nature/FallenTreeTexture";
+import { isSwayingTree } from "../Game/Nature/TreeSway";
+import { parseFloorPiece } from "../Game/MapEditor/MapLayer/MapLayerFloors";
+import { parseAnyLevelPrefab } from "../Game/MapEditor/MapLayer/MapLayerLevels";
+import { FLOOR_LEVEL_DEPTH, floorDepth, floorPieceDepth } from "../Game/MapEditor/MapLayer/FloorDepth";
 import type { ActionsMenuAction } from "../../Stores/ActionsMenuStore";
 import { actionsMenuStore } from "../../Stores/ActionsMenuStore";
 import { mapEditorModeStore } from "../../Stores/MapEditorStore";
+import { isBasicActive } from "../../Stores/BasicModeStore";
 import { createColorStore } from "../../Stores/OutlineColorStore";
 import { getImageCoWebsiteTitle, ImageCoWebsite, isImageCoWebsiteUrl } from "../../WebRtc/CoWebsite/ImageCoWebsite";
 import { SimpleCoWebsite } from "../../WebRtc/CoWebsite/SimpleCoWebsite";
@@ -23,7 +31,9 @@ import type { ActivatableInterface } from "../Game/ActivatableInterface";
 import { isTreadmillBelt } from "../../Utils/ObjectCategories";
 import { GameScene } from "../Game/GameScene";
 import type { OutlineableInterface } from "../Game/OutlineableInterface";
+import { switchPropertyOf } from "../Game/Switches/SwitchTargets";
 import {
+    WALL_THICKNESS,
     MAP_LAYER_FLOOR_DEPTH,
     isMapLayerPrefab,
     mapLayerGroundBottom,
@@ -32,14 +42,23 @@ import {
 import {
     applyDepthStep,
     applySupportDepthFloor,
+    standsOnSameFloor,
+    applyHungOnWallDepth,
     applyWallDepthFloor,
     getDepthStepRange,
 } from "../Game/MapEditor/MapLayer/ObjectDepthFloor";
-import type { DepthStepRange, SupportDepthBox, WallDepthBox } from "../Game/MapEditor/MapLayer/ObjectDepthFloor";
+import type {
+    DepthStepRange,
+    SupportDepthBox,
+    WallDepthBox,
+    WallFaceBox,
+} from "../Game/MapEditor/MapLayer/ObjectDepthFloor";
 import { SpeechDomElement } from "../Entity/SpeechDomElement";
 import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
 import { TexturesHelper } from "../Helpers/TexturesHelper";
+import { reachesView } from "../Game/ViewCulling";
+import { hitWhereDrawn, standsOnGround } from "../Game/Terrain/GroundDrop";
 import { getLayerDepth, stackableDepths } from "./EntityLayerDepth";
 
 import Sprite = Phaser.GameObjects.Sprite;
@@ -59,6 +78,13 @@ export enum EntityEvent {
 export const DEFAULT_ACTIVABLE_RADIUS = 14;
 
 // NOTE: Tiles-based entity for now. Individual images later on
+/** The colour and the opacity of an object seen under the water of the relief (the blue of its shallows). */
+const SUBMERGED_TINT = 0x7fb6d9;
+const SUBMERGED_ALPHA = 0.55;
+type HitTest = (area: unknown, x: number, y: number, object: Phaser.GameObjects.GameObject) => boolean;
+/** The hit tests already brought back to where their object is drawn (Entity.hitWhereDrawn): never wrapped twice. */
+const movedHitTests = new WeakSet<HitTest>();
+
 export class Entity extends Sprite implements ActivatableInterface, OutlineableInterface {
     public readonly activationRadius: number = DEFAULT_ACTIVABLE_RADIUS;
     private readonly outlineColorStore = createColorStore();
@@ -69,8 +95,12 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     private entityData: Required<WAMEntityData>;
     /** Depth before the manual stacking, from the position of the foot and the neighbouring images. */
     private automaticDepth = 0;
+    /** Whether the water of the relief covers it (a drain in a pool, in a flood): drawn as seen through the water. */
+    private submerged = false;
     private prefab: EntityPrefab;
     private season = Season.Summer;
+    /** How much snow covers the ground, 0 to 1: a tree under snow whitens with it, at its own pace. */
+    private snowCover = 1;
 
     private activatable!: boolean;
     private oldPosition: { x: number; y: number };
@@ -97,6 +127,7 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
             name: data.name ?? "",
             properties: data.properties ?? [],
             depthStep: data.depthStep ?? 0,
+            elevation: data.elevation ?? 0,
         };
         this.prefab = prefab;
 
@@ -129,20 +160,88 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         });
     }
 
+    /**
+     * Not drawn when out of what the camera of the scene shows (Phaser draws every object, on screen or not). Only
+     * for that camera: a texture an object is drawn into has its own, with another view.
+     */
+    public override willRender(camera: Phaser.Cameras.Scene2D.Camera): boolean {
+        if (!super.willRender(camera)) return false;
+        if (camera !== this.scene.cameras.main) return true;
+        // Drawn lower or higher on a relief seen in 3/4: in the view at its place or where it is drawn.
+        const reach = Math.abs(this.groundDrop);
+        return reachesView(
+            { x: this.x, y: this.y - reach, width: this.displayWidth, height: this.displayHeight + 2 * reach },
+            camera.worldView,
+        );
+    }
+
     /** Shows the loaded image of the prefab, played in a loop when it is an animated strip. */
     public showPrefabTexture(): this {
         const animation = this.prefab.animation;
         const animationKey = animation
             ? TexturesHelper.addEntityAnimation(this.scene, this.prefab.imagePath, animation)
             : undefined;
-        const seasonalPath = this.prefab.seasonal?.[this.season];
+        const scene = this.scene as GameScene;
+        // The depth offset locates the ground contact above an image's transparent bottom margin.
+        const sheltered =
+            scene
+                .getOutdoorGrid?.()
+                ?.isOutdoorAt(
+                    this.x + this.displayWidth / 2,
+                    this.y + this.displayHeight + (this.prefab.depthOffset ?? 0) - 1,
+                ) === false;
+        const season = this.season === Season.Winter && sheltered ? Season.Summer : this.season;
+        const seasonalPath = this.prefab.seasonal?.[season];
+        // A tree under snow turns white but its trunk: its own summer image, covered (see snowyTreeTexture). Anything
+        // else with a drawn winter image (a pine, a rock, a stump) shows its summer image covering as the snow settles,
+        // and its winter image once the ground is white: no object is whiter than the ground around it.
+        const step = this.snowCover >= 1 ? SNOW_STEPS : treeSnowStep(this.snowCover, seedOf(this.entityId));
+        const snowyTree =
+            this.prefab.seasonal && season === Season.Winter && (isSwayingTree(this.prefab.id) || step < SNOW_STEPS)
+                ? snowyTreeTexture(this.scene, this.prefab.seasonal?.[Season.Summer] ?? this.prefab.imagePath, step)
+                : undefined;
+        const shown =
+            snowyTree ??
+            (seasonalPath && this.scene.textures.exists(seasonalPath) ? seasonalPath : this.prefab.imagePath);
+        // A tree the fire took is its own image of the season, charred as far as it burnt: no snow settles on it.
+        // Not while the map is edited: the trees then show their plain image, as the rest of the weather is hidden.
+        const charred =
+            isSwayingTree(this.prefab.id) && !get(mapEditorModeStore)
+                ? (scene.getTreeFire?.().degreeOf(this.entityId) ?? 0)
+                : 0;
+        const unsnowed =
+            seasonalPath && this.scene.textures.exists(seasonalPath) ? seasonalPath : this.prefab.imagePath;
+        // A tree the wind laid down: it lies uprooted on the ground (drawn by FallenTreeView: nothing stands at its
+        // place meanwhile), then grows back from its foot. Not while the map is edited either, nor in Basique: the tree
+        // stands there as the map has it.
+        const fallen =
+            isSwayingTree(this.prefab.id) && !get(mapEditorModeStore) && !isBasicActive()
+                ? scene.getTreeFire?.().fallenOf(this.entityId)
+                : undefined;
+        const fallenTexture = fallen
+            ? fallen.lying
+                ? uprootedTexture(this.scene, unsnowed)
+                : growingTreeTexture(this.scene, unsnowed, growStep(fallen.grown))
+            : undefined;
+        scene.getFallenTreeView?.()?.show(
+            this.entityId,
+            fallen?.lying
+                ? {
+                      textureKey: unsnowed,
+                      x: this.x,
+                      y: this.y,
+                      toward: fallen.toward,
+                      depth: this.depth,
+                      fellAt: scene.getTreeFire?.().fellAt(this.entityId),
+                  }
+                : undefined,
+        );
         this.setTexture(
-            seasonalPath && this.scene.textures.exists(seasonalPath) ? seasonalPath : this.prefab.imagePath,
+            fallenTexture ?? (charred > 0 ? charredTreeTexture(this.scene, unsnowed, charred) : undefined) ?? shown,
         );
         if (animationKey) {
             this.play(animationKey);
         }
-        const scene = this.scene as GameScene;
         this.treadmillBelt =
             animationKey !== undefined && isTreadmillBelt(this.prefab, scene.wamFile?.settings?.categories);
         if (this.treadmillBelt) this.setBeltMoving(scene.treadmillBelts.isMoving(this.entityId));
@@ -158,8 +257,9 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         (this.scene as GameScene).markDirty();
     }
 
-    public setSeason(season: Season): void {
+    public setSeason(season: Season, snowCover = 1): void {
         this.season = season;
+        this.snowCover = snowCover;
         if (this.prefab.seasonal) this.showPrefabTexture();
     }
 
@@ -180,16 +280,35 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     public get canEdit(): boolean {
         // Checked at the top-left corner (the entity position), like map-storage does: it is the only point
         // of the entity the server knows, so any other point would let the UI offer edits the server refuses.
-        return (this.scene as GameScene).getEntityPermissions().canEdit({ x: this.x, y: this.y });
+        return (this.scene as GameScene)
+            .getEntityPermissions()
+            .canEdit({ x: this.x, y: this.y, z: this.entityData.elevation });
     }
 
     public get canRead(): boolean {
-        return (this.scene as GameScene).getEntityPermissions().canRead(this.getCenter());
+        return (this.scene as GameScene)
+            .getEntityPermissions()
+            .canRead({ ...this.getCenter(), z: this.entityData.elevation });
     }
 
     /**
      * This method is being used after command execution from outside and it will not trigger any emits
      */
+    /**
+     * Moves the entity to another level (0: the ground), over the same place of the ground: its image is drawn the
+     * difference of altitude higher or lower. Saved like any other edit of the entity.
+     */
+    public setElevation(elevation: number): void {
+        if (elevation === this.entityData.elevation) return;
+        const y = this.y + this.entityData.elevation - elevation;
+        this.emit(EntityEvent.Updated, this.appendId({ y, elevation }));
+    }
+
+    /** Altitude of the floor the entity stands on, in pixels above the ground: 0 on the ground. */
+    public getElevation(): number {
+        return this.entityData.elevation;
+    }
+
     public updateEntity(dataToModify: Partial<WAMEntityData>): void {
         deepmergeInto(this.entityData, dataToModify);
         // TODO: Find a way to update it without need of using conditions
@@ -348,6 +467,22 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         return this.entityData;
     }
 
+    /**
+     * Shows the object under the water (tinted by it, half seen through it) while the water of the relief covers it,
+     * and as it is again once the water went down: a drain is seen at the bottom of a pool until it emptied it.
+     */
+    public setSubmerged(submerged: boolean): void {
+        if (submerged === this.submerged) return;
+        this.submerged = submerged;
+        if (submerged) {
+            this.setTint(SUBMERGED_TINT);
+            this.setAlpha(SUBMERGED_ALPHA);
+        } else {
+            this.clearTint();
+            this.setAlpha(1);
+        }
+    }
+
     public getPrefab(): EntityPrefab {
         return this.prefab;
     }
@@ -374,7 +509,54 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
                 hitAreaCallback: () => false,
             });
         }
-        return super.setInteractive(hitArea, callback, dropZone);
+        super.setInteractive(hitArea, callback, dropZone);
+        this.hitWhereDrawn();
+        return this;
+    }
+
+    /**
+     * Phaser tests a click against the place of the object, which never moves: drawn lower or higher on a relief seen
+     * in 3/4 (getGroundDrop), it is clicked where it is seen.
+     */
+    private hitWhereDrawn(): void {
+        const input = this.input;
+        const test = input?.hitAreaCallback as HitTest | undefined;
+        if (!input || !test || movedHitTests.has(test)) return;
+        const whereDrawn = hitWhereDrawn<unknown, Entity>(
+            (area, x, y) => test(area, x, y, this),
+            () => this.groundDrop,
+        );
+        const moved: HitTest = (area, x, y) => whereDrawn(area, x, y, this);
+        movedHitTests.add(moved);
+        input.hitAreaCallback = moved;
+    }
+
+    /** How much lower the object is drawn, standing on a relief seen in 3/4 (higher on a mount): see PlacedDrops. */
+    private groundDrop = 0;
+    public getGroundDrop(): number {
+        return this.groundDrop;
+    }
+
+    /** Draws the object this much lower, only while the image is drawn (CharacterDrops): its place never changes. */
+    public setGroundDrop(drop: number): void {
+        const rounded = Math.round(drop);
+        if (rounded === this.groundDrop) return;
+        this.groundDrop = rounded;
+        // (Its scene is gone once it is destroyed.)
+        (this.scene as GameScene | undefined)?.markDirty();
+    }
+
+    /** Whether the object stands on the ground, and so follows it on a relief seen in 3/4 (standsOnGround). */
+    public standsOnGround(): boolean {
+        const { collectionName, id, layer } = this.prefab;
+        return standsOnGround({
+            cartePiece:
+                isMapLayerPrefab(collectionName, id) ||
+                parseFloorPiece(collectionName, id) !== undefined ||
+                parseAnyLevelPrefab(collectionName, id) !== undefined,
+            layer,
+            elevation: this.entityData.elevation,
+        });
     }
 
     /**
@@ -382,24 +564,47 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
      * level above the ground tiles: nothing, neither a character nor a companion walking over a tile row, may go under.
      */
     public updateDepth(depthOffset: number = this.prefab.depthOffset ?? 0): void {
+        const floorPiece = parseFloorPiece(this.prefab.collectionName, this.prefab.id);
+        if (floorPiece) {
+            // A slab or a stair of the raised floors: in the band of depths of its altitude.
+            this.setDepth(floorPieceDepth(floorPiece, this.x, this.y, this.entityData.elevation));
+            return;
+        }
+        const hung = this.updateGroundDepth(depthOffset);
+        // Standing on a raised floor: the same order among the things of its floor, in the band of its altitude.
+        // (What is always over everything, like a ceiling lamp, stays where it is; what hangs on a wall is drawn
+        // right over that wall.)
+        if (!hung && this.entityData.elevation > 0 && this.depth < FLOOR_LEVEL_DEPTH) {
+            this.setDepth(floorDepth(this.entityData.elevation, this.depth));
+        }
+    }
+
+    /** The depth the entity has standing on the ground, sorted by its foot. */
+    /** Returns whether the object hangs on the face of a wall (it is then drawn right over that wall). */
+    private updateGroundDepth(depthOffset: number): boolean {
         if (parseMapLayerPrefab(this.prefab.collectionName, this.prefab.id)?.kind === "floor") {
             this.setDepth(MAP_LAYER_FLOOR_DEPTH);
-            return;
+            return false;
         }
         if (this.prefab.layer === "floor" || this.prefab.layer === "overhead") {
             // Fixed levels, whatever the position of the players: under all of them (a pool, a rug) or over all of
             // them (a ceiling lamp). Among themselves, the manual stacking of the editor still applies.
             this.automaticDepth = getLayerDepth(this.prefab.layer, this.y + this.displayHeight);
             this.setDepth(applyDepthStep(this.automaticDepth, this.entityData.depthStep, this.getStackableDepths()));
-            return;
+            return false;
         }
         const naturalDepth = this.y + this.displayHeight + depthOffset;
         if (isMapLayerPrefab(this.prefab.collectionName, this.prefab.id)) {
             this.setDepth(naturalDepth);
-            return;
+            return false;
         }
+        const elevation = this.entityData.elevation;
+        // Above the ground with a slab of its altitude under its foot: it stands on that floor. Without one, it
+        // may hang on a wall.
+        let standsOnFloor = false;
         const box = { x: this.x, y: this.y, width: this.displayWidth, height: this.displayHeight };
         const walls: WallDepthBox[] = [];
+        const faces: WallFaceBox[] = [];
         const supports: SupportDepthBox[] = [];
         for (const neighbour of this.getOverlappingEntities()) {
             const prefab = neighbour.getPrefab();
@@ -411,22 +616,64 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
                 depth: neighbour.depth,
                 naturalDepth: neighbour.y + neighbour.displayHeight + (prefab.depthOffset ?? 0),
             };
+            if (
+                elevation > 0 &&
+                neighbour.getElevation() === elevation &&
+                parseFloorPiece(prefab.collectionName, prefab.id) !== undefined &&
+                box.y + box.height > neighbour.y &&
+                box.y + box.height <= neighbour.y + neighbour.displayHeight + 1
+            ) {
+                standsOnFloor = true;
+            }
+            const anyLevelPiece = parseAnyLevelPrefab(prefab.collectionName, prefab.id);
             const piece = parseMapLayerPrefab(prefab.collectionName, prefab.id);
-            if (piece) {
+            if (anyLevelPiece && !piece) {
+                // A wall of a raised floor: something can hang on its face too.
+                if (
+                    anyLevelPiece.kind === "facade" ||
+                    anyLevelPiece.kind === "lintel" ||
+                    anyLevelPiece.kind === "end"
+                ) {
+                    faces.push({
+                        ...neighbourBox,
+                        y: neighbour.y + WALL_THICKNESS,
+                        height: neighbour.displayHeight - WALL_THICKNESS,
+                    });
+                }
+            } else if (piece) {
+                if (piece.kind === "facade" || piece.kind === "lintel" || piece.kind === "end") {
+                    // The south face of the wall, under its cap: where a painting hangs.
+                    faces.push({
+                        ...neighbourBox,
+                        y: neighbour.y + WALL_THICKNESS,
+                        height: neighbour.displayHeight - WALL_THICKNESS,
+                    });
+                }
                 if (depthOffset < 0 && piece.kind !== "floor") {
                     // A high wall draws its cap above the tiles north of it: the wall stands where its foot is.
                     walls.push({ ...neighbourBox, footY: mapLayerGroundBottom(piece, neighbour.y) });
                 }
-            } else if (this.prefab.seat === undefined) {
+            } else if (
+                this.prefab.seat === undefined &&
+                standsOnSameFloor(elevation, {
+                    elevation: neighbour.getElevation(),
+                    floorPiece: parseFloorPiece(prefab.collectionName, prefab.id) !== undefined,
+                })
+            ) {
                 supports.push({ ...neighbourBox, collisionGrid: prefab.collisionGrid });
             }
         }
         // Sorted above its foot: a wall crossing it must not hide it when it stands on the tile in front of that wall.
-        const wallDepth = applyWallDepthFloor(naturalDepth, box, walls);
+        // Hung on the face of a wall (a painting up a high wall): over that wall.
+        // Only above the ground: on the ground the same image stands behind the wall.
+        const behindWalls = applyWallDepthFloor(naturalDepth, box, walls);
+        const wallDepth = elevation > 0 && !standsOnFloor ? applyHungOnWallDepth(behindWalls, box, faces) : behindWalls;
+        const hung = wallDepth !== behindWalls;
         // An object standing on another one (a plant on a table) is drawn over it.
         this.automaticDepth = applySupportDepthFloor(wallDepth, box, supports);
         // Then the manual stacking chosen in the editor, relative to the images it overlaps.
         this.setDepth(applyDepthStep(this.automaticDepth, this.entityData.depthStep, this.getStackableDepths()));
+        return hung;
     }
 
     /** Depths of the images this one overlaps. The floors stay under everything: no object goes below them. */
@@ -435,7 +682,12 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
             this.prefab.layer,
             this.getOverlappingEntities()
                 .filter(
-                    (entity) => parseMapLayerPrefab(entity.prefab.collectionName, entity.prefab.id)?.kind !== "floor",
+                    (entity) =>
+                        parseMapLayerPrefab(entity.prefab.collectionName, entity.prefab.id)?.kind !== "floor" &&
+                        standsOnSameFloor(this.entityData.elevation, {
+                            elevation: entity.getElevation(),
+                            floorPiece: parseFloorPiece(entity.prefab.collectionName, entity.prefab.id) !== undefined,
+                        }),
                 )
                 .map((entity) => ({ layer: entity.prefab.layer, depth: entity.depth })),
         );
@@ -677,6 +929,16 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
                     });
                     break;
                 }
+                case "switchPropertyData": {
+                    // A switch: sets the state of the objects it commands (see GameSwitches).
+                    // Read through the checked reader: the property may come from an edit command as it was sent.
+                    const switchProperty = switchPropertyOf(this);
+                    const action = switchProperty
+                        ? (this.scene as GameScene).getSwitches()?.actionOf(this, switchProperty)
+                        : undefined;
+                    if (action) actions.push(action);
+                    break;
+                }
                 case "openFile": {
                     if (!property.link) break;
                     const newTab = property.newTab;
@@ -735,9 +997,11 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     // Play text on the entity
     public playText(id: string, text: string, duration = 10000, callback = () => this.destroyText()) {
         const x = this.x + this.width / 2;
-        this.speechDomElement = new SpeechDomElement(id, text, this.scene, x, this.y - 10, callback);
+        // Over the object where it is drawn: lower in a hollow of a relief seen in 3/4, higher on a mount.
+        const y = this.y + this.groundDrop;
+        this.speechDomElement = new SpeechDomElement(id, text, this.scene, x, y - 10, callback);
         this.scene.add.existing(this.speechDomElement);
-        this.speechDomElement.play(x, this.y - 20, duration);
+        this.speechDomElement.play(x, y - 20, duration);
     }
 
     // Destroy text

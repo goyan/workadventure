@@ -6,6 +6,7 @@ import { localUserStore } from "../../../src/front/Connection/LocalUserStore";
 import {
     allJamRoomsStore,
     jamParticipantsCountStore,
+    jamParticipantsStore,
     type JamRoom,
     joinHomeJam,
     joinJam,
@@ -106,6 +107,31 @@ describe("Jam rooms", () => {
         expect(get(jamParticipantsCountStore).get("dj")).toBe(1);
         listening.set(new Map([["dj", { ...EMPTY_SPOTIFY_LISTENING, jamAreaId: "lounge", jamHostUuid: "dj" }]]));
         expect(get(jamParticipantsCountStore).get("dj")).toBe(1);
+    });
+
+    it("lists audio members and extension listeners once and ignores stale rooms", () => {
+        setRooms(lounge, [spotifyJam]);
+        listening.set(
+            new Map([
+                [
+                    "dj",
+                    { ...EMPTY_SPOTIFY_LISTENING, jamAreaId: "lounge", jamHostUuid: "dj", listeningAlongUuid: "dj" },
+                ],
+                [
+                    "guest",
+                    { ...EMPTY_SPOTIFY_LISTENING, jamAreaId: "lounge", jamHostUuid: "dj", listeningAlongUuid: "dj" },
+                ],
+                ["extension", { ...EMPTY_SPOTIFY_LISTENING, listeningAlongUuid: "dj" }],
+                ["stale", { ...EMPTY_SPOTIFY_LISTENING, jamAreaId: "patio", jamHostUuid: "dj" }],
+                ["gone", { ...EMPTY_SPOTIFY_LISTENING, listeningAlongUuid: "missing-host" }],
+            ]),
+        );
+        expect(get(jamParticipantsStore).get("dj")).toEqual(["dj", "guest", "extension"]);
+        expect(get(jamParticipantsCountStore).get("dj")).toBe(3);
+        listening.set(new Map());
+        expect(get(jamParticipantsStore).get("dj")).toEqual(["dj"]);
+        setRooms(lounge, []);
+        expect(get(jamParticipantsStore).size).toBe(0);
     });
 
     it("counts a guest's published audio membership once and removes it when listening stops", () => {

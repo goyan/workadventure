@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
     applyDepthStep,
     applySupportDepthFloor,
+    applyHungOnWallDepth,
+    standsOnSameFloor,
     applyWallDepthFloor,
     getDepthStepRange,
 } from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/ObjectDepthFloor";
@@ -114,5 +116,52 @@ describe("applyDepthStep", () => {
 describe("getDepthStepRange", () => {
     it("counts the distinct depths above and below", () => {
         expect(getDepthStepRange(15, [10, 20, 30, 20, 15])).toEqual({ down: 1, up: 2 });
+    });
+});
+
+describe("applyHungOnWallDepth", () => {
+    // Two facades of a wall 2 tiles high, side by side: 32 px wide, a cap of 12 px then a face of 52 px.
+    const left = { x: 64, y: 100, width: 32, height: 64, depth: 170 };
+    const right = { x: 96, y: 100, width: 32, height: 64, depth: 173 };
+    const faces = [left, right].map((wall) => ({ ...wall, y: wall.y + 12, height: wall.height - 12 }));
+
+    it("draws a painting hung on the face of a wall over that wall", () => {
+        // Its foot is north of the foot of the wall: sorted by its foot it would be hidden behind the wall.
+        const painting = { x: 68, y: 120, width: 24, height: 20 };
+        expect(applyHungOnWallDepth(140, painting, faces)).toBeGreaterThan(left.depth);
+    });
+
+    it("draws it over every wall it hangs across", () => {
+        const wide = { x: 80, y: 120, width: 40, height: 20 };
+        expect(applyHungOnWallDepth(140, wide, faces)).toBeGreaterThan(right.depth);
+    });
+
+    it("leaves behind the wall an object that shows over its cap, or beside it", () => {
+        const tree = { x: 68, y: 80, width: 24, height: 70 };
+        expect(applyHungOnWallDepth(150, tree, faces)).toBe(150);
+        const beside = { x: 50, y: 120, width: 24, height: 20 };
+        expect(applyHungOnWallDepth(140, beside, faces)).toBe(140);
+    });
+
+    it("never lowers an object already drawn over the wall", () => {
+        const painting = { x: 68, y: 120, width: 24, height: 20 };
+        expect(applyHungOnWallDepth(400, painting, faces)).toBe(400);
+        expect(applyHungOnWallDepth(140, painting, [])).toBe(140);
+    });
+});
+
+describe("standsOnSameFloor", () => {
+    it("keeps the neighbours of the same floor of the map", () => {
+        expect(standsOnSameFloor(0, { elevation: 0, floorPiece: false })).toBe(true);
+        expect(standsOnSameFloor(52, { elevation: 52, floorPiece: false })).toBe(true);
+    });
+
+    it("leaves out an object of another floor: a pool of a raised floor does not carry a fireplace of the ground", () => {
+        expect(standsOnSameFloor(0, { elevation: 52, floorPiece: false })).toBe(false);
+        expect(standsOnSameFloor(52, { elevation: 0, floorPiece: false })).toBe(false);
+    });
+
+    it("leaves out the slabs and stairs: they are the floor, not something on it", () => {
+        expect(standsOnSameFloor(52, { elevation: 52, floorPiece: true })).toBe(false);
     });
 });

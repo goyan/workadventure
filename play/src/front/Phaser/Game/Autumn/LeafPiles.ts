@@ -1,3 +1,4 @@
+import { isRaisedFloorCollection } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { FLOOR_COLLECTIONS, MISSING_TEXTURE, type AlphaMask, type SnowEntity } from "../Christmas/SnowCaps";
 import { OUTDOOR_WALL_COLLECTIONS, type OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { leafPileHeight, leafPileSpan, paintLeafPile } from "./LeafPileShape";
@@ -13,7 +14,7 @@ interface PileTexture {
     height: number;
 }
 
-/** A small mound of leaves at the foot of each object placed outdoors, trees included. */
+/** A small mound of leaves at the foot of each object placed outdoors where the trees dropped leaves, trees included. */
 export class LeafPiles {
     /** Pile texture per entity frame, or undefined when its pixels cannot be read or it has no base. */
     private readonly textures = new Map<string, PileTexture | undefined>();
@@ -26,21 +27,35 @@ export class LeafPiles {
         private readonly readPixels: (entity: SnowEntity) => AlphaMask | undefined,
     ) {}
 
-    rebuild(entities: Iterable<SnowEntity>, grid: OutdoorGrid): void {
+    /** `hasLeavesAt`: whether leaves lie at a point of the map (by default, everywhere outdoors). */
+    rebuild(
+        entities: Iterable<SnowEntity>,
+        grid: OutdoorGrid,
+        hasLeavesAt: (x: number, y: number) => boolean = () => true,
+    ): void {
         this.clear();
         for (const entity of entities) {
             if (!entity.visible || entity.texture.key === MISSING_TEXTURE) continue;
             const { collectionName } = entity.getPrefab();
-            if (OUTDOOR_WALL_COLLECTIONS.includes(collectionName) || FLOOR_COLLECTIONS.includes(collectionName))
+            if (
+                OUTDOOR_WALL_COLLECTIONS.includes(collectionName) ||
+                FLOOR_COLLECTIONS.includes(collectionName) ||
+                isRaisedFloorCollection(collectionName)
+            )
                 continue;
-            if (!grid.isOutdoorAt(entity.x + entity.displayWidth / 2, entity.y + entity.displayHeight - 1)) continue;
+            const footX = entity.x + entity.displayWidth / 2;
+            const footY = entity.y + entity.displayHeight - 1;
+            if (!grid.isOutdoorAt(footX, footY) || !hasLeavesAt(footX, footY)) continue;
             const pile = this.pileTexture(entity);
             if (!pile) continue;
             const scaleX = entity.displayWidth / entity.frame.width;
             const scaleY = entity.displayHeight / entity.frame.height;
             const image = this.scene.add.image(
                 entity.x + pile.left * scaleX,
-                entity.y + (pile.bottom + 1 + PILE_OVERHANG_PX - pile.height) * scaleY,
+                // At the foot of the object where it is drawn (lower in a hollow of a relief seen in 3/4).
+                entity.y +
+                    (entity.getGroundDrop?.() ?? 0) +
+                    (pile.bottom + 1 + PILE_OVERHANG_PX - pile.height) * scaleY,
                 pile.key,
             );
             image.setOrigin(0);

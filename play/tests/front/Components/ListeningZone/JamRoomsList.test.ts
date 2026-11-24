@@ -1,4 +1,4 @@
-import type { SpotifyListening } from "@workadventure/messages";
+import { AvailabilityStatus, type SpotifyListening } from "@workadventure/messages";
 import { listeningZoneJamKey } from "@workadventure/map-editor";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync, mount, unmount } from "svelte";
@@ -11,11 +11,14 @@ import { followedUserUuidStore, listenAlongAvailableStore } from "../../../../sr
 import { joinedJamStore } from "../../../../src/front/ListeningZone/ListeningZoneStore";
 import { lampEffectsEnabledStore } from "../../../../src/front/Stores/LampEffectsStore";
 import { selectedKaraokeRoomStore } from "../../../../src/front/Karaoke/JamKaraoke";
+import type { PlayerInterface } from "../../../../src/front/Phaser/Game/PlayerInterface";
 import JamRoomsList from "../../../../src/front/Components/ListeningZone/JamRoomsList.svelte";
 
 const mocks = vi.hoisted(() => ({
     setRooms: vi.fn<(rooms: JamRoom[]) => void>(),
     setListening: vi.fn<(listening: Map<string, SpotifyListening>) => void>(),
+    setParticipants: vi.fn<(participants: Map<string, readonly string[]>) => void>(),
+    setPlayers: vi.fn<(players: Map<number, PlayerInterface>) => void>(),
     join: vi.fn(),
     playback: vi.fn(),
     update: vi.fn(),
@@ -25,11 +28,14 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../../../../src/front/ListeningZone/ListeningZoneController", async () => {
     const { writable } = await import("svelte/store");
     const rooms = writable<JamRoom[]>([]);
+    const participants = writable(new Map<string, readonly string[]>());
     mocks.setRooms.mockImplementation(rooms.set);
+    mocks.setParticipants.mockImplementation(participants.set);
     return {
         allJamRoomsStore: rooms,
         isLocalUser: () => mocks.local,
         jamParticipantsCountStore: writable(new Map()),
+        jamParticipantsStore: participants,
         joinJam: mocks.join,
         joinHomeJam: mocks.join,
         leaveJam: mocks.join,
@@ -42,14 +48,16 @@ vi.mock("../../../../src/front/Spotify/SpotifyListeningDirectory", async () => {
     const { writable } = await import("svelte/store");
     const listening = writable(new Map<string, SpotifyListening>());
     mocks.setListening.mockImplementation(listening.set);
-    return { listeningByUserUuidStore: listening };
+    return { listeningByUserUuidStore: listening, listeningUserNamesStore: writable(new Map()) };
 });
 vi.mock("../../../../src/front/ListeningZone/ListeningZoneStore", async () => ({
     joinedJamStore: (await import("svelte/store")).writable(undefined),
 }));
-vi.mock("../../../../src/front/Stores/PlayersStore", async () => ({
-    playersStore: (await import("svelte/store")).writable(new Map()),
-}));
+vi.mock("../../../../src/front/Stores/PlayersStore", async () => {
+    const players = (await import("svelte/store")).writable(new Map<number, PlayerInterface>());
+    mocks.setPlayers.mockImplementation(players.set);
+    return { playersStore: players };
+});
 // Native Jam audio is covered separately; this suite exercises only the Spotify extension action.
 vi.mock("../../../../src/front/ListeningZone/GameJamAudioSession", () => ({
     jamAudioSession: { leave: mocks.audioLeave },
@@ -76,6 +84,9 @@ vi.mock("../../../../src/i18n/i18n-svelte", async () => ({
             karaoke: { title: () => "Karaoke" },
             card: { stopListeningAlong: () => "Stop listening" },
             listeningZone: {
+                roomTypes: () => "Room types",
+                allRooms: () => "All",
+                jamRooms: () => "Jams",
                 kindSpotify: () => "Spotify",
                 kindLive: () => "Live",
                 liveOf: ({ name }: { name: string }) => `Live of ${name}`,
@@ -83,6 +94,15 @@ vi.mock("../../../../src/i18n/i18n-svelte", async () => ({
                 kindHome: () => "Jukebox",
                 hostedBy: () => "Host",
                 participants: () => "Participants",
+                audience: ({ count }: { count: number }) => `Audience · ${count}`,
+                audienceHost: () => "Host",
+                audienceYou: () => "You",
+                audienceUnknown: () => "Participant",
+                browseRooms: ({ count }: { count: number }) => `All rooms (${count})`,
+                backToRoom: () => "Back to room",
+                searchRooms: () => "Find a room",
+                searchRoomsLabel: () => "Search",
+                noMatchingRooms: () => "No matching rooms",
                 join: () => "Join Spotify",
                 leave: () => "Leave",
                 listenViaExtension: () => "Listen via extension",
@@ -134,6 +154,8 @@ beforeEach(() => {
     joinedJamStore.set(undefined);
     mocks.local = false;
     mocks.setRooms([room]);
+    mocks.setParticipants(new Map());
+    mocks.setPlayers(new Map());
     mocks.setListening(
         new Map([
             [
@@ -152,67 +174,12 @@ beforeEach(() => {
     selectedKaraokeRoomStore.set(undefined);
 });
 describe("personal light switch", () => {
-    it("lets a listener toggle lights without changing the Jam or Spotify playback", () => {
-        joinedJamStore.set({ ...room.zone, hostUuid: room.jam.hostUuid, url: listeningZoneJamKey(room.jam) });
-        render();
-        const button = target.querySelector<HTMLButtonElement>('[data-testid="jam-lights-toggle"]');
-        if (!button) throw new Error("Missing light switch");
-        flushSync(() => button.click());
-        expect(get(lampEffectsEnabledStore)).toBe(false);
-        expect(button.getAttribute("aria-pressed")).toBe("false");
-        expect(button.getAttribute("aria-label")).toBe("Turn on lights for me");
-        flushSync(() => button.click());
-        expect(get(lampEffectsEnabledStore)).toBe(true);
-        expect(mocks.join).not.toHaveBeenCalled();
-        expect(mocks.playback).not.toHaveBeenCalled();
-        expect(mocks.update).not.toHaveBeenCalled();
-    });
-
-    it("lets the host turn lights off only for themselves while keeping the room lit", () => {
-        mocks.local = true;
-        render();
-        const button = target.querySelector<HTMLButtonElement>('[data-testid="jam-lights-toggle"]');
-        if (!button) throw new Error("Missing personal host light switch");
-        flushSync(() => button.click());
-        expect(get(lampEffectsEnabledStore)).toBe(false);
-        expect(button.getAttribute("aria-label")).toBe("Turn on lights for me");
-        expect(mocks.update).not.toHaveBeenCalled();
-        expect(mocks.join).not.toHaveBeenCalled();
-        expect(mocks.playback).not.toHaveBeenCalled();
-    });
-
     it("offers the host no switch for everyone: lights are only turned off per person", () => {
         mocks.local = true;
         render();
         expect(target.querySelector('[data-testid="jam-lights-toggle-all"]')).toBeNull();
-        expect(target.querySelector('[data-testid="jam-lights-toggle"]')).not.toBeNull();
-    });
-
-    it("lets a guest choose their personal light preference, with no notice from an old switch for everyone", () => {
-        mocks.setRooms([{ ...room, jam: { ...room.jam, lightsOff: true } }]);
-        joinedJamStore.set({ ...room.zone, hostUuid: room.jam.hostUuid, url: listeningZoneJamKey(room.jam) });
-        render();
-        expect(target.querySelector('[data-testid="jam-lights-off-by-host"]')).toBeNull();
-        const button = target.querySelector<HTMLButtonElement>('[data-testid="jam-lights-toggle"]');
-        if (!button) throw new Error("Missing guest light switch");
-        flushSync(() => button.click());
-        expect(get(lampEffectsEnabledStore)).toBe(false);
-        flushSync(() => mocks.setRooms([room]));
-        expect(button.getAttribute("aria-pressed")).toBe("false");
-        expect(target.querySelector('[data-testid="jam-lights-toggle-all"]')).toBeNull();
-        expect(mocks.update).not.toHaveBeenCalled();
-    });
-
-    it("lets a guest turn lights off without joining the Jam", () => {
-        render();
-        const button = target.querySelector<HTMLButtonElement>('[data-testid="jam-lights-toggle"]');
-        if (!button) throw new Error("Missing guest light switch");
-        flushSync(() => button.click());
-        expect(get(lampEffectsEnabledStore)).toBe(false);
-        expect(get(joinedJamStore)).toBeUndefined();
-        expect(target.querySelector('[data-testid="jam-lights-toggle-all"]')).toBeNull();
-        expect(mocks.update).not.toHaveBeenCalled();
-        expect(mocks.join).not.toHaveBeenCalled();
+        // The personal switch lives with the look of the lounge (JamThemePicker), not in each room.
+        expect(target.querySelector('[data-testid="jam-lights-toggle"]')).toBeNull();
     });
 });
 afterEach(async () => {
@@ -234,11 +201,9 @@ describe("Jam invite link", () => {
         ]);
         render();
         const cards = [...target.querySelectorAll('[data-testid="listening-zone-room"]')];
-        expect(cards.map((card) => card.querySelector('[data-testid="jam-link-status"]') !== null)).toEqual([
-            true,
-            false,
-            false,
-        ]);
+        expect(cards.map((card) => card.querySelector('[data-testid="jam-link-status"]') !== null)).toEqual([true]);
+        flushSync(() => target.querySelector<HTMLButtonElement>('[data-testid="jam-room-browse"]')?.click());
+        expect(target.querySelectorAll('[data-testid="jam-link-status"]')).toHaveLength(0);
     });
 
     it.each([true, false])(
@@ -291,10 +256,14 @@ describe("Karaoke", () => {
         };
         mocks.setRooms([room, otherRoom]);
         render();
-        const [first, second] = target.querySelectorAll<HTMLButtonElement>('[data-testid="jam-karaoke-open"]');
-        if (!first || !second) throw new Error("Missing Karaoke actions");
+        const first = target.querySelector<HTMLButtonElement>('[data-testid="jam-karaoke-open"]');
+        if (!first) throw new Error("Missing first Karaoke action");
         flushSync(() => first.click());
         expect(get(selectedKaraokeRoomStore)).toEqual(room);
+        flushSync(() => target.querySelector<HTMLButtonElement>('[data-testid="jam-room-browse"]')?.click());
+        flushSync(() => target.querySelectorAll<HTMLButtonElement>('[data-testid="jam-room-toggle"]')[1]?.click());
+        const second = target.querySelector<HTMLButtonElement>('[data-testid="jam-karaoke-open"]');
+        if (!second) throw new Error("Missing second Karaoke action");
         flushSync(() => second.click());
         expect(get(selectedKaraokeRoomStore)).toEqual(otherRoom);
         flushSync(() => second.click());
@@ -302,6 +271,116 @@ describe("Karaoke", () => {
         expect(mocks.join).not.toHaveBeenCalled();
         expect(mocks.playback).not.toHaveBeenCalled();
         expect(get(followedUserUuidStore)).toBeUndefined();
+    });
+});
+describe("compact room directory", () => {
+    const otherRoom: JamRoom = {
+        ...room,
+        jam: { home: true, hostUuid: "other", hostName: "Nat", title: "Jazz lounge" },
+    };
+    it("separates the room library from the selected player's controls", () => {
+        mocks.setRooms([room, otherRoom]);
+        render();
+        expect(target.querySelectorAll('[data-testid="listening-zone-room"]')).toHaveLength(1);
+        expect(target.querySelectorAll('[data-testid="jam-room-details"]')).toHaveLength(1);
+        flushSync(() => target.querySelector<HTMLButtonElement>('[data-testid="jam-room-browse"]')?.click());
+        expect(target.querySelectorAll('[data-testid="listening-zone-room"]')).toHaveLength(2);
+        expect(target.querySelectorAll('[data-testid="jam-room-details"]')).toHaveLength(0);
+        flushSync(() => target.querySelectorAll<HTMLButtonElement>('[data-testid="jam-room-toggle"]')[1]?.click());
+        expect(target.querySelectorAll('[data-testid="listening-zone-room"]')).toHaveLength(1);
+        expect(target.querySelector('[data-testid="jam-room-toggle"]')?.textContent).toContain("Jazz lounge");
+        expect(target.querySelectorAll('[data-testid="jam-room-details"]')).toHaveLength(1);
+        expect(mocks.join).not.toHaveBeenCalled();
+    });
+    it("puts the joined room first and searches room titles and host names without changing membership", () => {
+        mocks.setRooms([room, otherRoom]);
+        joinedJamStore.set({ ...otherRoom.zone, hostUuid: "other", url: listeningZoneJamKey(otherRoom.jam) });
+        render();
+        expect(target.querySelector('[data-testid="jam-room-toggle"]')?.textContent).toContain("Jazz lounge");
+        flushSync(() => target.querySelector<HTMLButtonElement>('[data-testid="jam-room-browse"]')?.click());
+        const input = target.querySelector<HTMLInputElement>("#jam-room-search");
+        if (!input) throw new Error("Missing room search");
+        flushSync(() => {
+            input.value = "  NAT  ";
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        expect(target.querySelectorAll('[data-testid="listening-zone-room"]')).toHaveLength(1);
+        expect(target.textContent).toContain("Jazz lounge");
+        flushSync(() => {
+            input.value = "absent";
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        expect(target.textContent).toContain("No matching rooms");
+        expect(mocks.join).not.toHaveBeenCalled();
+        expect(get(joinedJamStore)?.hostUuid).toBe("other");
+    });
+    it("filters by type, combines search, and supports keyboard navigation without joining", () => {
+        mocks.setRooms([room, otherRoom, { ...room, jam: { live: true, hostUuid: "live", hostName: "Alex" } }]);
+        render();
+        flushSync(() => target.querySelector<HTMLButtonElement>('[data-testid="jam-room-browse"]')?.click());
+        const jukebox = target.querySelector<HTMLButtonElement>('[data-room-kind="jukebox"]');
+        if (!jukebox) throw new Error("Missing Jukebox tab");
+        flushSync(() => jukebox.click());
+        expect(jukebox.getAttribute("aria-selected")).toBe("true");
+        expect(target.querySelectorAll('[data-testid="listening-zone-room"]')).toHaveLength(1);
+        expect(target.textContent).toContain("Jazz lounge");
+        flushSync(() => jukebox.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
+        expect(target.querySelector('[data-room-kind="live"]')?.getAttribute("aria-selected")).toBe("true");
+        expect(target.querySelector('[data-testid="jam-room-toggle"]')?.textContent).toContain("Live of Alex");
+        const input = target.querySelector<HTMLInputElement>("#jam-room-search");
+        if (!input) throw new Error("Missing search");
+        flushSync(() => {
+            input.value = "Jazz";
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        expect(target.textContent).toContain("No matching rooms");
+        flushSync(() => target.querySelector<HTMLButtonElement>('[data-room-kind="all"]')?.click());
+        expect(target.querySelector('[data-testid="jam-room-toggle"]')?.textContent).toContain("Jazz lounge");
+        expect(mocks.join).not.toHaveBeenCalled();
+    });
+    it("shows artwork only once in an expanded room", () => {
+        mocks.setListening(
+            new Map([
+                [
+                    "host",
+                    {
+                        ...EMPTY_SPOTIFY_LISTENING,
+                        source: "spotify",
+                        trackTitle: "Track",
+                        trackUrl: "https://open.spotify.com/track/abc",
+                        artworkUrl: "https://example.com/art.jpg",
+                    },
+                ],
+            ]),
+        );
+        render();
+        expect(target.querySelectorAll('img[src="https://example.com/art.jpg"]')).toHaveLength(1);
+    });
+    it("shows participants by name, identifies the host, and updates when someone leaves", () => {
+        mocks.setPlayers(
+            new Map([
+                [
+                    1,
+                    {
+                        userId: 1,
+                        userUuid: "alice",
+                        name: "Alice",
+                        characterTextures: [],
+                        visitCardUrl: null,
+                        availabilityStatus: AvailabilityStatus.ONLINE,
+                    },
+                ],
+            ]),
+        );
+        mocks.setParticipants(new Map([["host", ["host", "alice"]]]));
+        render();
+        const audience = target.querySelector<HTMLDetailsElement>('[data-testid="jam-audience"]');
+        expect(audience?.textContent).toContain("Audience · 2");
+        expect(audience?.textContent).toContain("Alice");
+        expect(audience?.querySelectorAll('[data-testid="jam-audience-member"]')).toHaveLength(2);
+        flushSync(() => mocks.setParticipants(new Map([["host", ["host"]]])));
+        expect(audience?.textContent).toContain("Audience · 1");
+        expect(audience?.textContent).not.toContain("Alice");
     });
 });
 describe("classic Jam listening via extension", () => {

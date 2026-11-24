@@ -460,15 +460,20 @@ export function eraseWallsAlong(model: MapLayerModel, start: Point, end: Point):
     }
 }
 
-/** Removes the floors an eraser drag started on a floor passes over: its straight line and the tiles visited; walls stay. */
-export function eraseFloorsAlong(model: MapLayerModel, start: Point, end: Point, path: readonly Point[]): void {
+/** The tiles an eraser drag passes over: its straight line, then the tiles visited (some more than once). */
+export function floorCellsAlong(start: Point, end: Point, path: readonly Point[]): Point[] {
+    const cells: Point[] = [];
     // Steps shorter than a tile, so no tile of the line is jumped over.
     const steps = Math.max(1, Math.ceil(Math.hypot(end.x - start.x, end.y - start.y) / 8));
     for (let step = 0; step <= steps; step++) {
-        const cell = cellAt(start.x + ((end.x - start.x) * step) / steps, start.y + ((end.y - start.y) * step) / steps);
-        model.removeFloor(cell.x, cell.y);
+        cells.push(cellAt(start.x + ((end.x - start.x) * step) / steps, start.y + ((end.y - start.y) * step) / steps));
     }
-    for (const cell of path) model.removeFloor(cell.x, cell.y);
+    return [...cells, ...path];
+}
+
+/** Removes the floors an eraser drag started on a floor passes over: its straight line and the tiles visited; walls stay. */
+export function eraseFloorsAlong(model: MapLayerModel, start: Point, end: Point, path: readonly Point[]): void {
+    for (const cell of floorCellsAlong(start, end, path)) model.removeFloor(cell.x, cell.y);
 }
 
 /** Pixel rectangle of a door itself: its opening along the wall (the swinging leaves are not counted). */

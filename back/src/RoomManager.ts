@@ -228,6 +228,60 @@ const roomManager = {
                             socketManager.handleEntityMessage(room, message.message.entityMessage);
                             break;
                         }
+                        case "reportSwitchPresenceMessage": {
+                            room.reportSwitchAnimals(user, message.message.reportSwitchPresenceMessage.switchIds);
+                            break;
+                        }
+                        case "tameAnimalMessage": {
+                            room.tameAnimal(user, message.message.tameAnimalMessage.animalId);
+                            break;
+                        }
+                        case "releaseAnimalsMessage": {
+                            room.releaseAnimals(user, message.message.releaseAnimalsMessage.animalId);
+                            break;
+                        }
+                        case "setEntityStateMessage": {
+                            socketManager.handleSetEntityStateEvent(room, user, message.message.setEntityStateMessage);
+                            break;
+                        }
+                        case "castFishingLineMessage": {
+                            const { x, y } = message.message.castFishingLineMessage;
+                            room.castFishingLine(user, x, y);
+                            break;
+                        }
+                        case "reelFishingLineMessage": {
+                            room.reelFishingLine(user);
+                            break;
+                        }
+                        case "iceShackActionMessage": {
+                            const { action, shackId } = message.message.iceShackActionMessage;
+                            room.iceShackAction(user, action, shackId);
+                            break;
+                        }
+                        case "startFishingContestMessage": {
+                            room.startFishingContest(user, message.message.startFishingContestMessage.minutes);
+                            break;
+                        }
+                        case "setFireConditionsMessage": {
+                            room.setFireConditions(user, message.message.setFireConditionsMessage);
+                            break;
+                        }
+                        case "launchCatastropheMessage": {
+                            const { kind, x, y, radiusTiles, wholeMap, release, temperature, hurricane } =
+                                message.message.launchCatastropheMessage;
+                            room.launchCatastrophe(
+                                user,
+                                kind,
+                                x,
+                                y,
+                                radiusTiles,
+                                wholeMap,
+                                release,
+                                temperature,
+                                hurricane,
+                            );
+                            break;
+                        }
                         default: {
                             const _exhaustiveCheck: never = message.message;
                         }

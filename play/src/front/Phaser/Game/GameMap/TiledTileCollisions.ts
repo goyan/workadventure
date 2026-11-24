@@ -20,7 +20,9 @@ export class TiledTileCollisions {
         this.player = player;
         for (const state of this.layers.values()) {
             state.collider?.destroy();
-            state.collider = this.scene.physics.add.collider(player, state.group);
+            state.collider = this.scene.physics.add.collider(player, state.group, undefined, () =>
+                player.isNearGround(),
+            );
         }
     }
 
@@ -70,7 +72,14 @@ export class TiledTileCollisions {
         }
         this.layers.set(layer, {
             group,
-            collider: this.player ? this.scene.physics.add.collider(this.player, group) : undefined,
+            collider: this.player
+                ? this.scene.physics.add.collider(
+                      this.player,
+                      group,
+                      undefined,
+                      () => this.player?.isNearGround() === true,
+                  )
+                : undefined,
         });
         // A scripted wall change invalidates a path already being followed.
         this.player?.finishFollowingPath(true);

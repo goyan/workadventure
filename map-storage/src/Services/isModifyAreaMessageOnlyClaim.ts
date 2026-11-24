@@ -58,7 +58,9 @@ export function isModifyAreaMessageOnlyClaim(
         (message.x !== undefined && message.x !== existingArea.x) ||
         (message.y !== undefined && message.y !== existingArea.y) ||
         (message.width !== undefined && message.width !== existingArea.width) ||
-        (message.height !== undefined && message.height !== existingArea.height)
+        (message.height !== undefined && message.height !== existingArea.height) ||
+        // Nor the floor it belongs to.
+        (message.elevation !== undefined && message.elevation !== (existingArea.elevation ?? 0))
     ) {
         return false;
     }

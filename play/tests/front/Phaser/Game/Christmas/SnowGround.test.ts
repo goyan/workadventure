@@ -1,35 +1,54 @@
-import { describe, expect, it } from "vitest";
-import { mockDeep, type DeepMockProxy } from "vitest-mock-extended";
+import { describe, expect, it, vi } from "vitest";
 import { OutdoorGrid } from "../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid";
+
+interface Shown {
+    area: { x: number; y: number; columns: number; rows: number; cell: number };
+    coverage: (index: number) => number;
+    alpha: number;
+}
+
+const textured = vi.hoisted(() => ({ shown: [] as Shown[], hidden: 0, alpha: [] as number[] }));
+
+vi.mock("../../../../../src/front/Phaser/Game/Terrain/TexturedGround", () => ({
+    GROUND_TEXTURES: { snow: "snow" },
+    TexturedGround: class {
+        show(area: Shown["area"], coverage: Shown["coverage"], _stamp: number, alpha: number): void {
+            textured.shown.push({ area, coverage, alpha });
+        }
+        hide(): void {
+            textured.hidden++;
+        }
+        setAlpha(alpha: number): void {
+            textured.alpha.push(alpha);
+        }
+        destroy(): void {}
+    },
+}));
+
 import { SnowGround } from "../../../../../src/front/Phaser/Game/Christmas/SnowGround";
-import { MAP_LAYER_FLOOR_DEPTH } from "../../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
+
+function sceneSeeing(view: { x: number; y: number; width: number; height: number }) {
+    const worldView = { ...view, right: view.x + view.width, bottom: view.y + view.height };
+    return { cameras: { main: { worldView } } } as unknown as Phaser.Scene;
+}
+
+/** The snowy cells of the last snow laid, as "column,row" of the map. */
+function snowyOf(last: Shown): Set<string> {
+    const snowy = new Set<string>();
+    const { area } = last;
+    for (let index = 0; index < area.columns * area.rows; index++) {
+        if (last.coverage(index) > 0) {
+            snowy.add(
+                `${area.x / area.cell + (index % area.columns)},${area.y / area.cell + Math.floor(index / area.columns)}`,
+            );
+        }
+    }
+    return snowy;
+}
 
 describe("SnowGround", () => {
-    it("draws the outdoor cells at 1/8 and stretches them over the map", () => {
-        const scene = mockDeep<Phaser.Scene>();
-        const canvas = mockDeep<Phaser.Textures.CanvasTexture>();
-        const context = mockDeep<CanvasRenderingContext2D>();
-        canvas.getContext.mockReturnValue(context);
-        scene.textures.createCanvas.mockReturnValue(canvas);
-        const image = mockDeep<Phaser.GameObjects.Image>();
-        scene.add.image.mockReturnValue(image);
-        new SnowGround(scene).draw(OutdoorGrid.fromWalls(320, 160, 32, []));
-        expect(scene.textures.createCanvas.mock.calls[0].slice(1)).toEqual([40, 20]);
-        expect(context.fillRect.mock.calls).toContainEqual([0, 0, 40, 4]);
-        expect(canvas.setFilter.mock.calls).toHaveLength(1);
-        expect(image.setDisplaySize.mock.calls[0]).toEqual([320, 160]);
-        // Strictly below the floor tiles, so outdoor paving stays visible under its frost.
-        expect(image.setDepth.mock.calls[0][0]).toBeLessThan(MAP_LAYER_FLOOR_DEPTH);
-        expect(image.setDepth.mock.calls[0][0]).toBeGreaterThan(-2);
-    });
-
     it("covers the edge of a wall that touches the outside, never the room behind it", () => {
-        const scene = mockDeep<Phaser.Scene>();
-        const canvas = mockDeep<Phaser.Textures.CanvasTexture>();
-        const context = mockDeep<CanvasRenderingContext2D>();
-        canvas.getContext.mockReturnValue(context);
-        scene.textures.createCanvas.mockReturnValue(canvas);
-        scene.add.image.mockReturnValue(mockDeep<Phaser.GameObjects.Image>());
+        textured.shown = [];
         // 6x6 cells of 8 px: a ring of walls (cells 1..4) around a room (cells 2..3).
         const walls = [
             { x: 8, y: 8, width: 32, height: 8 },
@@ -37,11 +56,11 @@ describe("SnowGround", () => {
             { x: 8, y: 8, width: 8, height: 32 },
             { x: 32, y: 8, width: 8, height: 32 },
         ];
-        new SnowGround(scene).draw(OutdoorGrid.fromWalls(48, 48, 8, walls));
-        const snowy = new Set<string>();
-        for (const [x, y, w, h] of context.fillRect.mock.calls) {
-            for (let px = x; px < x + w; px++) for (let py = y; py < y + h; py++) snowy.add(`${px},${py}`);
-        }
+        new SnowGround(sceneSeeing({ x: 0, y: 0, width: 48, height: 48 })).draw(
+            OutdoorGrid.fromWalls(48, 48, 8, walls),
+        );
+        const snowy = snowyOf(textured.shown[0]);
+        expect(snowy.has("0,0")).toBe(true);
         // Walls start mid-cell on the map: the wall cell next to the outside gets snow (the wall image covers it).
         expect(snowy.has("1,1")).toBe(true);
         expect(snowy.has("4,2")).toBe(true);
@@ -49,20 +68,31 @@ describe("SnowGround", () => {
         expect(snowy.has("3,3")).toBe(false);
     });
 
-    it("fades its image, kept when the ground is drawn again", () => {
-        const scene = mockDeep<Phaser.Scene>();
-        const canvas = mockDeep<Phaser.Textures.CanvasTexture>();
-        canvas.getContext.mockReturnValue(mockDeep<CanvasRenderingContext2D>());
-        scene.textures.createCanvas.mockReturnValue(canvas);
-        scene.add.image.mockImplementation(() => mockDeep<Phaser.GameObjects.Image>());
+    it("lays the snow around the view only, again once the view left it", () => {
+        textured.shown = [];
+        const view = { x: 0, y: 0, width: 64, height: 64 };
+        const scene = sceneSeeing(view);
         const ground = new SnowGround(scene);
+        ground.draw(OutdoorGrid.fromWalls(3200, 3200, 32, []));
+        expect(textured.shown).toHaveLength(1);
+        expect(ground.follow()).toBe(false);
+        const moved = sceneSeeing({ x: 2000, y: 2000, width: 64, height: 64 });
+        Object.assign(scene.cameras.main.worldView, moved.cameras.main.worldView);
+        expect(ground.follow()).toBe(true);
+        expect(textured.shown.at(-1)?.area.x).toBeGreaterThan(1000);
+    });
+
+    it("keeps its fading when the snow is laid again, and lays nothing while hidden", () => {
+        textured.shown = [];
+        textured.hidden = 0;
+        const ground = new SnowGround(sceneSeeing({ x: 0, y: 0, width: 64, height: 64 }));
         const grid = OutdoorGrid.fromWalls(64, 64, 32, []);
-        ground.draw(grid);
-        const first = scene.add.image.mock.results[0].value as DeepMockProxy<Phaser.GameObjects.Image>;
         ground.setAlpha(0.3);
-        expect(first.setAlpha.mock.lastCall).toEqual([0.3]);
         ground.draw(grid);
-        const next = scene.add.image.mock.results[1].value as DeepMockProxy<Phaser.GameObjects.Image>;
-        expect(next.setAlpha.mock.lastCall).toEqual([0.3]);
+        expect(textured.alpha.at(-1)).toBe(0.3);
+        expect(textured.shown.at(-1)?.alpha).toBe(0.3);
+        ground.setVisible(false);
+        expect(textured.hidden).toBe(1);
+        expect(ground.follow()).toBe(false);
     });
 });
