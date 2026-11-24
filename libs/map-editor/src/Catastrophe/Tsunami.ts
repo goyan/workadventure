@@ -134,10 +134,7 @@ export function tsunamiTopPx(tsunami: Pick<Tsunami, "metres"> | undefined, usual
  * altitude 0 of the map, the rest level of the sea, and the ceiling of the water while it goes on. None before it
  * comes and once its backwash is over.
  */
-export function tsunamiSea(
-    tsunami: Tsunami | undefined,
-    now: number,
-): { levelPx: number; topPx: number } | undefined {
+export function tsunamiSea(tsunami: Tsunami | undefined, now: number): { levelPx: number; topPx: number } | undefined {
     if (!tsunami || now < tsunami.startedAt || tsunamiPhase(tsunami, now) === "over") return undefined;
     return { levelPx: tsunamiRisePx(tsunami, now), topPx: tsunamiTopPx(tsunami, MAX_WATER_MAX_SURFACE) };
 }

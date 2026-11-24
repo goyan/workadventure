@@ -114,4 +114,19 @@ describe("LocalCatastropheRelay", () => {
             balls: [],
         });
     });
+
+    it("gives the local ground the tsunami the server tells, once while it is told again, and lets it end", () => {
+        const relay = new LocalCatastropheRelay();
+        const tsunami = { metres: 8, minutes: 3, startedAt: 5000, durationMs: 180_000 };
+        const wave = told({ id: 4, kind: CatastropheKind.CATASTROPHE_TSUNAMI, impactInMs: 240_000, tsunami });
+        relay.receive(wave, 0);
+        const going = { id: 4, startedAt: 5000, metres: 8, durationMs: 180_000 };
+        expect(relay.due(10)).toEqual([{ kind: "catastrophes", downpours: [], drains: [], balls: [], tsunami: going }]);
+        // Told again a second later: nothing new for the local ground.
+        relay.receive({ ...wave, impactInMs: 239_000 }, 1000);
+        expect(relay.due(1010)).toEqual([]);
+        // Stopped: the local ground loses it.
+        relay.receive({ ...wave, impactInMs: 0 }, 2000);
+        expect(relay.due(2010)).toEqual([{ kind: "catastrophes", downpours: [], drains: [], balls: [] }]);
+    });
 });

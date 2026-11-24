@@ -191,6 +191,7 @@ import {
     heldBallStore,
     hurricaneHighestRiseStore,
     hurricaneShownStore,
+    tsunamiShownStore,
     pointerFloodRiseStore,
 } from "@wa/front/Stores/CatastropheStore";
 import { refreshPromptStore } from "@wa/front/Stores/RefreshPromptStore";
@@ -510,6 +511,7 @@ import { DrainView } from "./Catastrophe/DrainView";
 import { BallView } from "./Catastrophe/BallView";
 import { ColdView } from "./Catastrophe/ColdView";
 import { HurricaneReceiver } from "./Catastrophe/HurricaneReceiver";
+import { TsunamiReceiver } from "./Catastrophe/TsunamiReceiver";
 import { HurricaneDebris } from "./Catastrophe/HurricaneDebris";
 import { HurricaneView, seaHurricaneOf } from "./Catastrophe/HurricaneView";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
@@ -766,6 +768,7 @@ export class GameScene extends DirtyScene {
     private ballView: BallView | undefined;
     private coldView: ColdView | undefined;
     private hurricaneReceiver: HurricaneReceiver | undefined;
+    private tsunamiReceiver: TsunamiReceiver | undefined;
     private hurricaneView: HurricaneView | undefined;
     /** The debris the wind of a hurricane (or a wind of the map strong enough) carries, drawn here alone. */
     private hurricaneDebris: HurricaneDebris | undefined;
@@ -2006,6 +2009,9 @@ export class GameScene extends DirtyScene {
         coldLyingStore.set(undefined);
         this.hurricaneReceiver?.destroy();
         this.hurricaneReceiver = undefined;
+        this.tsunamiReceiver?.destroy();
+        this.tsunamiReceiver = undefined;
+        tsunamiShownStore.set(undefined);
         this.hurricaneView?.destroy();
         this.hurricaneView = undefined;
         this.hurricaneDebris?.destroy();
@@ -5364,6 +5370,12 @@ export class GameScene extends DirtyScene {
             },
         );
         this.hurricaneReceiver = hurricaneReceiver;
+        // The tsunami of the room: its water comes with the water of the room; the panel says where it is.
+        this.tsunamiReceiver?.destroy();
+        const tsunamiReceiver = new TsunamiReceiver((tsunami) =>
+            tsunamiShownStore.set(tsunami ? { tsunami, at: this.nightManager?.serverDate()?.getTime() } : undefined),
+        );
+        this.tsunamiReceiver = tsunamiReceiver;
         this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {
             // The water of this player, when it is their own, lives the catastrophes of the room too.
             this.localTerrain.fromCatastrophe(message);
@@ -5372,6 +5384,7 @@ export class GameScene extends DirtyScene {
             else if (message.kind === CatastropheKind.CATASTROPHE_BALL) ballView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_COLD) coldView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_HURRICANE) hurricaneReceiver.report(message);
+            else if (message.kind === CatastropheKind.CATASTROPHE_TSUNAMI) tsunamiReceiver.report(message);
             else if (message.kind === CatastropheKind.CATASTROPHE_FIRE) fireTorchView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_ICE_BREAK) {
                 // The ice another player broke (or ours, told back): the same hole for everyone.

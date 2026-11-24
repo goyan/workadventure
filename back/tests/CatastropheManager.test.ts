@@ -841,7 +841,10 @@ describe("CatastropheManager, tsunamis", () => {
     it("keeps its height and its duration within what a tsunami may be", () => {
         const { manager } = harness();
         manager.request(1, TSUNAMI, 0, 0, 0, true, false, undefined, undefined, asked(40, 500));
-        expect(manager.tsunami()).toMatchObject({ metres: TSUNAMI_MAX_METRES, durationMs: TSUNAMI_MAX_MINUTES * 60_000 });
+        expect(manager.tsunami()).toMatchObject({
+            metres: TSUNAMI_MAX_METRES,
+            durationMs: TSUNAMI_MAX_MINUTES * 60_000,
+        });
     });
 
     it("one a room: refused while one goes on, stopped by anyone, and none once the room stops", () => {

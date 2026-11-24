@@ -1,6 +1,6 @@
 import { ballRadiusPx, coldCelsius, coldTiles } from "@workadventure/map-editor";
-import { hurricaneTrack } from "@workadventure/map-editor";
-import type { Ball, ColdMass, Downpour, Drain, Hurricane } from "@workadventure/map-editor";
+import { hurricaneTrack, tsunamiMetres } from "@workadventure/map-editor";
+import type { Ball, ColdMass, Downpour, Drain, Hurricane, Tsunami } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { CatastropheMessage } from "@workadventure/messages";
 import type { LocalTerrainCommand } from "./LocalTerrainSimulation";
@@ -28,6 +28,8 @@ export class LocalCatastropheRelay {
     private readonly colds = new Map<number, { cold: ColdMass; until: number }>();
     /** The hurricane crossing the map, until it ends or is stopped (its weather is computed from it). */
     private hurricane: { hurricane: Hurricane; until: number } | undefined;
+    /** The tsunami coming in, until it ends or is stopped (the sea it holds at the coast is computed from it). */
+    private tsunami: { tsunami: Tsunami; until: number } | undefined;
     private falls: { at: number; command: LocalCatastropheCommand }[] = [];
     private changed = false;
 
@@ -105,6 +107,27 @@ export class LocalCatastropheRelay {
                 this.hurricane = { hurricane, until };
                 return [];
             }
+            case CatastropheKind.CATASTROPHE_TSUNAMI: {
+                const told = message.tsunami;
+                if (message.impactInMs <= 0 || !told || !(told.durationMs > 0)) {
+                    if (this.tsunami) this.changed = true;
+                    this.tsunami = undefined;
+                    return [];
+                }
+                const known = this.tsunami?.tsunami;
+                // Told again each second: the local ground is told only when it is another one.
+                if (!known || known.id !== id || known.startedAt !== told.startedAt) {
+                    this.changed = true;
+                    const tsunami = {
+                        id,
+                        startedAt: told.startedAt,
+                        metres: tsunamiMetres(told.metres),
+                        durationMs: told.durationMs,
+                    };
+                    this.tsunami = { tsunami, until };
+                } else if (this.tsunami) this.tsunami.until = until;
+                return [];
+            }
             default:
                 return [];
         }
@@ -128,6 +151,10 @@ export class LocalCatastropheRelay {
             this.hurricane = undefined;
             this.changed = true;
         }
+        if (this.tsunami && this.tsunami.until <= now) {
+            this.tsunami = undefined;
+            this.changed = true;
+        }
         if (this.changed) {
             this.changed = false;
             commands.push(this.state());
@@ -145,6 +172,7 @@ export class LocalCatastropheRelay {
             // The masses of cold air held; the local ground keeps those let go while they warm, as the server does.
             ...(this.colds.size > 0 ? { colds: [...this.colds.values()].map(({ cold }) => cold) } : {}),
             ...(this.hurricane ? { hurricane: this.hurricane.hurricane } : {}),
+            ...(this.tsunami ? { tsunami: this.tsunami.tsunami } : {}),
         };
     }
 }

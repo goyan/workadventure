@@ -74,11 +74,7 @@ describe("the sea a tsunami holds at the coast", () => {
  * end; its bed at `bedPx(column)`, its water at rest at the altitude 0. The coast stands at the altitude 0 of the
  * map (a sill between the sea and a lake), or, `sea`, at the bed of the channel (the sea goes on into it).
  */
-function channel(
-    length: number,
-    bedPx: (column: number) => number,
-    sea = false,
-): { grid: WaterGrid; row: number } {
+function channel(length: number, bedPx: (column: number) => number, sea = false): { grid: WaterGrid; row: number } {
     const height = 5;
     const cells = new Map<string, number>();
     for (let column = 0; column < (sea ? length : length - 1); column++) {
