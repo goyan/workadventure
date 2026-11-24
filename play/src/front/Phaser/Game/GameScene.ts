@@ -58,7 +58,7 @@ import {
     pavedTilesOf,
 } from "@workadventure/map-editor";
 import type { Bridges, ColdMass, TerrainData, WeatherLocation } from "@workadventure/map-editor";
-import { zombieGrenadeAim } from "@workadventure/map-editor";
+import { ZOMBIE_GRENADES_A_PLAYER, zombieGrenadeAim } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
 import { asError } from "catch-unknown";
@@ -789,6 +789,8 @@ export class GameScene extends DirtyScene {
     private zombieReceiver: ZombieReceiver | undefined;
     /** When this player shot their last grenade (scene time, ms). */
     private zombieGrenadeShotAt = -Infinity;
+    /** The grenades this player shot into the horde it shoots at; the launcher is put away once they are all shot. */
+    private zombieGrenadesShot = { horde: -1, shot: 0 };
     private zombieView: ZombieView | undefined;
     /** When the panel was last told the horde (ms, the clock of the game). */
     private zombieToldAt = 0;
@@ -3971,6 +3973,10 @@ export class GameScene extends DirtyScene {
             return;
         }
         this.zombieGrenadeShotAt = this.time.now;
+        const horde = this.zombieReceiver.current()?.id ?? -1;
+        if (this.zombieGrenadesShot.horde !== horde) this.zombieGrenadesShot = { horde, shot: 0 };
+        this.zombieGrenadesShot.shot++;
+        if (this.zombieGrenadesShot.shot >= ZOMBIE_GRENADES_A_PLAYER) grenadeLauncherEquippedStore.set(false);
         const pointer = new Phaser.Math.Vector2();
         this.input.activePointer.positionToCamera(this.cameras.main, pointer);
         const aim = zombieGrenadeAim({

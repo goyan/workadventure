@@ -1,8 +1,9 @@
 import * as Phaser from "phaser";
-import { ZOMBIE_WALKING, ZombieCrowd } from "@workadventure/map-editor";
+import { ZOMBIE_BURN_STEPS, ZOMBIE_DYING, ZOMBIE_WALKING, ZombieCrowd } from "@workadventure/map-editor";
 import type { ZombieHorde } from "@workadventure/map-editor";
 import {
     ZOMBIE_DEAD,
+    ZOMBIE_HURT,
     ZOMBIE_IDLE,
     ZOMBIE_SHEET_COLUMNS,
     ZOMBIE_SHEETS,
@@ -10,6 +11,7 @@ import {
     zombieAtlasFrame,
     zombieAtlasLayout,
 } from "./ZombieSheets";
+import { ZombieBlastView } from "./ZombieBlastView";
 
 const TEXTURE = "zombie-horde";
 /**
@@ -26,6 +28,8 @@ const VIEW_MARGIN_PX = 64;
  * smaller. (A Blitter is not scaled when it is drawn: its images are.)
  */
 const SCALES: readonly number[] = [0.44, 0.5];
+/** The empty pixels between two frames of the atlas. */
+const FRAME_GAP = 2;
 /** The frames of the atlas at one scale; those of the next scale follow. */
 const FRAMES_A_SCALE = ZOMBIE_SHEETS.length * 5 * ZOMBIE_SHEET_COLUMNS;
 /** An image of the walk every this many pixels of the map walked: a stride of some 3 m runs over its 8 images. */
@@ -69,6 +73,9 @@ export class ZombieView {
     /** A horde stopped or over: its last zombies (those walking then), fading. */
     private dust: { until: number; walking: Uint8Array } | undefined;
     private walkingNow = 0;
+    /** The fire of the grenades, drawn once one is shot; the clock of the last image. */
+    private blasts: ZombieBlastView | undefined;
+    private lastNow = 0;
     /** Whether the crowd was drawn at the last image (caught up). */
     private shown = false;
     /** What draw sorts with, kept from an image to the next. */
@@ -197,9 +204,9 @@ export class ZombieView {
         let atlasWidth = 0;
         for (const scale of SCALES) {
             lefts.push(atlasWidth);
-            atlasWidth += Math.ceil(width * scale) + 2;
+            atlasWidth += Math.ceil(width * scale) + ZOMBIE_SHEET_COLUMNS * FRAME_GAP + 2;
         }
-        const atlasHeight = Math.ceil(height * SCALES[SCALES.length - 1]) + 2;
+        const atlasHeight = Math.ceil(height * SCALES[SCALES.length - 1]) + 5 * ZOMBIE_SHEETS.length * FRAME_GAP + 2;
         const canvas = this.scene.textures.createCanvas(TEXTURE, atlasWidth, atlasHeight);
         const context = canvas?.getContext();
         if (!canvas || !context) return;
@@ -216,8 +223,9 @@ export class ZombieView {
                 const frameHeight = this.frameHeightOf(sheet, size);
                 sheet.counts.forEach((count, row) => {
                     for (let column = 0; column < count; column++) {
-                        const x = lefts[size] + column * frameWidth;
-                        const y = Math.round(tops[index] * scale) + row * frameHeight;
+                        // Two empty pixels round each frame: a smoothed frame takes nothing of its neighbours.
+                        const x = lefts[size] + column * (frameWidth + FRAME_GAP) + 1;
+                        const y = Math.round(tops[index] * scale) + row * (frameHeight + FRAME_GAP) + 1;
                         // Frame by frame: none bleeds into its neighbour.
                         context.drawImage(
                             image,
@@ -280,8 +288,12 @@ export class ZombieView {
             }
             crowd.step();
             this.shamble(crowd);
+            this.burn(crowd, now, still, target);
         }
         this.walkingNow = crowd.walking;
+        this.blasts?.update(now, now - this.lastNow);
+        this.lastNow = now;
+        this.blasts?.setGrenades(crowd.grenadesAt(crowd.steps - 1 + crowd.between(epoch)));
         if (target - crowd.steps > SHOWN_BEHIND_STEPS || crowd.over()) {
             this.shown = false;
             this.hideAll();
@@ -291,6 +303,28 @@ export class ZombieView {
         if (!this.scene.textures.exists(TEXTURE)) return;
         this.draw(crowd, crowd.between(epoch), 1, still);
         this.scene.markDirty();
+    }
+
+    /**
+     * After a step: the blasts of the grenades that went off at it, drawn (not those of long ago, caught up with), and
+     * flames over the zombies burning.
+     */
+    private burn(crowd: ZombieCrowd, now: number, still: boolean, target: number): void {
+        const blasts = crowd.takeExplosions();
+        const dying = crowd.dying;
+        if (blasts.length === 0 && dying === 0) return;
+        this.blasts ??= new ZombieBlastView(this.scene);
+        for (const blast of blasts) {
+            if (target - blast.step < 20) this.blasts.blast(blast.x, blast.y, now, still);
+        }
+        if (dying === 0 || target - crowd.steps > 2) return;
+        // A flame every other step over each burning zombie, at most this many a step.
+        let flames = 0;
+        for (let zombie = 0; zombie < crowd.count && flames < 60; zombie++) {
+            if (crowd.state[zombie] !== ZOMBIE_DYING || (zombie + crowd.steps) % 2 !== 0) continue;
+            this.blasts.flame(crowd.x[zombie], crowd.y[zombie], crowd.z[zombie], now, zombie + crowd.steps);
+            flames++;
+        }
     }
 
     /** After a step: each zombie that walked is that much further into its shamble, and faces where it goes. */
@@ -329,7 +363,8 @@ export class ZombieView {
         let seen = 0;
         for (let zombie = 0; zombie < crowd.count; zombie++) {
             this.bandOf[zombie] = -1;
-            if (dust ? dust[zombie] === 0 : state[zombie] !== ZOMBIE_WALKING) continue;
+            const burning = state[zombie] === ZOMBIE_DYING;
+            if (dust ? dust[zombie] === 0 : state[zombie] !== ZOMBIE_WALKING && !burning) continue;
             const px = lastX[zombie] + (x[zombie] - lastX[zombie]) * between;
             const py = lastY[zombie] + (y[zombie] - lastY[zombie]) * between;
             if (px < left || px > right || py < top || py > bottom) continue;
@@ -369,7 +404,25 @@ export class ZombieView {
                 shown++;
                 let row = ZOMBIE_WALK;
                 let image: number;
-                if (this.dust) {
+                let lift = 0;
+                let tint = this.tint[zombie];
+                let fade = 1;
+                if (crowd.state[zombie] === ZOMBIE_DYING) {
+                    // Thrown by a blast: hurt in the air, falling dead on the ground, burning, then charred and gone.
+                    const age = crowd.steps - (crowd.dieAt[zombie] - ZOMBIE_BURN_STEPS);
+                    lift = crowd.z[zombie];
+                    row = lift > 2 && age < 8 ? ZOMBIE_HURT : ZOMBIE_DEAD;
+                    const count = sheet.counts[row];
+                    image =
+                        row === ZOMBIE_HURT ? Math.min(count - 1, age >> 1) : Math.min(count - 1, Math.floor(age / 3));
+                    const charred = Math.min(1, age / ZOMBIE_BURN_STEPS);
+                    const flicker = (zombie * 7 + crowd.steps * 3) % 5 < 2 ? 1 : 0.85;
+                    const red = 255;
+                    const green = Math.round((150 - 110 * charred) * flicker);
+                    const blue = Math.round((70 - 60 * charred) * flicker);
+                    tint = (red << 16) | (green << 8) | blue;
+                    fade = Math.min(1, (ZOMBIE_BURN_STEPS - age) / 10);
+                } else if (this.dust) {
                     // Falling to dust: they collapse, then fade.
                     row = ZOMBIE_DEAD;
                     image = Math.min(sheet.counts[ZOMBIE_DEAD] - 1, Math.floor(dying * 2 * sheet.counts[ZOMBIE_DEAD]));
@@ -388,9 +441,9 @@ export class ZombieView {
                 bob.setFrame(size * FRAMES_A_SCALE + zombieAtlasFrame(look, row, image));
                 bob.flipX = this.facing[zombie] === 1;
                 bob.x = Math.round(this.drawX[zombie] - this.frameWidthOf(sheet, size) / 2);
-                bob.y = Math.round(this.drawY[zombie] - this.frameHeightOf(sheet, size) + 1);
-                bob.tint = this.tint[zombie];
-                bob.setAlpha(this.dust ? Math.min(1, alpha * 2) : 1);
+                bob.y = Math.round(this.drawY[zombie] - lift - this.frameHeightOf(sheet, size) + 1);
+                bob.tint = tint;
+                bob.setAlpha((this.dust ? Math.min(1, alpha * 2) : 1) * fade);
                 bob.setVisible(true);
             }
             for (let hidden = shown; hidden < batch.shown; hidden++) batch.bobs[hidden].setVisible(false);
@@ -431,6 +484,8 @@ export class ZombieView {
 
     /** The horde is gone: its images with it. */
     private forget(): void {
+        this.blasts?.destroy();
+        this.blasts = undefined;
         for (const batch of this.bands.values()) batch.blitter.destroy();
         this.bands.clear();
         this.crowd = undefined;
@@ -441,6 +496,8 @@ export class ZombieView {
     }
 
     public destroy(): void {
+        this.blasts?.destroy();
+        this.blasts = undefined;
         for (const batch of this.bands.values()) batch.blitter.destroy();
         this.bands.clear();
         this.crowd = undefined;
