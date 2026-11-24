@@ -325,7 +325,7 @@ import {
 import { jungleEnabledStore } from "../../Stores/JungleStore";
 import { isEffectShown, pixelReliefStore } from "../../Stores/EffectsStore";
 import { fireConditionsStore } from "../../Stores/FireConditionsStore";
-import { isBasicActive } from "../../Stores/BasicModeStore";
+import { basicActiveStore, isBasicActive } from "../../Stores/BasicModeStore";
 import {
     isWeatherPipetteOn,
     waterFlowMeasuredStore,
@@ -2617,6 +2617,7 @@ export class GameScene extends DirtyScene {
                 serverDate,
                 this.nightManager?.sunPosition()?.elevation,
                 window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+                !isBasicActive(),
             );
             {
                 const weather = this.shownWeather();
@@ -2654,7 +2655,7 @@ export class GameScene extends DirtyScene {
             );
             // The flood of a hurricane: its marks, and how much higher the water stands under the pointer than before
             // it (to the decimetre, told only when that changes).
-            this.hurricaneFlood?.update(time);
+            this.hurricaneFlood?.update(time, !isBasicActive());
             const risen = pointed && this.hurricaneFlood?.riseAt(pointed.x, pointed.y);
             const shownRise = risen === undefined ? undefined : Math.round(risen * 10) / 10;
             if (shownRise !== this.shownFloodRise) {
@@ -5596,6 +5597,8 @@ export class GameScene extends DirtyScene {
 
         // While the map is edited the charred trees show their plain image: drawn again when the editor opens or closes.
         this.unsubscribers.push(mapEditorModeStore.subscribe(() => this.showTreeFireImages(this.treeFire.marked())));
+        // Basique stands the trees the wind laid down back up: drawn again when it is turned on or off.
+        this.unsubscribers.push(basicActiveStore.subscribe(() => this.showTreeFireImages(this.treeFire.marked())));
 
         this.unsubscribers.push(
             userIsJitsiDominantSpeakerStore.subscribe((dominantSpeaker) => {

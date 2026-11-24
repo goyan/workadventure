@@ -49,8 +49,15 @@ export class HurricaneFloodView {
         }
     }
 
-    /** Each image: once a second, the water read and the marks drawn again. */
-    public update(now: number): void {
+    /**
+     * Each image: once a second, the water read and the marks drawn again. Not `shown` (Basique), the marks are not
+     * drawn; the rise is still followed and told.
+     */
+    public update(now: number, shown: boolean): void {
+        if (!shown && this.graphics.visible) {
+            this.graphics.clear().setVisible(false);
+            this.readAt = -Infinity;
+        }
         if (now - this.readAt < FLOOD_READ_MS) return;
         this.readAt = now;
         if (!this.flood.following(now)) {
@@ -60,7 +67,7 @@ export class HurricaneFloodView {
         }
         this.flood.observe(this.water.settled(), now);
         this.tellHighest(metresOf(this.flood.highestRisePx()));
-        this.draw(now);
+        if (shown) this.draw(now);
     }
 
     /** How much higher than before the hurricane the water stands at a point of the map (m); undefined if none. */

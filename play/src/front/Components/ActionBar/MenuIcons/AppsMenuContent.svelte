@@ -151,7 +151,7 @@
 <ActionBarButton
     onclick={toggleWeatherBanner}
     label={$LL.actionbar.weather()}
-    state={$weatherBannerStore ? "active" : "normal"}
+    state={$basicActiveStore ? "disabled" : $weatherBannerStore ? "active" : "normal"}
     dataTestId="weatherBannerButton"
 >
     <IconCloud width="20" height="20" />
