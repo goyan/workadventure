@@ -55,6 +55,7 @@ import type {
     TerrainWaterMessage,
     MeadowMessage,
     TreeFireMessage,
+    HurricaneAirMessage,
     FireConditionsMessage,
     SetFireConditionsMessage,
     AquaticLifeMessage,
@@ -258,6 +259,9 @@ export class RoomConnection implements RoomConnection {
     public readonly meadowMessageStream = this._meadowMessageStream.asObservable();
     private readonly _treeFireMessageStream = new Subject<TreeFireMessage>();
     public readonly treeFireMessageStream = this._treeFireMessageStream.asObservable();
+    /** The wind of the air of the hurricane crossing the map, twice a second while it crosses. */
+    private readonly _hurricaneAirMessageStream = new Subject<HurricaneAirMessage>();
+    public readonly hurricaneAirMessageStream = this._hurricaneAirMessageStream.asObservable();
     /** The conditions the fire of the room goes by, whenever they change. */
     private readonly _fireConditionsMessageStream = new Subject<FireConditionsMessage>();
     public readonly fireConditionsMessageStream = this._fireConditionsMessageStream.asObservable();
@@ -504,6 +508,10 @@ export class RoomConnection implements RoomConnection {
                                     this._treeFireMessageStream.next(subMessage.treeFireMessage);
                                     break;
                                 }
+                                case "hurricaneAirMessage": {
+                                    this._hurricaneAirMessageStream.next(subMessage.hurricaneAirMessage);
+                                    break;
+                                }
                                 case "meadowMessage": {
                                     this._meadowMessageStream.next(subMessage.meadowMessage);
                                     break;
@@ -736,6 +744,7 @@ export class RoomConnection implements RoomConnection {
                         aquaticLife: roomJoinedMessage.aquaticLife,
                         meadow: roomJoinedMessage.meadow,
                         treeFire: roomJoinedMessage.treeFire,
+                        hurricaneAir: roomJoinedMessage.hurricaneAir,
                         fireConditions: roomJoinedMessage.fireConditions,
                         fishing: roomJoinedMessage.fishing,
                         iceShacks: roomJoinedMessage.iceShacks,
@@ -2540,6 +2549,7 @@ export class RoomConnection implements RoomConnection {
         this._terrainWaterMessageStream.complete();
         this._meadowMessageStream.complete();
         this._treeFireMessageStream.complete();
+        this._hurricaneAirMessageStream.complete();
         this._fireConditionsMessageStream.complete();
         this._aquaticLifeMessageStream.complete();
         this._fishingMessageStream.complete();

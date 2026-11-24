@@ -43,6 +43,7 @@ import type {
     FireConditionsMessage,
     MeadowMessage,
     TreeFireMessage,
+    HurricaneAirMessage,
     SetFireConditionsMessage,
     AquaticLifeMessage,
     CatastropheKind,
@@ -1297,6 +1298,11 @@ export class GameRoom implements BrothersFinder {
     /** The trees that burn or are charred, sent to a user who joins the room. */
     public getTreeFire(): TreeFireMessage | undefined {
         return this.ground?.treeSnapshot();
+    }
+
+    /** The wind of the hurricane crossing the map, whole, sent to a user who joins the room; none outside one. */
+    public getHurricaneAir(): HurricaneAirMessage | undefined {
+        return this.ground?.airSnapshot();
     }
 
     /** The conditions the fire of the room goes by, sent to a user who joins the room. */

@@ -55,7 +55,38 @@ function offerEvent(transferId: string, size: number, sender = "sender", mimeTyp
     };
 }
 
+/** A peer connection that never connects: its data channel never opens. */
+class SilentPeerConnection {
+    onicecandidate: unknown = null;
+    ondatachannel: unknown = null;
+    onconnectionstatechange: unknown = null;
+    connectionState: RTCPeerConnectionState = "new";
+    createDataChannel(): unknown {
+        return { readyState: "connecting", close: vi.fn(), send: vi.fn() };
+    }
+    createOffer(): Promise<RTCSessionDescriptionInit> {
+        return Promise.resolve({ type: "offer", sdp: "" });
+    }
+    createAnswer(): Promise<RTCSessionDescriptionInit> {
+        return Promise.resolve({ type: "answer", sdp: "" });
+    }
+    setLocalDescription(): Promise<void> {
+        return Promise.resolve();
+    }
+    setRemoteDescription(): Promise<void> {
+        return Promise.resolve();
+    }
+    addIceCandidate(): Promise<void> {
+        return Promise.resolve();
+    }
+    close(): void {
+        this.connectionState = "closed";
+    }
+}
+
 type PrivateService = {
+    peerSessions: Map<string, unknown>;
+    handleSignal(sender: string, signal: { transferId: string; connectionId: string; signal: string }): Promise<void>;
     handleDataChannelMessage(session: unknown, data: unknown): Promise<void>;
     sendOutgoingTransfer(session: unknown, transferId: string): Promise<void>;
     closePeerSession(remoteSpaceUserId: string): void;
@@ -67,6 +98,7 @@ function fakeSession(remoteSpaceUserId: string, dataChannel?: unknown, stats = n
         remoteSpaceUserId,
         dataChannel,
         awaitingReceipt: new Set<string>(),
+        rejectOpen: vi.fn(),
         peerConnection: { getStats: () => Promise.resolve(stats) },
     };
 }
@@ -409,5 +441,52 @@ describe("ProximityFileTransferService", () => {
         );
         expect(surfaced).toContain("other-1");
         subscription.unsubscribe();
+    });
+    it("should show a download error when the connection to the sender never opens", async () => {
+        vi.useFakeTimers();
+        vi.stubGlobal("RTCPeerConnection", SilentPeerConnection);
+        const { service, incomingOffers, updates } = createService("recipient");
+        incomingOffers.next(offerEvent("transfer-1", 5));
+
+        const download = service.download("transfer-1");
+        await vi.advanceTimersByTimeAsync(15_000);
+        await download;
+
+        expect(updates.at(-1)).toMatchObject({ transferId: "transfer-1", state: "error", error: "connection-failed" });
+        vi.useRealTimers();
+    });
+
+    it("should report a file as not delivered when the recipient's connection never opens", async () => {
+        vi.useFakeTimers();
+        vi.stubGlobal("RTCPeerConnection", SilentPeerConnection);
+        const { service, privateService, outgoingUpdates } = createService("sender");
+        const [offer] = service.createOutgoingOffers([sendableFile(HELLO, "hello.txt")], ["recipient"]);
+
+        await privateService.handleSignal("recipient", {
+            transferId: offer.transferId,
+            connectionId: "connection-1",
+            signal: JSON.stringify({ type: "description", description: { type: "offer", sdp: "" } }),
+        });
+        await vi.advanceTimersByTimeAsync(15_000);
+
+        expect(outgoingUpdates).toEqual([
+            { transferId: offer.transferId, recipientSpaceUserId: "recipient", state: "failed", progress: 0 },
+        ]);
+        vi.useRealTimers();
+    });
+
+    it("should show a download error when the connection closes in the middle of a file", async () => {
+        const { incomingOffers, updates, handleDataChannelMessage, privateService } = createService("recipient");
+        incomingOffers.next(offerEvent("transfer-1", 10));
+        await handleDataChannelMessage(startMessage("transfer-1"));
+        await handleDataChannelMessage(encodeProximityFileChunkFrame("transfer-1", HELLO));
+        privateService.peerSessions.set("sender", {
+            ...fakeSession("sender"),
+            peerConnection: { close: vi.fn() },
+        });
+
+        privateService.closePeerSession("sender");
+
+        expect(updates.at(-1)).toMatchObject({ transferId: "transfer-1", state: "error", error: "connection-failed" });
     });
 });

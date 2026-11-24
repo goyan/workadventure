@@ -9,6 +9,7 @@ import type {
     TerrainWaterMessage,
     MeadowMessage,
     TreeFireMessage,
+    HurricaneAirMessage,
     FireConditionsMessage,
     AquaticLifeMessage,
     FishingMessage,
@@ -101,6 +102,8 @@ export interface RoomJoinedMessageInterface {
     meadow?: MeadowMessage;
     /** The trees that burn or are charred, as the server computes them; absent when every tree is green. */
     treeFire?: TreeFireMessage;
+    /** The wind of the hurricane in progress when it was joined; absent when there is none. */
+    hurricaneAir?: HurricaneAirMessage;
     /** The conditions the fire of the room goes by when it was joined. */
     fireConditions?: FireConditionsMessage;
     /** The fishing lines of the room when it was joined; absent when nobody ever fished there. */

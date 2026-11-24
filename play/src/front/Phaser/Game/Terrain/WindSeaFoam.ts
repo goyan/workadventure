@@ -81,11 +81,14 @@ export class WindSeaFoam {
     /**
      * `fragmentSource`: the whole shader of the pass (the GLSL of the ground, WIND_SEA_GLSL, WIND_SEA_FOAM_GLSL).
      * `ground`: sets the uniforms of the ground the pass reads (the weights, their area), its texture second.
+     * `airKey`: the picture of the wind of the air of a hurricane, its texture third.
      */
     public constructor(
         private readonly scene: Phaser.Scene,
         fragmentSource: string,
         private readonly groundKey: () => string,
+        /** The picture of the wind of the air of a hurricane (SeaAir), its texture third. */
+        private readonly airKey: () => string,
         private readonly ground: (setUniform: (name: string, value: unknown) => void) => void,
     ) {
         const id = ++foamCount;
@@ -102,7 +105,7 @@ export class WindSeaFoam {
                 0,
                 FOAM_TEXELS.across,
                 FOAM_TEXELS.down,
-                ["__DEFAULT", "__DEFAULT"],
+                ["__DEFAULT", "__DEFAULT", "__DEFAULT"],
             );
             shader.setOrigin(0);
             // Drawn once into its picture here, from nothing: the step says so.
@@ -147,7 +150,7 @@ export class WindSeaFoam {
         this.count = (this.count + 1) % 4096;
         const written = 1 - this.current;
         const shader = this.shaders[written];
-        shader.setTextures([this.keys[this.current], this.groundKey()]);
+        shader.setTextures([this.keys[this.current], this.groundKey(), this.airKey()]);
         shader.renderImmediate();
         this.current = written;
         return true;
@@ -156,6 +159,7 @@ export class WindSeaFoam {
     private setUniforms(setUniform: (name: string, value: unknown) => void): void {
         this.ground(setUniform);
         setUniform("uFoamBefore", 0);
+        setUniform("uHurAirTex", 2);
         const area = this.area ?? { x: 0, y: 0, width: 1, height: 1 };
         const before = this.before ?? area;
         setUniform("uFoamArea", [area.x, area.y, area.width, area.height]);

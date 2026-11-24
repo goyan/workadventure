@@ -190,6 +190,27 @@ describe("the fire spreading", () => {
         expect(meadow.fireAt(10, 9) + meadow.ashAt(10, 9)).toBe(0);
     });
 
+    it("runs with the wind of its place where the wind differs from place to place (the air of a hurricane)", () => {
+        const meadow = prairie(1);
+        meadow.ignite(10, 10, 0);
+        // The room says a wind from the east; the air at the fire blows from the west at 60 km/h: it goes east.
+        run(meadow, 12, {
+            ...night,
+            windFrom: 90,
+            windSpeed: 60,
+            windAt: () => ({ speed: 60, from: 270 }),
+            random: () => 0.5,
+        });
+        expect(meadow.fireAt(11, 10) + meadow.ashAt(11, 10)).toBeGreaterThan(0);
+        expect(meadow.fireAt(9, 10) + meadow.ashAt(9, 10)).toBe(0);
+        // Where the air is not known, the wind of the room: west.
+        const room = prairie(1);
+        room.ignite(10, 10, 0);
+        run(room, 12, { ...night, windFrom: 90, windSpeed: 60, windAt: () => undefined, random: () => 0.5 });
+        expect(room.fireAt(9, 10) + room.ashAt(9, 10)).toBeGreaterThan(0);
+        expect(room.fireAt(11, 10) + room.ashAt(11, 10)).toBe(0);
+    });
+
     it("sweeps a dry land: without wind, a tile on fire sets most of its neighbours on fire before it is out", () => {
         const meadow = prairie(1);
         meadow.ignite(10, 10, 0);

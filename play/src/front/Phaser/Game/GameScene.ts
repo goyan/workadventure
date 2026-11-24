@@ -36,6 +36,7 @@ import {
     GameMapProperties,
     GRAZING_COVER,
     heightAt,
+    HURRICANE_GUST_FACTOR,
     hurricaneHere,
     type LifeFire,
     lifeFireOf,
@@ -499,6 +500,7 @@ import { FishingManager } from "./Fishing/FishingManager";
 import { IceShackManager } from "./IceShack/IceShackManager";
 import { groundWind } from "./Weather/Snowfall";
 import { MeteorView } from "./Catastrophe/MeteorView";
+import { roomHurricaneAir, windOfAir } from "./Weather/HurricaneAir";
 import { FireView } from "./Fire/FireView";
 import { TreeFireState } from "./Fire/TreeFireState";
 import { FallenTreeView } from "./Nature/FallenTreeView";
@@ -755,6 +757,7 @@ export class GameScene extends DirtyScene {
     private meadowSubscription: Subscription | undefined;
     private readonly treeFire = new TreeFireState();
     private treeFireSubscription: Subscription | undefined;
+    private hurricaneAirSubscription: Subscription | undefined;
     private fireConditionsSubscription: Subscription | undefined;
     private meadowQueue: Promise<void> = Promise.resolve();
     private terrainWaterSubscription: Subscription | undefined;
@@ -1848,6 +1851,8 @@ export class GameScene extends DirtyScene {
         document.removeEventListener("visibilitychange", this.tabVisibilityChanged);
         this.treeFireSubscription?.unsubscribe();
         this.treeFireSubscription = undefined;
+        this.hurricaneAirSubscription?.unsubscribe();
+        this.hurricaneAirSubscription = undefined;
         this.fireConditionsSubscription?.unsubscribe();
         this.fireConditionsSubscription = undefined;
         this.receiveFireConditions(undefined);
@@ -2019,6 +2024,7 @@ export class GameScene extends DirtyScene {
         this.hurricaneFlood?.destroy();
         this.hurricaneFlood = undefined;
         setRoomHurricane(undefined);
+        roomHurricaneAir.clear();
         hurricaneShownStore.set(undefined);
         this.fireTorchView?.destroy();
         this.fireTorchView = undefined;
@@ -3902,6 +3908,12 @@ export class GameScene extends DirtyScene {
         const hurricane = getRoomHurricane();
         const at = hurricane ? this.nightManager?.serverDate()?.getTime() : undefined;
         if (!hurricane || at === undefined) return undefined;
+        // The wind of its air where the server simulates it; of its formula otherwise.
+        const air = roomHurricaneAir.windAt(hurricane.id, x, y);
+        if (air) {
+            const wind = windOfAir(air);
+            return { speed: wind.windSpeed, from: wind.windFrom };
+        }
         const here = hurricaneHere(hurricane, at, x, y);
         // Past half of its fade, as the weather shown (withHurricane).
         if (!here || here.share < 0.5) return undefined;
@@ -4702,10 +4714,14 @@ export class GameScene extends DirtyScene {
                         isFlatAt: (x, y) => this.seenRelief?.isFlatAt(x, y) ?? false,
                     },
                 );
-                // Under a hurricane, the wind sea takes its wind at each point (seaWindHere).
-                this.terrainView.seaHurricaneWith(() =>
-                    seaHurricaneOf(getRoomHurricane(), this.nightManager?.serverDate()),
-                );
+                // Under a hurricane, the wind sea takes its wind at each point (seaWindHere): that of its air where the
+                // server simulates it.
+                this.terrainView.seaHurricaneWith(() => {
+                    const hurricane = getRoomHurricane();
+                    const sea = seaHurricaneOf(hurricane, this.nightManager?.serverDate());
+                    const air = sea ? roomHurricaneAir.seaAir(hurricane?.id) : undefined;
+                    return sea && air ? { ...sea, air } : sea;
+                });
                 // What is built stays flat where the relief is seen in 3/4: paved, indoors, a pool.
                 this.seenRelief = new SeenRelief({
                     terrain: () => this.terrainWater.relief(),
@@ -5170,6 +5186,15 @@ export class GameScene extends DirtyScene {
         this.treeFireSubscription = this.connection.treeFireMessageStream.subscribe((message) => {
             this.receiveTreeFire(message);
         });
+        // The wind of the air of a hurricane crossing the map, as the server simulates it: whole now, then twice a
+        // second while it crosses.
+        roomHurricaneAir.clear();
+        if (room.hurricaneAir) roomHurricaneAir.receive(room.hurricaneAir);
+        this.hurricaneAirSubscription?.unsubscribe();
+        this.hurricaneAirSubscription = this.connection.hurricaneAirMessageStream.subscribe((message) => {
+            roomHurricaneAir.receive(message);
+            this.markDirty();
+        });
         // The life of that water: the animals of the room now, then all of them every second.
         this.receiveAquaticLife(room.aquaticLife ?? { animals: [], species: [] });
         this.aquaticLifeSubscription?.unsubscribe();
@@ -5364,7 +5389,12 @@ export class GameScene extends DirtyScene {
                 hurricaneFlood.setHurricane(hurricane, this.time.now);
                 const at = this.nightManager?.serverDate()?.getTime();
                 const look = this.cameras.main.midPoint;
-                const here = at === undefined ? undefined : hurricaneHere(hurricane, at, look.x, look.y);
+                const formula = at === undefined ? undefined : hurricaneHere(hurricane, at, look.x, look.y);
+                // Where the server simulates its air, the wind of that air where this player looks.
+                const air = hurricane ? roomHurricaneAir.windAt(hurricane.id, look.x, look.y) : undefined;
+                const wind = air && windOfAir(air);
+                const here =
+                    formula && wind ? { ...formula, ...wind, gust: wind.windSpeed * HURRICANE_GUST_FACTOR } : formula;
                 hurricaneShownStore.set(hurricane ? { hurricane, here } : undefined);
                 this.markDirty();
             },

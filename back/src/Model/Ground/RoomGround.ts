@@ -11,7 +11,7 @@ import type {
     PrecipitationAir,
     WaterView,
 } from "@workadventure/map-editor";
-import type { MeadowMessage, TerrainWaterMessage, TreeFireMessage } from "@workadventure/messages";
+import type { HurricaneAirMessage, MeadowMessage, TerrainWaterMessage, TreeFireMessage } from "@workadventure/messages";
 import type { VariablesRepositoryInterface } from "../../Services/Repository/VariablesRepositoryInterface";
 import type { GameRoom } from "../GameRoom";
 import type { RainTimelineService } from "../Services/RainTimelineService";
@@ -99,4 +99,6 @@ export interface RoomGround {
     waterSnapshot(): TerrainWaterMessage | undefined;
     meadowSnapshot(): MeadowMessage | undefined;
     treeSnapshot(): TreeFireMessage | undefined;
+    /** The wind of the air of the hurricane crossing the map, last told; undefined outside a hurricane. */
+    airSnapshot(): HurricaneAirMessage | undefined;
 }

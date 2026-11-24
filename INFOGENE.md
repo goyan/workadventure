@@ -6202,6 +6202,75 @@ de l'œil, plus denses et plus rapides au mur, et disparaissent dans l'œil (`De
 de la carte réglé à plus de 98 km/h (rafale de 120) en emporte aussi, en ligne droite. Dessinés par chaque navigateur,
 rien d'envoyé ; masqués avec les effets de météo, en mode Basique et dans l'éditeur.
 
+**L'air de l'ouragan, simulé par le serveur** (lots a et b, 2026-11-23). Le vent n'est plus seulement une formule :
+il émerge d'une simulation de la couche limite (`AirSimulation`, lib) sur une grille de 4 × 4 cases (4,4 m, 80 × 60
+mailles marge comprise sur la carte d'Antoine).
+- Physique : une dalle d'air poussée par la dépression de l'ouragan (la chute de pression de Holland 1980 que l'eau
+  ressent déjà, `hurricanePressureDrop`) et par la pression de grande échelle qui tient le vent de la salle. Y
+  s'ajoutent la force de Coriolis, le frottement du sol selon sa nature et le transport du vent par lui-même. Là où la
+  dalle diverge, l'air du dessus, au vent de gradient, y descend (Smith 2003). Le frottement vaut Large et Pond sur
+  la mer, plafonné à 2,5·10⁻³. Sur terre, il vaut celui de la mer × F, où F = u*/u*mer vient de la loi de traînée
+  géostrophique (Blackadar et Tennekes 1968) et de la longueur de rugosité (Wieringa 1992 : 0,03 m pour un sol ouvert,
+  1 m pour une forêt). F vaut 1,15 sur sol ouvert et 1,5 en forêt aux vents d'un ouragan. La contrainte croît comme
+  u*² et l'épaisseur de la couche comme u* (h ≈ 0,25 u*/f) ; c'est un choix de fermeture, maille par maille (la vérité
+  est entre F et F²).
+- **Choix**, l'ouragan étant mille fois plus petit qu'un vrai : similitude de Rossby (f* = 0,05 s⁻¹ à R = 30 m) et
+  épaisseur de la dalle h = 2 m (le double de la similitude à 1 m, sans quoi l'air remplit l'œil). Aucun autre
+  réglage : la catégorie sort de la pression.
+- Vent à 10 m sur mer = vent de la dalle × 0,80 (Franklin, Black et Valde 2003, Weather and Forecasting 18, p. 42 :
+  rapport moyen du vent à 10 m au vent moyen des 500 m inférieurs, dans le mur), appliqué en un seul endroit
+  (`surfaceWindAt`). Mesuré sur mer à 10 m : 104 km/h pour 126 en catégorie 1 (−17 %), 195 pour 214 en
+  catégorie 4 (−9 %), 235 pour 250 en catégorie 5 (−6 %) ; rayon du maximum de 0,85 à 1,05 Rmax, œil calme,
+  entrée de 15 à 25° sur mer, plus forte sur terre et en forêt.
+- Sur terre, le vent à 10 m vient de celui de la mer par la loi logarithmique : U10/U10mer = F·ln((10 − d)/z0)/ln(10/z0mer),
+  avec des obstacles hauts de h ≈ 10 z0 et un déplacement d ≈ 2/3 h (Garratt 1992, Raupach 1994, à vérifier). Une
+  forêt de z0 = 1 m mesure 10 m : son « 10 m » est le sommet de sa canopée. Mesuré en catégorie 4 : 195 km/h sur mer,
+  165 sur sol ouvert (−15 %, comme à un atterrissage), 46 au sommet d'une forêt ; en catégorie 5 : 235, 198, 54.
+- Qui lit quel vent : les lecteurs de surface (débris, arbres qui ploient, mer, feux, panneau Météo) prennent le vent
+  à 10 m de leur surface, celui du sommet de la canopée en forêt. Les **arbres couchés** prennent le vent d'exposition
+  standard (`standardWindAt` : 10 m sur sol ouvert sous la même couche), celui des stations (OMM) et de l'échelle EF
+  sur laquelle est défini leur seuil de 130 km/h de rafales, arbre en peuplement compris. Piste hors lot : un seuil
+  propre aux arbres en peuplement, lu au sommet de la canopée (vitesses critiques de ForestGALES).
+- Les défauts de la forêt (mur contracté à 0,55 Rmax, œil mobile rempli, asymétrie inversée) venaient de
+  l'épaisseur unique de la couche : corrigés le 2026-11-24 (PR #554). Rayon du maximum 0,85 Rmax en forêt (0,90
+  sur mer), œil calme, côté fort à droite dans le nord ; entrée 20,0° sur mer, 22,0° sur sol ouvert, 25,8° en forêt.
+- Le fondu : la dépression vaut sa chute × la part de l'ouragan (`share`), comme sur l'eau ; le vent à l'équilibre
+  en suit la racine. Elle était appliquée deux fois jusqu'au 2026-11-24.
+- Sur le serveur (`MapAir`) : l'air est créé au début d'un ouragan, sa surface lue alors dans la carte (mer là où
+  l'eau du relief a la profondeur d'un poisson sur la moitié d'une maille, forêt là où un arbre occupe le quart des
+  cases, terre ailleurs, deux seuils choisis). Il avance avec chaque pas de l'eau, donc de la même façon avec ou sans
+  fil de calcul (scénario d'identité). Il est jeté à la fin de l'ouragan. Un ouragan accéléré par le widget vit
+  `times` pas de son air dans chaque pas de la salle (1, 2, puis 5 au plus : `MAP_AIR_MOST_TIMES`). Sans cela, son œil
+  va plus vite que l'air ne tourne : mesuré après 5 s à ×10, l'œil de l'air est à 0,14 Rmax de celui de la formule
+  avec 5 sous-pas (0,12 avec 10), à 0,29 Rmax avec un seul. Le plafond de 5 vient du coût (ci-dessous). Un pas de
+  0,2 s un pas sur deux, aussi économe, a été essayé et écarté : il rentrait le maximum de 0,90 à 0,65 Rmax.
+- Le message : `HurricaneAirMessage`, le vent à 10 m aux points d'une grille de 128 px sur la carte, un octet signé
+  par composante, envoyé deux fois par seconde pendant un ouragan seulement, et entier au joueur qui arrive
+  (`RoomJoinedMessage.hurricaneAir`). Environ 5 ko par message, soit 10 ko/s par joueur, non compressé (2,8 à 3,6 ko
+  en gzip).
+- Repli : sur une carte sans eau, l'air ne tourne pas (il suit le pas de l'eau). Si l'air échoue, il est abandonné
+  pour cet ouragan, avec une seule erreur au journal. Dans les deux cas, rien n'est envoyé et le vent reste celui
+  de la formule.
+- Coût mesuré sur le Mac (M4 Max), encodage compris : 0,32 ms par pas à ×1, 1,5 ms à ×10 avec le plafond de 5
+  sous-pas (2,9 ms avec 10). Estimation pour le VPS (×6) : 2 ms (2 % d'un cœur) à ×1, 9 ms (9 %) à ×10, dans le fil
+  du sol qui prend déjà 55 ms par pas pour l'eau.
+- La dépression de l'air se creuse et se comble avec l'ouragan (`share`), comme la formule et la dépression sur
+  l'eau. À 1 % de la traversée, son vent vaut 0,45 du plein.
+- Qui lit le vent de l'air (lot c), à la place de la formule :
+  - **Serveur** : les arbres couchés, par les rafales de l'air au pied de chacun (vent à 10 m × 1,23). Chaque feu
+    d'herbe ou d'arbre est poussé par le vent de l'air là où il brûle : propagation, braises, chaleur des voisins.
+  - **Navigateur** (`HurricaneAir.ts`) : le balancement des arbres, les débris, la météo et la pluie dessinées au
+    point regardé, le vent du panneau Météo. Le navigateur garde les deux derniers champs reçus et passe de l'un à
+    l'autre en une demi-seconde.
+  - **Mer et écume** : une petite texture lissée (le champ précédent à gauche, le dernier à droite, un octet par
+    composante) que `seaWindHere` lit en chaque point, dans le shader de l'eau et dans la passe d'écume. Le repère en
+    spirale des traînées reste centré sur l'œil. Vérifié sur GPU (Metal et SwiftShader) : le vent lu égale celui du
+    navigateur à 0,08 m/s près, et le shader de l'eau rend les mêmes octets qu'avant sans ouragan et sous un
+    ouragan sans air.
+- La formule reste en repli partout : sans air simulé (carte sans eau, air en échec), et dans le navigateur si le
+  serveur ne dit plus rien depuis 3 s. La pluie et les nuages restent ceux de la formule (l'air ne simule que le
+  vent), comme la poussée du vent sur l'eau du relief.
+
 **Compatibilité.** `play` et `back` se déploient ensemble (protobuf). Le PNJ du dépôt d'infra doit être réaligné sur
 `messages.proto`.
 

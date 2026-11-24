@@ -197,6 +197,16 @@ describe("a tree on fire", () => {
         expect(still.stateOf("far").fire).toBe(0);
     });
 
+    it("heats the tree downwind by the wind at the tree on fire, where the wind differs from place to place", () => {
+        const { meadow } = ground();
+        const fire = new TreeFire([tree("a", 10, 10), tree("east", 13, 10), tree("west", 7, 10)], meadow);
+        fire.ignite(10.5 * TILE_PX, 10.5 * TILE_PX, TILE_PX);
+        // The room says a wind from the east; the air at the tree on fire blows from the west at 60 km/h.
+        run(fire, 12, { ...calm, windFrom: 90, windSpeed: 60, fireWindAt: () => ({ speed: 60, from: 270 }) });
+        expect(fire.stateOf("east").fire).toBeGreaterThan(0);
+        expect(fire.stateOf("west").fire).toBe(0);
+    });
+
     it("goes out under a hard rain or a flood, and keeps what burnt of it", () => {
         const rain = lit();
         run(rain.fire, 20);
