@@ -664,3 +664,28 @@ describe("the trees a hurricane lays down round its eye", () => {
         });
     }
 });
+
+describe("the trees a horde of zombies goes over", () => {
+    it("pulls a tree down after TREE_TRAMPLE_PASSES passes at its foot, lying away from the horde", () => {
+        const { meadow } = ground();
+        const fire = new TreeFire([tree("oak", 4, 4), tree("pine", 9, 4)], meadow);
+        const trodden = (tileX: number, tileY: number): number => (tileX === 4 && tileY === 4 ? 6 : 0);
+        fire.step({ ...calm, trodden, troddenFrom: 270 });
+        expect(fire.stateOf("oak").damage).toBe(0);
+        const { changed } = fire.step({ ...calm, trodden, troddenFrom: 270 });
+        expect(fire.stateOf("oak")).toMatchObject({ damage: 1, fallenFrom: 270 });
+        expect(changed).toEqual([expect.objectContaining({ id: "oak", fallen: 271 })]);
+        expect(fire.stateOf("pine").damage).toBe(0);
+    });
+
+    it("forgets the passes of a horde once it is over: the next one starts from nothing", () => {
+        const { meadow } = ground();
+        const fire = new TreeFire([tree("oak", 4, 4)], meadow);
+        const trodden = (tileX: number, tileY: number): number => (tileX === 4 && tileY === 4 ? 9 : 0);
+        fire.step({ ...calm, trodden });
+        // Over: a step without a horde, with nothing else going on.
+        fire.step({ ...calm, groundBurning: false });
+        fire.step({ ...calm, trodden: (tileX, tileY) => (tileX === 4 && tileY === 4 ? 2 : 0) });
+        expect(fire.stateOf("oak").damage).toBe(0);
+    });
+});

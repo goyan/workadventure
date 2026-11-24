@@ -13,6 +13,9 @@ import type { PrecipitationAir } from "../Weather/Precipitation";
 import { rainRateAt } from "../Weather/RainRate";
 import { HURRICANE_GUST_FACTOR, hurricaneAt, hurricaneHere, skyRainUnder } from "../Catastrophe/Hurricane";
 import type { Hurricane } from "../Catastrophe/Hurricane";
+import { ZombieCrowd } from "../Catastrophe/ZombieCrowd";
+import { zombieHordeGoing } from "../Catastrophe/ZombieHorde";
+import type { ZombieHorde } from "../Catastrophe/ZombieHorde";
 import { REAL_WEATHER_SLOT_MS } from "../Weather/RealWeather";
 import type { MapPlace, RealWeatherSlot } from "../Weather/RealWeather";
 import { seasonAt } from "../Weather/SeasonClock";
@@ -129,6 +132,14 @@ export class MeadowSimulation {
     private air: () => PrecipitationAir | undefined = () => undefined;
     /** The hurricane crossing the map, whose rain takes the place of that of the map (none on a ground of one's own). */
     private hurricane: () => Hurricane | undefined = () => undefined;
+    /** The horde of zombies crossing the map (none on a ground of one's own until the room says). */
+    private zombies: () => ZombieHorde | undefined = () => undefined;
+    /**
+     * Its crowd, stepped here as in every browser (the same zombies at the same step), and what it left of the grass
+     * of each tile it trampled (by the index of the tile), held there while it goes on.
+     */
+    private crowd: ZombieCrowd | undefined;
+    private readonly trodden = new Map<number, number>();
     /** The wind at 10 m of the air of a hurricane where it is simulated (m/s, east and north); undefined elsewhere. */
     private hurricaneAir: (x: number, y: number) => { east: number; north: number } | undefined = () => undefined;
     /** The same in the standard exposure (10 m over open land under the same air), which lays the trees down. */
@@ -410,6 +421,47 @@ export class MeadowSimulation {
         };
         // Simulated everywhere or nowhere: asked once.
         return windOf(0, 0) ? windOf : undefined;
+    }
+
+    /** The catastrophes of the room say which horde of zombies crosses the map: it tramples the meadow. */
+    public zombiesUnder(zombies: () => ZombieHorde | undefined): void {
+        this.zombies = zombies;
+    }
+
+    /**
+     * The horde of zombies at the time of the room: its crowd stepped to it, the grass of the tiles it went over
+     * trampled (and held where it trampled it, nothing grows back while it goes on). How many zombies went over each
+     * tile at this step, for its trees; undefined while no horde crosses the map. Its crowd is forgotten once it is
+     * over: nothing is kept of it, nothing is computed without it.
+     */
+    private tread(meadow: Meadow): { passes: Map<number, number>; across: number; from: number } | undefined {
+        const at = this.clock();
+        const horde = this.zombies();
+        if (!horde || !zombieHordeGoing(horde, at)) {
+            this.crowd = undefined;
+            this.trodden.clear();
+            return undefined;
+        }
+        if (!this.crowd || this.crowd.horde.id !== horde.id || this.crowd.horde.startedAt !== horde.startedAt) {
+            this.crowd = new ZombieCrowd(horde, landWallsOf(this.room.getWam()));
+            this.trodden.clear();
+        }
+        this.crowd.advanceTo(at);
+        // All of it walked out before its end: nothing more is trampled nor held, what it laid down lies as the map says.
+        if (this.crowd.over()) {
+            this.trodden.clear();
+            return undefined;
+        }
+        const across = this.crowd.tilesAcross;
+        const passes = new Map<number, number>();
+        for (const tile of this.crowd.takeTrample()) {
+            const index = tile.tileY * across + tile.tileX;
+            passes.set(index, tile.passes);
+            const left = meadow.trample(tile.tileX, tile.tileY, tile.passes);
+            if (left !== undefined) this.trodden.set(index, Math.min(left, this.trodden.get(index) ?? left));
+        }
+        for (const [index, grass] of this.trodden) meadow.holdGrass(index % across, Math.floor(index / across), grass);
+        return { passes, across, from: (horde.heading + 180) % 360 };
     }
 
     /** The catastrophes of the room say which masses of cold air its players hold. */
@@ -767,13 +819,16 @@ export class MeadowSimulation {
         // An ice that thickens or thaws is seen moving, as a snow is.
         if (meadow.iceMoved()) this.snowMoved = true;
         if (!replaying) for (const grazer of this.grazers()) meadow.graze(grazer.x, grazer.y, seconds);
+        // A horde of zombies tramples what it walks over; not while the room lives the time it missed.
+        const trodden = replaying ? undefined : this.tread(meadow);
         // The trees after the ground they stand on: what they set on fire is told with this step. The wind at each of
         // them lays it down in its strongest gusts: the wind of the hurricane where it blows (it depends on where a
         // tree is from the eye), that of the room elsewhere.
         const crossing = replaying ? undefined : this.hurricane();
         const at = this.clock();
         const roomGust = weather.windSpeed * HURRICANE_GUST_FACTOR;
-        const stormy = hurricaneAt(crossing, at) !== undefined;
+        // The trees laid down hold while a hurricane or a horde goes on.
+        const stormy = hurricaneAt(crossing, at) !== undefined || trodden !== undefined;
         const trees = this.trees.step({
             seconds: seconds,
             rainMmPerHour: this.rainRate,
@@ -782,7 +837,14 @@ export class MeadowSimulation {
             growSeconds: set.growMinutes * 60,
             groundBurning: meadow.burning() > 0,
             random: replaying ? NO_LUCK : this.random,
-            strongWind: stormy || roomGust >= TREE_FALL_GUST_KMH,
+            strongWind: hurricaneAt(crossing, at) !== undefined || roomGust >= TREE_FALL_GUST_KMH,
+            ...(trodden
+                ? {
+                      trodden: (tileX: number, tileY: number) =>
+                          trodden.passes.get(tileY * trodden.across + tileX) ?? 0,
+                      troddenFrom: trodden.from,
+                  }
+                : {}),
             // The trees it laid down lie until it is over.
             stormy,
             ...(airWind ? { fireWindAt: airWind } : {}),
@@ -801,7 +863,12 @@ export class MeadowSimulation {
         // A fire is seen running: the room is told at every step while one burns, and once more when it is out.
         const burning = meadow.burning() > 0 || this.trees.burning() > 0;
         // So is a snow falling or melting.
-        if (!replaying && (this.steps % STEPS_PER_MESSAGE === 0 || burning || this.wasBurning || this.snowMoved)) {
+        // So is a horde trampling, every other step.
+        const trampling = trodden !== undefined && trodden.passes.size > 0 && this.steps % 2 === 0;
+        if (
+            !replaying &&
+            (this.steps % STEPS_PER_MESSAGE === 0 || burning || this.wasBurning || this.snowMoved || trampling)
+        ) {
             this.tell(meadow);
         }
         this.wasBurning = burning;

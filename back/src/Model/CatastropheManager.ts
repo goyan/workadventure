@@ -25,15 +25,23 @@ import {
     METEOR_FALL_MS,
     meteorShape,
     METEORS_PER_ROOM,
+    TERRAIN_CELL,
     TILE_PX,
     TSUNAMI_TELL_MS,
     tsunamiLastsMs,
     tsunamiMetres,
     tsunamiMinutes,
+    encodeZombieTerrain,
+    zombieAsk,
+    zombieDirection,
+    zombieHordeGoing,
+    zombieTerrainHash,
+    ZOMBIE_TELL_MS,
+    ZOMBIE_TERRAIN_TELL_MS,
 } from "@workadventure/map-editor";
-import type { Ball, ColdMass, Downpour, Drain, Hurricane, Tsunami } from "@workadventure/map-editor";
+import type { Ball, ColdMass, Downpour, Drain, Hurricane, Tsunami, ZombieHorde } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
-import type { HurricaneTrackMessage, TsunamiMessage } from "@workadventure/messages";
+import type { HurricaneTrackMessage, TsunamiMessage, ZombieHordeMessage } from "@workadventure/messages";
 import type { GameRoom } from "./GameRoom";
 
 /** The ice broken around a player who goes through it, in tiles: the hole they fall into. */
@@ -113,6 +121,13 @@ export class CatastropheManager {
     private waveTimer: ReturnType<typeof setInterval> | undefined;
     /** How many times faster the hurricane goes (the speed of the map, hurricaneTimesOf): given by the room. */
     private hurricaneTimes: () => number = () => 1;
+    /** The horde of zombies crossing the map, one a room, what tells the room about it, and when its water was told. */
+    private horde: ZombieHorde | undefined;
+    private hordeTimer: ReturnType<typeof setInterval> | undefined;
+    private hordeTerrainToldAt = Number.NEGATIVE_INFINITY;
+    /** The water of each cell of the map as a horde reads it when it begins (zombieTerrainOf): given by the room. */
+    private zombieTerrain: () => { widthCells: number; heightCells: number; classes: Uint8Array } | undefined = () =>
+        undefined;
 
     constructor(
         private readonly room: Pick<GameRoom, "sendSubMessageToRoom">,
@@ -700,6 +715,121 @@ export class CatastropheManager {
         if (left <= 0) this.endTsunami();
     }
 
+    /** The water of the map as a horde reads it is made with the room (its ground): it is given here. */
+    public zombieTerrainWith(
+        terrain: () => { widthCells: number; heightCells: number; classes: Uint8Array } | undefined,
+    ): void {
+        this.zombieTerrain = terrain;
+    }
+
+    /**
+     * A player sends a horde of zombies across the map, the way, the numbers and the time they chose (kept within what
+     * a horde may be): it begins now at the edge it comes from. The water of the map is read now, once: the crowd goes
+     * round it as it is now, in every browser and on the ground alike. The room is told at once, then once a second
+     * (its water every few seconds), and once more when it ends. One a room: false while one goes on, or once the room
+     * stopped.
+     */
+    public startZombies(asked: ZombieHordeMessage): boolean {
+        if (this.stopped || this.zombies()) return false;
+        let terrain: { widthCells: number; heightCells: number; classes: Uint8Array } | undefined;
+        try {
+            terrain = this.zombieTerrain();
+        } catch (error) {
+            console.error("The water of the map could not be read for a horde", error);
+        }
+        if (!terrain || terrain.widthCells <= 0 || terrain.heightCells <= 0) return false;
+        const ask = zombieAsk(asked);
+        this.horde = {
+            id: this.nextId++,
+            ...ask,
+            seed: Math.floor(Math.random() * 0x1_0000_0000) >>> 0,
+            startedAt: this.now(),
+            ...zombieDirection(ask.heading),
+            // Its middle over the middle of the map.
+            anchorX: (terrain.widthCells * TERRAIN_CELL) / 2,
+            anchorY: (terrain.heightCells * TERRAIN_CELL) / 2,
+            widthCells: terrain.widthCells,
+            heightCells: terrain.heightCells,
+            terrain: encodeZombieTerrain(terrain.classes),
+        };
+        this.hordeTerrainToldAt = Number.NEGATIVE_INFINITY;
+        this.tellZombies();
+        if (!this.hordeTimer) {
+            this.hordeTimer = setInterval(() => {
+                try {
+                    this.tellZombies();
+                } catch (error) {
+                    console.error("The horde of the room could not be told", error);
+                }
+            }, ZOMBIE_TELL_MS);
+            // A horde must never keep the process alive.
+            this.hordeTimer.unref?.();
+        }
+        return true;
+    }
+
+    /** A player stops the horde of the room: it is gone at once, and the room is told. False when there is none. */
+    public stopZombies(): boolean {
+        const horde = this.zombies();
+        if (!horde || this.stopped) return false;
+        this.tellZombies(horde, 0);
+        this.endZombies();
+        return true;
+    }
+
+    /** The horde crossing the map now; undefined once it ended. */
+    public zombies(): ZombieHorde | undefined {
+        const horde = this.horde;
+        return horde && zombieHordeGoing(horde, this.now()) ? horde : undefined;
+    }
+
+    private endZombies(): void {
+        this.horde = undefined;
+        if (this.hordeTimer) clearInterval(this.hordeTimer);
+        this.hordeTimer = undefined;
+    }
+
+    /** Tells the room the horde, and how long it still lasts: 0 once it ended, and then it is forgotten. */
+    private tellZombies(horde = this.horde, lastsMs?: number): void {
+        if (!horde) return this.endZombies();
+        const now = this.now();
+        const left = lastsMs ?? Math.max(0, horde.startedAt + horde.durationMs - now);
+        // Its water at once, then every few seconds, for those who join: the other messages carry its hash only.
+        const withTerrain = left > 0 && now - this.hordeTerrainToldAt >= ZOMBIE_TERRAIN_TELL_MS;
+        if (withTerrain) this.hordeTerrainToldAt = now;
+        this.room.sendSubMessageToRoom({
+            message: {
+                $case: "catastropheMessage",
+                catastropheMessage: {
+                    id: horde.id,
+                    kind: CatastropheKind.CATASTROPHE_ZOMBIES,
+                    x: 0,
+                    y: 0,
+                    impactInMs: left,
+                    radiusTiles: 0,
+                    wholeMap: true,
+                    zombies: {
+                        count: horde.count,
+                        minutes: Math.round(horde.durationMs / 60_000),
+                        heading: horde.heading,
+                        seed: horde.seed,
+                        startedAt: horde.startedAt,
+                        durationMs: horde.durationMs,
+                        dirX: horde.dirX,
+                        dirY: horde.dirY,
+                        anchorX: horde.anchorX,
+                        anchorY: horde.anchorY,
+                        widthCells: horde.widthCells,
+                        heightCells: horde.heightCells,
+                        terrain: withTerrain ? horde.terrain : "",
+                        terrainHash: zombieTerrainHash(horde.terrain),
+                    },
+                },
+            },
+        });
+        if (left <= 0) this.endZombies();
+    }
+
     /** What a player asks for: the downpour, the drain or the ball that follows them, or a catastrophe thrown once. */
     public request(
         userId: number,
@@ -787,5 +917,6 @@ export class CatastropheManager {
         this.holding.clear();
         this.endHurricane();
         this.endTsunami();
+        this.endZombies();
     }
 }

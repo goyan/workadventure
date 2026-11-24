@@ -13,6 +13,7 @@ import type {
     WAMFileFormat,
     WaterGridBounds,
     WaterSnapshotBuffers,
+    ZombieHorde,
 } from "@workadventure/map-editor";
 import type { MeadowMessage, SubToPusherRoomMessage, TreeFireMessage } from "@workadventure/messages";
 import type { GroundTimingsBatch } from "./GroundTimings";
@@ -33,6 +34,8 @@ export interface GroundRoomState {
     hurricane?: Hurricane;
     /** The tsunami coming in; absent while there is none. The sea it holds is computed from it at each step. */
     tsunami?: Tsunami;
+    /** The horde of zombies crossing the map; absent while there is none. The ground steps its crowd from it. */
+    zombies?: ZombieHorde;
     grazers: readonly { x: number; y: number }[];
     air: PrecipitationAir | undefined;
     fire: FireConditions;

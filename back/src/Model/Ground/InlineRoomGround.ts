@@ -129,6 +129,7 @@ export class InlineRoomGround implements RoomGround {
                 colds: () => inputs.colds?.() ?? [],
                 hurricane: () => inputs.hurricane?.(),
                 tsunami: () => inputs.tsunami?.(),
+                zombies: () => inputs.zombies?.(),
             },
             // A room left empty lives the time it missed: with the weather of the past at the place of a map in real
             // weather, each quarter hour read as the conditions of the room read the quarter hour of now.

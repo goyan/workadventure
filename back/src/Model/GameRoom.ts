@@ -19,6 +19,9 @@ import {
     KaraokeLeaderboardRequestSchema,
     mapCellsOf,
     TERRAIN_CELL,
+    bridgeTilesOf,
+    dryOnBridges,
+    zombieTerrainOf,
 } from "@workadventure/map-editor";
 import * as Sentry from "@sentry/node";
 import { Metadata } from "@grpc/grpc-js";
@@ -49,6 +52,7 @@ import type {
     CatastropheKind,
     HurricaneTrackMessage,
     TsunamiMessage,
+    ZombieHordeMessage,
     FishingMessage,
     IceShackAction,
     IceShacksMessage,
@@ -386,6 +390,8 @@ export class GameRoom implements BrothersFinder {
             colds: () => groundParts.catastrophes?.colds() ?? [],
             hurricane: () => groundParts.catastrophes?.hurricane(),
             tsunami: () => groundParts.catastrophes?.tsunami(),
+            // A horde of zombies tramples the meadow and pulls its trees down.
+            zombies: () => groundParts.catastrophes?.zombies(),
             // The antelopes of the life of the land graze the meadow.
             grazers: () => groundParts.aquaticLife?.grazers() ?? [],
             // In the cold of the room the rain of the map falls as snow; the weather is not known until it is read.
@@ -413,6 +419,8 @@ export class GameRoom implements BrothersFinder {
         catastrophes.southernWith(gameRoom.inSouthernHemisphere.bind(gameRoom));
         // The widget of the speed of the map speeds the hurricane up too.
         catastrophes.hurricaneTimesWith(gameRoom.hurricaneTimes.bind(gameRoom));
+        // A horde of zombies goes round the water of the ground as it is when it begins.
+        catastrophes.zombieTerrainWith(gameRoom.zombieTerrain.bind(gameRoom));
         gameRoom.catastrophes = catastrophes;
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => catastrophes.stop());
@@ -1410,6 +1418,30 @@ export class GameRoom implements BrothersFinder {
             hurricane,
             tsunami,
         );
+    }
+
+    /** A player sends a horde of zombies across the map, or stops the one crossing it (`release`). */
+    public launchZombies(user: Pick<User, "id">, zombies: ZombieHordeMessage | undefined, release = false): void {
+        if (release) this.catastrophes?.stopZombies();
+        else if (zombies) this.catastrophes?.startZombies(zombies);
+    }
+
+    /**
+     * The water of each cell of the map as a horde of zombies reads it when it begins: the water of the ground (dry
+     * on the decks of the bridges), none on a map without water. Undefined until the size of the map is read.
+     */
+    public zombieTerrain(): { widthCells: number; heightCells: number; classes: Uint8Array } | undefined {
+        const cells = this.mapCells;
+        if (!cells) return undefined;
+        const grid = this.ground?.getGrid();
+        const depthAt = grid
+            ? dryOnBridges((cellX, cellY) => grid.depthAt(cellX, cellY), bridgeTilesOf(this.getWam()))
+            : () => 0;
+        return {
+            widthCells: cells.width,
+            heightCells: cells.height,
+            classes: zombieTerrainOf(cells.width, cells.height, depthAt),
+        };
     }
 
     /** A player casts their fishing line at a point of the map. */

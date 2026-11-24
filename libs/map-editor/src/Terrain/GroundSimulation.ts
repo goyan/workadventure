@@ -5,6 +5,7 @@ import type { Drain } from "../Catastrophe/Drain";
 import type { Hurricane } from "../Catastrophe/Hurricane";
 import type { Tsunami } from "../Catastrophe/Tsunami";
 import { TERRAIN_CELL, TILE_PX } from "../types";
+import type { ZombieHorde } from "../Catastrophe/ZombieHorde";
 import type { PrecipitationAir } from "../Weather/Precipitation";
 import type { MapAirSetup } from "../Weather/MapAir";
 import { MapAir, mapSurfaceOf } from "../Weather/MapAir";
@@ -37,6 +38,8 @@ export interface GroundSetup<W extends WaterSimulation, M extends MeadowSimulati
         hurricane?(): Hurricane | undefined;
         /** The tsunami coming in by the east edge of the map: the sea it holds there, on the water. */
         tsunami?(): Tsunami | undefined;
+        /** The horde of zombies crossing the map: the meadow steps its crowd, which tramples it. */
+        zombies?(): ZombieHorde | undefined;
     };
     /**
      * The air of a hurricane crossing the map (MapAir), told to the room: what it reads of the room. Absent: no air is
@@ -123,6 +126,7 @@ export class GroundSimulation<
                 (x, y) => air.standardWindAt(x, y),
             );
         }
+        if (catastrophes?.zombies) meadow.zombiesUnder(catastrophes.zombies.bind(catastrophes));
         const catchUp = setup.catchUp;
         if (catchUp) {
             meadow.liveAlong(water.liveAgain.bind(water));

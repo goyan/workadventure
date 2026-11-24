@@ -110,6 +110,12 @@ const SELF_START_TRIES = 20;
 export const DRYING_SECONDS = 30;
 /** An animal that grazes eats a full tile of grass in this many seconds. */
 export const GRAZE_SECONDS = 120;
+/**
+ * A horde of zombies tramples half the grass of a tile in this many passes. Of the order of the trampling trials of
+ * Cole (1995, Journal of Applied Ecology 32), where 25 to 500 passes of walkers take from a part of the cover of
+ * resistant grasses to all of that of fragile herbs [not read: an order of magnitude]; zombies drag their feet.
+ */
+export const ZOMBIE_TRAMPLE_HALF_PASSES = 12;
 /** From this much grass under it, an animal that stands still is seen grazing. */
 export const GRAZING_COVER = 0.15;
 /** Moisture a soil gains a second under a rain of 1 mm an hour. */
@@ -1168,6 +1174,25 @@ export class Meadow {
         const eaten = Math.min(this.grass[index], seconds / GRAZE_SECONDS);
         this.grass[index] -= eaten;
         return eaten;
+    }
+
+    /**
+     * A horde of zombies went `passes` times over a tile (tiles of the map): its grass is trampled, half of it gone
+     * every ZOMBIE_TRAMPLE_HALF_PASSES. What grass is left on it; undefined outside the meadow.
+     */
+    public trample(tileX: number, tileY: number, passes: number): number | undefined {
+        const index = this.indexOf(tileX, tileY);
+        if (index === undefined) return undefined;
+        if (passes > 0 && Number.isFinite(passes)) {
+            this.grass[index] *= Math.pow(0.5, passes / ZOMBIE_TRAMPLE_HALF_PASSES);
+        }
+        return this.grass[index];
+    }
+
+    /** The grass of a tile held at `most` at the most (what a horde left of it, while it goes on): nothing grows back. */
+    public holdGrass(tileX: number, tileY: number, most: number): void {
+        const index = this.indexOf(tileX, tileY);
+        if (index !== undefined && this.grass[index] > most) this.grass[index] = most;
     }
 
     /** A map that turns its meadow off: bare and dry at once. The snow is not of the meadow: it stays. */

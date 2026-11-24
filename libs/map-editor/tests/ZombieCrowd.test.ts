@@ -14,10 +14,13 @@ import {
     ZOMBIE_UNDER,
 } from "../src/Catastrophe/ZombieHorde";
 import type { ZombieHorde } from "../src/Catastrophe/ZombieHorde";
+import { Meadow, ZOMBIE_TRAMPLE_HALF_PASSES } from "../src/Terrain/Meadow";
 import { cellKey } from "../src/Terrain/TerrainGrid";
 import { TERRAIN_CELL, TILE_PX } from "../src/types";
 
 const START = 1_800_000_000_000;
+/** The checksum of the reference crowd (see its test): set once, changed only with the model. */
+const REFERENCE_CHECKSUM = 419686176;
 
 /** A horde over a map of `widthCells` x `heightCells` cells, with that water. */
 function horde(
@@ -231,6 +234,19 @@ describe("a crowd of zombies", () => {
         expect(crowd.takeTrample()).toEqual([]);
     });
 
+    it("is the crowd it was: the same number after the same steps, with walls and water", () => {
+        // 1500 steps of 2000 zombies over this map gave 1078317079 under Node, Chrome, Firefox and JavaScriptCore
+        // (.superpowers/harness of the branch). A change of the model changes this number: it is then a new model,
+        // which a browser running the old one does not draw the same.
+        const width = 160;
+        const height = 100;
+        const water = zombieTerrainOf(width, height, (x, y) => (Math.abs(x - 80) < 6 && (y < 40 || y > 50) ? 50 : 0));
+        const told = horde({ count: 400, heading: 250, ...zombieDirection(250) }, water, width, height);
+        const crowd = new ZombieCrowd(told, box(30, 20, 50, 40));
+        for (let step = 0; step < 600; step++) crowd.step();
+        expect(crowd.checksum()).toBe(REFERENCE_CHECKSUM);
+    });
+
     it("steps with nothing but what every engine computes the same", () => {
         const source = readFileSync(new URL("../src/Catastrophe/ZombieCrowd.ts", import.meta.url), "utf8");
         // The comments may name them; the code may not.
@@ -242,5 +258,21 @@ describe("a crowd of zombies", () => {
         ]) {
             expect(code).not.toMatch(forbidden);
         }
+    });
+});
+
+describe("the grass a horde of zombies goes over", () => {
+    it("loses half of it every ZOMBIE_TRAMPLE_HALF_PASSES passes, and does not grow back above what was left", () => {
+        const meadow = new Meadow({ width: 4, height: 4 }, undefined, undefined);
+        meadow.set(1, 1, 0.4, 0.8);
+        expect(meadow.trample(1, 1, ZOMBIE_TRAMPLE_HALF_PASSES)).toBeCloseTo(0.4, 5);
+        expect(meadow.trample(1, 1, 2 * ZOMBIE_TRAMPLE_HALF_PASSES)).toBeCloseTo(0.1, 5);
+        // Outside the meadow: nothing.
+        expect(meadow.trample(9, 9, 10)).toBeUndefined();
+        meadow.set(1, 1, 0.4, 0.6);
+        meadow.holdGrass(1, 1, 0.1);
+        expect(meadow.grassAt(1, 1)).toBeCloseTo(0.1, 5);
+        meadow.holdGrass(1, 1, 0.5);
+        expect(meadow.grassAt(1, 1)).toBeCloseTo(0.1, 5);
     });
 });
