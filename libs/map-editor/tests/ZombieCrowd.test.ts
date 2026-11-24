@@ -333,6 +333,32 @@ describe("a crowd of zombies", () => {
         expect(gone / crowd.count).toBeGreaterThan(0.9);
     });
 
+    it("senses an avatar anywhere on the map, some 200 m away, and runs to it", () => {
+        // A map 400 cells long (some 220 m), the avatar at its far end: far beyond what a voice carries.
+        const width = 400;
+        const height = 80;
+        const far = tileAt(390 * TERRAIN_CELL, 40 * TERRAIN_CELL, width);
+        const told = horde(
+            {
+                count: 200,
+                // Long enough for the way across not to press yet.
+                durationMs: 6 * 60_000,
+                avatars: encodeZombieLog([{ applyStep: 0, changes: [{ slot: 0, tile: far }] }]),
+            },
+            undefined,
+            width,
+            height,
+        );
+        const crowd = new ZombieCrowd(told);
+        for (let step = 0; step < 100; step++) crowd.step();
+        let running = 0;
+        for (let zombie = 0; zombie < crowd.count; zombie++) {
+            if (crowd.state[zombie] === ZOMBIE_WALKING && crowd.target[zombie] === 0) running++;
+        }
+        expect(crowd.walking).toBeGreaterThan(5);
+        expect(running).toBe(crowd.walking);
+    });
+
     it("goes into a closed room by its door to the avatar inside, comes within 5 tiles, comes out and crosses", () => {
         const width = 120;
         const height = 80;
@@ -376,6 +402,48 @@ describe("a crowd of zombies", () => {
         expect(came).toBeGreaterThan(0);
         // The door is a bottleneck: most get out all the same, in time.
         expect(gone / crowd.count).toBeGreaterThan(0.85);
+    });
+
+    it("runs to every avatar of a meeting, not only to the one nearest the door", () => {
+        // Twelve avatars in a closed room, its door on its east side: the one nearest the door is the nearest to the
+        // whole map outside. Once it has its share, or a zombie is done with it, the others are run to.
+        const width = 160;
+        const height = 80;
+        const terrain = zombieTerrainOf(width, height, () => 0, undefined, box(40, 20, 80, 60, 4));
+        const changes = [];
+        for (let slot = 0; slot < 12; slot++) {
+            const x = (44 + (slot % 4) * 9) * TERRAIN_CELL;
+            const y = (24 + Math.floor(slot / 4) * 12) * TERRAIN_CELL;
+            changes.push({ slot, tile: tileAt(x, y, width) });
+        }
+        const told = horde(
+            {
+                count: 1500,
+                heading: 270,
+                ...zombieDirection(270),
+                durationMs: 6 * 60_000,
+                avatars: encodeZombieLog([{ applyStep: 0, changes }]),
+            },
+            terrain,
+            width,
+            height,
+        );
+        const crowd = new ZombieCrowd(told);
+        const runTo = new Set<number>();
+        let mostAtOnce = 0;
+        for (let step = 0; step < 1800; step++) {
+            crowd.step();
+            let atOnce = 0;
+            for (let zombie = 0; zombie < crowd.count; zombie++) {
+                if (crowd.state[zombie] !== ZOMBIE_WALKING || crowd.target[zombie] < 0) continue;
+                runTo.add(crowd.target[zombie]);
+                atOnce++;
+            }
+            mostAtOnce = Math.max(mostAtOnce, atOnce);
+        }
+        expect(runTo.size).toBeGreaterThanOrEqual(10);
+        // More than the share of a single avatar (40) at once.
+        expect(mostAtOnce).toBeGreaterThan(120);
     });
 
     it("tramples a band over every tile it ran over", () => {

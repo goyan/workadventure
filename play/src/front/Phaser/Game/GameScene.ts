@@ -333,7 +333,7 @@ import {
 import { jungleEnabledStore } from "../../Stores/JungleStore";
 import { isEffectShown, pixelReliefStore } from "../../Stores/EffectsStore";
 import { fireConditionsStore } from "../../Stores/FireConditionsStore";
-import { basicActiveStore, isBasicActive } from "../../Stores/BasicModeStore";
+import { basicActiveStore, basicModeStore, isBasicActive } from "../../Stores/BasicModeStore";
 import {
     isWeatherPipetteOn,
     waterFlowMeasuredStore,
@@ -524,6 +524,7 @@ import { HurricaneDebris } from "./Catastrophe/HurricaneDebris";
 import { HurricaneView, seaHurricaneOf } from "./Catastrophe/HurricaneView";
 import { ZombieReceiver } from "./Catastrophe/ZombieReceiver";
 import { ZombieView } from "./Catastrophe/ZombieView";
+import { zombieShoveOf, zombieShownOf } from "./Catastrophe/ZombieShown";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
@@ -3932,16 +3933,14 @@ export class GameScene extends DirtyScene {
      * ask for (Player): the walls and the collisions of the map hold it as always; never into deep water.
      */
     public zombiePushAt(x: number, y: number): { x: number; y: number } | undefined {
-        const view = this.zombieView;
-        if (!view?.active()) return undefined;
-        const shove = view.shoveAt(x, y);
-        if (shove.x === 0 && shove.y === 0) return undefined;
-        const length = Math.sqrt(shove.x * shove.x + shove.y * shove.y);
-        // Half a tile ahead: no shove into water an avatar would swim in.
-        const aheadX = x + (shove.x / length) * 16;
-        const aheadY = y + (shove.y / length) * 16;
-        if (this.terrainWater.depthAt(aheadX, aheadY, this.time.now) >= LIFE_DEPTHS_PX.deep) return undefined;
-        return shove;
+        return zombieShoveOf(
+            this.zombieView,
+            get(basicModeStore),
+            x,
+            y,
+            (atX, atY) => this.terrainWater.depthAt(atX, atY, this.time.now),
+            LIFE_DEPTHS_PX.deep,
+        );
     }
 
     /**
@@ -4026,25 +4025,15 @@ export class GameScene extends DirtyScene {
         view.update(
             epoch,
             time,
-            !isBasicActive(),
+            // Not drawn in Basique, the map editor included: the horde leaves the avatar out then (PerceptionProtocol).
+            !get(basicModeStore),
             window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
         );
         if (time - this.zombieToldAt < 1000) return;
         this.zombieToldAt = time;
         const walking = view.walking();
         const horde = this.zombieReceiver?.current();
-        zombieShownStore.set(
-            horde && walking !== undefined && epoch !== undefined
-                ? {
-                      count: horde.count,
-                      durationMs: horde.durationMs,
-                      startedAt: horde.startedAt,
-                      heading: horde.heading,
-                      walking,
-                      secondsLeft: Math.max(0, Math.round((horde.startedAt + horde.durationMs - epoch) / 1000)),
-                  }
-                : undefined,
-        );
+        zombieShownStore.set(zombieShownOf(horde, walking, epoch));
     }
 
     /** The wind of the hurricane of the room at a map point now; undefined while none crosses the map. */

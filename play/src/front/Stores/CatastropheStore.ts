@@ -129,19 +129,19 @@ export function disarmCatastrophe(): void {
 export const zombieCountStore = writable<number>(ZOMBIE_DEFAULT_COUNT);
 export const zombieMinutesStore = writable<number>(ZOMBIE_DEFAULT_MINUTES);
 export const zombieHeadingStore = writable<number>(ZOMBIE_DEFAULT_HEADING);
+/** What the panel shows of the horde of zombies crossing the map (zombieShownOf). */
+export interface ZombieShown {
+    count: number;
+    durationMs: number;
+    startedAt: number;
+    heading: number;
+    walking: number;
+    secondsLeft: number;
+}
+
 /**
  * The horde crossing the map as this browser sees it, refreshed once a second by the game scene (the panel only reads
  * it): how many zombies it began with, how many still walk, and how long it still has to go. Undefined while there is
  * no horde.
  */
-export const zombieShownStore = writable<
-    | {
-          count: number;
-          durationMs: number;
-          startedAt: number;
-          heading: number;
-          walking: number;
-          secondsLeft: number;
-      }
-    | undefined
->(undefined);
+export const zombieShownStore = writable<ZombieShown | undefined>(undefined);

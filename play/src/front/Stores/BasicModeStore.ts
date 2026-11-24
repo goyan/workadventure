@@ -8,7 +8,8 @@ import { createPersistedSwitchStore } from "./PersistedSwitchStore";
  * (BasicWater, BasicPools) and the water no longer
  * acts on the avatar here (no swimming, no current, no slow ground). It writes no other setting: off, each one finds
  * their detailed settings as they were. The map editor ignores it, so that the relief and the water can be edited.
- * Nothing goes through the server: the others still see where the avatar really is.
+ * Only that it is on goes through the server (the perception of the player, see PerceptionProtocol), so that a horde of
+ * zombies leaves the avatar out: the others still see where the avatar really is.
  */
 export const basicModeStore = createPersistedSwitchStore("basicMode", false);
 
