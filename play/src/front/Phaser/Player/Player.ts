@@ -1149,7 +1149,7 @@ export class Player extends Character {
         }
         // A horde of zombies running over the avatar shoves it, in a call too: the keys are added on top.
         if (!followMode && !this.isInAirplane() && !this.isSeated()) {
-            const shove = this.scene.zombiePushAt?.(this.x, this.y + BODY_CENTER_OFFSET_Y);
+            const shove = this.scene?.zombiePushAt?.(this.x, this.y + BODY_CENTER_OFFSET_Y);
             if (shove) {
                 x += shove.x;
                 y += shove.y;
