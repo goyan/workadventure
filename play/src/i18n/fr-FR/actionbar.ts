@@ -542,6 +542,18 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
             ebb: "la mer redescend",
             backwash: "reflux vers la mer",
         },
+        zombies: "Zombies",
+        zombiesHelp:
+            "Une horde de zombies traverse la carte dans la direction choisie : elle piétine l'herbe et couche les arbres sur son passage, sans toucher aux avatars ni au mobilier.",
+        zombiesCountLabel: "Effectif de la horde",
+        zombiesCount: "{count} zombies",
+        zombiesMinutesLabel: "Temps que met la horde pour traverser la carte, en minutes",
+        zombiesMinutes: "{minutes} min pour traverser la carte",
+        zombiesHeadingLabel: "Vers où va la horde",
+        zombiesHeading: "Elle va vers {point} ({degrees}°)",
+        zombiesStart: "Lancer la horde",
+        zombiesStop: "Arrêter la horde",
+        zombiesGoing: "Horde en cours : {walking} zombies en marche, encore {minutes} min {seconds} s",
         ball: "Boule",
         ballSizeLabel: "Taille de la boule : son diamètre, en cases",
         ballArmedHelp:

@@ -26,6 +26,10 @@
         tsunamiPhase,
         tsunamiRiseAt,
         TSUNAMI_FULL_CELERITY,
+        ZOMBIE_MAX_COUNT,
+        ZOMBIE_MAX_MINUTES,
+        ZOMBIE_MIN_COUNT,
+        ZOMBIE_MIN_MINUTES,
     } from "@workadventure/map-editor";
     import { onDestroy, untrack } from "svelte";
     import { LL, locale } from "../../../i18n/i18n-svelte";
@@ -52,6 +56,10 @@
         tsunamiMetresStore,
         tsunamiMinutesStore,
         tsunamiShownStore,
+        zombieCountStore,
+        zombieHeadingStore,
+        zombieMinutesStore,
+        zombieShownStore,
     } from "../../Stores/CatastropheStore";
     import { terrainWaterStatsStore } from "../../Stores/TerrainEditorStore";
     import { compassPointOf } from "../../Phaser/Game/Weather/WindDirection";
@@ -61,6 +69,7 @@
     import { stopColdSnap } from "./coldSnapActions";
     import { startHurricane, stopHurricane } from "./hurricaneActions";
     import { startTsunami, stopTsunami } from "./tsunamiActions";
+    import { startZombies, stopZombies } from "./zombieActions";
     import WeatherTab from "./WeatherTab.svelte";
 
     const shown = $derived($catastrophePanelStore);
@@ -85,6 +94,7 @@
             sized = $armedCatastropheStore;
             hurricaneOpen = false;
             tsunamiOpen = false;
+            zombiesOpen = false;
         }
     });
     /**
@@ -96,6 +106,7 @@
         hurricaneOpen = !hurricaneOpen;
         if (hurricaneOpen) {
             tsunamiOpen = false;
+            zombiesOpen = false;
             disarmCatastrophe();
         }
     }
@@ -105,9 +116,32 @@
         tsunamiOpen = !tsunamiOpen;
         if (tsunamiOpen) {
             hurricaneOpen = false;
+            zombiesOpen = false;
             disarmCatastrophe();
         }
     }
+    /** The settings of the horde of zombies, in the same place: it comes in by the edge it comes from, not at a point. */
+    let zombiesOpen = $state(false);
+    function toggleZombies(): void {
+        zombiesOpen = !zombiesOpen;
+        if (zombiesOpen) {
+            hurricaneOpen = false;
+            tsunamiOpen = false;
+            disarmCatastrophe();
+        }
+    }
+
+    /** What the panel says of the horde crossing the map, as this browser last counted it (once a second). */
+    const zombiesGoing = $derived.by((): string | undefined => {
+        const going = $zombieShownStore;
+        if (!going) return undefined;
+        return $LL.actionbar.catastrophe.zombiesGoing({
+            walking: going.walking,
+            minutes: Math.floor(going.secondsLeft / 60),
+            seconds: going.secondsLeft % 60,
+        });
+    });
+    const zombiesPoint = $derived(compassPointOf(Number($zombieHeadingStore)) ?? "n");
 
     /**
      * How much of the real speed of the waves of the tsunami the server bears, in %, when it bears less (it affords
@@ -255,15 +289,17 @@
             ? $LL.actionbar.catastrophe.hurricaneHelp()
             : tsunamiOpen
               ? $LL.actionbar.catastrophe.tsunamiHelp()
-              : ballArmed
-                ? $LL.actionbar.catastrophe.ballArmedHelp()
-                : coldArmed
-                  ? $LL.actionbar.catastrophe.coldArmedHelp()
-                  : downpourArmed || drainArmed
-                    ? $LL.actionbar.catastrophe.downpourArmedHelp()
-                    : meteorArmed || fireballArmed || fireArmed
-                      ? $LL.actionbar.catastrophe.armedHelp()
-                      : $LL.actionbar.catastrophe.idleHelp(),
+              : zombiesOpen
+                ? $LL.actionbar.catastrophe.zombiesHelp()
+                : ballArmed
+                  ? $LL.actionbar.catastrophe.ballArmedHelp()
+                  : coldArmed
+                    ? $LL.actionbar.catastrophe.coldArmedHelp()
+                    : downpourArmed || drainArmed
+                      ? $LL.actionbar.catastrophe.downpourArmedHelp()
+                      : meteorArmed || fireballArmed || fireArmed
+                        ? $LL.actionbar.catastrophe.armedHelp()
+                        : $LL.actionbar.catastrophe.idleHelp(),
     );
 
     /** What the panel says of the cold air lying on the map: its temperature, and how long it still has. */
@@ -445,6 +481,18 @@
                         <PixelIcon name="tsunami" size={16} />
                         <span>{$LL.actionbar.catastrophe.tsunami()}</span>
                     </button>
+                    <button
+                        type="button"
+                        class="flex items-center gap-1 rounded-full px-2 py-1 {zombiesOpen
+                            ? 'bg-white/30 ring-1 ring-white'
+                            : 'bg-white/10 hover:bg-white/20'}"
+                        aria-pressed={zombiesOpen}
+                        data-testid="catastrophe-zombies"
+                        onclick={toggleZombies}
+                    >
+                        <PixelIcon name="zombie" size={16} />
+                        <span>{$LL.actionbar.catastrophe.zombies()}</span>
+                    </button>
                     {#if hurricaneOpen}
                         <span class="flex basis-full flex-wrap items-center gap-x-3 gap-y-1.5">
                             <label class="flex items-center gap-2">
@@ -579,6 +627,69 @@
                                     onclick={startTsunami}
                                 >
                                     {$LL.actionbar.catastrophe.tsunamiStart()}
+                                </button>
+                            {/if}
+                        </span>
+                    {:else if zombiesOpen}
+                        <span class="flex basis-full flex-wrap items-center gap-x-3 gap-y-1.5">
+                            <label class="flex items-center gap-2">
+                                <input
+                                    type="range"
+                                    class="w-24"
+                                    min={ZOMBIE_MIN_COUNT}
+                                    max={ZOMBIE_MAX_COUNT}
+                                    step="100"
+                                    aria-label={$LL.actionbar.catastrophe.zombiesCountLabel()}
+                                    data-testid="catastrophe-zombies-count"
+                                    bind:value={$zombieCountStore}
+                                />
+                                <span class="whitespace-nowrap tabular-nums"
+                                    >{$LL.actionbar.catastrophe.zombiesCount({ count: $zombieCountStore })}</span
+                                >
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input
+                                    type="range"
+                                    class="w-24"
+                                    min={ZOMBIE_MIN_MINUTES}
+                                    max={ZOMBIE_MAX_MINUTES}
+                                    step="1"
+                                    aria-label={$LL.actionbar.catastrophe.zombiesMinutesLabel()}
+                                    data-testid="catastrophe-zombies-minutes"
+                                    bind:value={$zombieMinutesStore}
+                                />
+                                <span class="whitespace-nowrap tabular-nums"
+                                    >{$LL.actionbar.catastrophe.zombiesMinutes({
+                                        minutes: $zombieMinutesStore,
+                                    })}</span
+                                >
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input
+                                    type="range"
+                                    class="w-24"
+                                    min="0"
+                                    max="355"
+                                    step="5"
+                                    aria-label={$LL.actionbar.catastrophe.zombiesHeadingLabel()}
+                                    data-testid="catastrophe-zombies-heading"
+                                    bind:value={$zombieHeadingStore}
+                                />
+                                <span class="whitespace-nowrap tabular-nums"
+                                    >{$LL.actionbar.catastrophe.zombiesHeading({
+                                        point: $LL.actionbar.weatherBanner.windPoint[zombiesPoint](),
+                                        degrees: $zombieHeadingStore,
+                                    })}</span
+                                >
+                            </label>
+                            {#if zombiesGoing === undefined}
+                                <button
+                                    type="button"
+                                    class="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20"
+                                    data-testid="catastrophe-zombies-start"
+                                    onclick={startZombies}
+                                >
+                                    {$LL.actionbar.catastrophe.zombiesStart()}
                                 </button>
                             {/if}
                         </span>
@@ -739,6 +850,20 @@
                                 onclick={stopTsunami}
                             >
                                 {$LL.actionbar.catastrophe.tsunamiStop()}
+                            </button>
+                        </span>
+                    {/if}
+                    {#if zombiesGoing !== undefined}
+                        <!-- A horde crosses the map: how many still walk, for how long, how to stop it. -->
+                        <span class="flex basis-full items-center gap-2">
+                            <span class="tabular-nums" data-testid="catastrophe-zombies-going">{zombiesGoing}</span>
+                            <button
+                                type="button"
+                                class="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20"
+                                data-testid="catastrophe-zombies-stop"
+                                onclick={stopZombies}
+                            >
+                                {$LL.actionbar.catastrophe.zombiesStop()}
                             </button>
                         </span>
                     {/if}

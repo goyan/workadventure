@@ -11,6 +11,9 @@ import {
     METEOR_DEFAULT_TILES,
     TSUNAMI_DEFAULT_METRES,
     TSUNAMI_DEFAULT_MINUTES,
+    ZOMBIE_DEFAULT_COUNT,
+    ZOMBIE_DEFAULT_HEADING,
+    ZOMBIE_DEFAULT_MINUTES,
 } from "@workadventure/map-editor";
 import type { Hurricane, HurricaneHere, Tsunami, WaterBall } from "@workadventure/map-editor";
 import { derived, get, writable } from "svelte/store";
@@ -121,3 +124,24 @@ export function toggleArmedCatastrophe(choice: CatastropheChoice): void {
 export function disarmCatastrophe(): void {
     chosenCatastropheStore.set(undefined);
 }
+
+/** How the next horde of zombies crosses the map: how many, how long it takes (minutes) and where it goes (degrees). */
+export const zombieCountStore = writable<number>(ZOMBIE_DEFAULT_COUNT);
+export const zombieMinutesStore = writable<number>(ZOMBIE_DEFAULT_MINUTES);
+export const zombieHeadingStore = writable<number>(ZOMBIE_DEFAULT_HEADING);
+/**
+ * The horde crossing the map as this browser sees it, refreshed once a second by the game scene (the panel only reads
+ * it): how many zombies it began with, how many still walk, and how long it still has to go. Undefined while there is
+ * no horde.
+ */
+export const zombieShownStore = writable<
+    | {
+          count: number;
+          durationMs: number;
+          startedAt: number;
+          heading: number;
+          walking: number;
+          secondsLeft: number;
+      }
+    | undefined
+>(undefined);

@@ -38,6 +38,7 @@ import {
     heightAt,
     HURRICANE_GUST_FACTOR,
     hurricaneHere,
+    landWallsOf,
     type LifeFire,
     lifeFireOf,
     listeningZoneJamKey,
@@ -193,6 +194,7 @@ import {
     hurricaneHighestRiseStore,
     hurricaneShownStore,
     tsunamiShownStore,
+    zombieShownStore,
     pointerFloodRiseStore,
 } from "@wa/front/Stores/CatastropheStore";
 import { refreshPromptStore } from "@wa/front/Stores/RefreshPromptStore";
@@ -516,6 +518,8 @@ import { HurricaneReceiver } from "./Catastrophe/HurricaneReceiver";
 import { TsunamiReceiver } from "./Catastrophe/TsunamiReceiver";
 import { HurricaneDebris } from "./Catastrophe/HurricaneDebris";
 import { HurricaneView, seaHurricaneOf } from "./Catastrophe/HurricaneView";
+import { ZombieReceiver } from "./Catastrophe/ZombieReceiver";
+import { ZombieView } from "./Catastrophe/ZombieView";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
@@ -777,6 +781,11 @@ export class GameScene extends DirtyScene {
     private hurricaneDebris: HurricaneDebris | undefined;
     /** The flood of the hurricane as this browser sees it: the rise of the water, the marks it leaves. */
     private hurricaneFlood: HurricaneFloodView | undefined;
+    /** The horde of zombies of the room: what the server tells of it, and its crowd drawn. */
+    private zombieReceiver: ZombieReceiver | undefined;
+    private zombieView: ZombieView | undefined;
+    /** When the panel was last told the horde (ms, the clock of the game). */
+    private zombieToldAt = 0;
     private shownFloodRise: number | undefined;
     private fireTorchView: FireTorchView | undefined;
     private catastropheSubscription: Subscription | undefined;
@@ -2026,6 +2035,11 @@ export class GameScene extends DirtyScene {
         setRoomHurricane(undefined);
         roomHurricaneAir.clear();
         hurricaneShownStore.set(undefined);
+        this.zombieReceiver?.destroy();
+        this.zombieReceiver = undefined;
+        this.zombieView?.destroy();
+        this.zombieView = undefined;
+        zombieShownStore.set(undefined);
         this.fireTorchView?.destroy();
         this.fireTorchView = undefined;
         rodEquippedStore.set(false);
@@ -2625,6 +2639,7 @@ export class GameScene extends DirtyScene {
             );
             // The trees the wind is laying down fall on, before their shadows are drawn.
             this.fallenTreeView?.update(time);
+            this.updateZombies(time, serverDate?.getTime());
             this.hurricaneView?.update(
                 serverDate,
                 this.nightManager?.sunPosition()?.elevation,
@@ -3901,6 +3916,37 @@ export class GameScene extends DirtyScene {
      */
     public mapDaylightAt(at: number): number {
         return mapDaylightAt(this.getGameMap().getWamFile()?.getWam().settings, new Date(at));
+    }
+
+    /**
+     * At each image, the horde of zombies of the room: stepped to the time of the server and drawn, and told to the
+     * panel once a second. Nothing while there is none.
+     */
+    private updateZombies(time: number, epoch: number | undefined): void {
+        const view = this.zombieView;
+        if (!view?.active()) return;
+        view.update(
+            epoch,
+            time,
+            !isBasicActive(),
+            window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+        );
+        if (time - this.zombieToldAt < 1000) return;
+        this.zombieToldAt = time;
+        const walking = view.walking();
+        const horde = this.zombieReceiver?.current();
+        zombieShownStore.set(
+            horde && walking !== undefined && epoch !== undefined
+                ? {
+                      count: horde.count,
+                      durationMs: horde.durationMs,
+                      startedAt: horde.startedAt,
+                      heading: horde.heading,
+                      walking,
+                      secondsLeft: Math.max(0, Math.round((horde.startedAt + horde.durationMs - epoch) / 1000)),
+                  }
+                : undefined,
+        );
     }
 
     /** The wind of the hurricane of the room at a map point now; undefined while none crosses the map. */
@@ -5409,6 +5455,21 @@ export class GameScene extends DirtyScene {
             ),
         );
         this.tsunamiReceiver = tsunamiReceiver;
+        // The horde of zombies of the room: its crowd stepped here as on the server, from what it tells.
+        this.zombieReceiver?.destroy();
+        this.zombieView?.destroy();
+        const zombieView = new ZombieView(
+            this,
+            () => landWallsOf(this.getGameMap().getWamFile()?.getWam()),
+            (x, y) => this.groundDropAt(x, y),
+        );
+        this.zombieView = zombieView;
+        const zombieReceiver = new ZombieReceiver((horde) => {
+            zombieView.setHorde(horde, this.time.now);
+            if (!horde) zombieShownStore.set(undefined);
+            this.markDirty();
+        });
+        this.zombieReceiver = zombieReceiver;
         this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {
             // The water of this player, when it is their own, lives the catastrophes of the room too.
             this.localTerrain.fromCatastrophe(message);
@@ -5418,6 +5479,7 @@ export class GameScene extends DirtyScene {
             else if (message.kind === CatastropheKind.CATASTROPHE_COLD) coldView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_HURRICANE) hurricaneReceiver.report(message);
             else if (message.kind === CatastropheKind.CATASTROPHE_TSUNAMI) tsunamiReceiver.report(message);
+            else if (message.kind === CatastropheKind.CATASTROPHE_ZOMBIES) zombieReceiver.report(message);
             else if (message.kind === CatastropheKind.CATASTROPHE_FIRE) fireTorchView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_ICE_BREAK) {
                 // The ice another player broke (or ours, told back): the same hole for everyone.

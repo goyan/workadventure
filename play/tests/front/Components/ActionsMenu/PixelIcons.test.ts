@@ -46,6 +46,7 @@ describe("PixelIcons", () => {
                 "tsunami",
                 "twoPiece",
                 "weather",
+                "zombie",
             ].sort(),
         );
     });

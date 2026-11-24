@@ -1,6 +1,6 @@
 import { ballRadiusPx, coldCelsius, coldTiles } from "@workadventure/map-editor";
-import { hurricaneTrack, tsunamiLastsMs, tsunamiMetres } from "@workadventure/map-editor";
-import type { Ball, ColdMass, Downpour, Drain, Hurricane, Tsunami } from "@workadventure/map-editor";
+import { hurricaneTrack, tsunamiLastsMs, tsunamiMetres, zombieAsk } from "@workadventure/map-editor";
+import type { Ball, ColdMass, Downpour, Drain, Hurricane, Tsunami, ZombieHorde } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { CatastropheMessage } from "@workadventure/messages";
 import type { LocalTerrainCommand } from "./LocalTerrainSimulation";
@@ -33,6 +33,12 @@ export class LocalCatastropheRelay {
      * when it began as the server told it (its time), to know it again.
      */
     private tsunami: { tsunami: Tsunami; until: number; toldStart: number } | undefined;
+    /**
+     * The horde of zombies crossing the map, until it ends or is stopped, set on the clock of the local ground as the
+     * tsunami is, when it began as the server told it, and its water as last told (by hash).
+     */
+    private zombies: { horde: ZombieHorde; until: number; toldStart: number } | undefined;
+    private zombieTerrain: { hash: number; text: string } | undefined;
 
     /**
      * `epoch`: the clock the local ground reads the time by (ms since the epoch, that of its worker): a tsunami is
@@ -140,6 +146,42 @@ export class LocalCatastropheRelay {
                 } else known.until = until;
                 return [];
             }
+            case CatastropheKind.CATASTROPHE_ZOMBIES: {
+                const told = message.zombies;
+                if (message.impactInMs <= 0 || !told || !(told.durationMs > 0)) {
+                    if (this.zombies) this.changed = true;
+                    this.zombies = undefined;
+                    this.zombieTerrain = undefined;
+                    return [];
+                }
+                if (told.terrain) this.zombieTerrain = { hash: told.terrainHash, text: told.terrain };
+                // Its water is told every few seconds: the local ground waits for it.
+                if (!this.zombieTerrain || this.zombieTerrain.hash !== told.terrainHash) return [];
+                const known = this.zombies;
+                // Told again each second: the local ground is told only when it is another one.
+                if (!known || known.horde.id !== id || known.toldStart !== told.startedAt) {
+                    this.changed = true;
+                    const ask = zombieAsk(told);
+                    const horde: ZombieHorde = {
+                        id,
+                        seed: told.seed,
+                        count: ask.count,
+                        heading: ask.heading,
+                        durationMs: told.durationMs,
+                        // When it began on the clock of the local ground: what is left of it, as the server says.
+                        startedAt: this.epoch() + message.impactInMs - told.durationMs,
+                        dirX: told.dirX,
+                        dirY: told.dirY,
+                        anchorX: told.anchorX,
+                        anchorY: told.anchorY,
+                        widthCells: told.widthCells,
+                        heightCells: told.heightCells,
+                        terrain: this.zombieTerrain.text,
+                    };
+                    this.zombies = { horde, until, toldStart: told.startedAt };
+                } else known.until = until;
+                return [];
+            }
             default:
                 return [];
         }
@@ -167,6 +209,10 @@ export class LocalCatastropheRelay {
             this.tsunami = undefined;
             this.changed = true;
         }
+        if (this.zombies && this.zombies.until <= now) {
+            this.zombies = undefined;
+            this.changed = true;
+        }
         if (this.changed) {
             this.changed = false;
             commands.push(this.state());
@@ -185,6 +231,7 @@ export class LocalCatastropheRelay {
             ...(this.colds.size > 0 ? { colds: [...this.colds.values()].map(({ cold }) => cold) } : {}),
             ...(this.hurricane ? { hurricane: this.hurricane.hurricane } : {}),
             ...(this.tsunami ? { tsunami: this.tsunami.tsunami } : {}),
+            ...(this.zombies ? { zombies: this.zombies.horde } : {}),
         };
     }
 }

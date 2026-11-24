@@ -12,6 +12,7 @@ import {
 import type {
     HurricaneTrackMessage,
     TsunamiMessage,
+    ZombieHordeMessage,
     AddSpaceFilterMessage,
     AnswerMessage,
     ApplicationMessage,
@@ -59,7 +60,6 @@ import type {
     FireConditionsMessage,
     SetFireConditionsMessage,
     AquaticLifeMessage,
-    CatastropheKind,
     CatastropheMessage,
     FishingMessage,
     IceShackAction,
@@ -109,6 +109,7 @@ import type {
     SendUserMessage,
 } from "@workadventure/messages";
 import {
+    CatastropheKind,
     noUndefined,
     AskPositionMessage_AskType as AskPositionMessageAskType,
     apiVersionHash,
@@ -1305,6 +1306,24 @@ export class RoomConnection implements RoomConnection {
                     ...(temperature === undefined ? {} : { temperature }),
                     ...(hurricane === undefined ? {} : { hurricane }),
                     ...(tsunami === undefined ? {} : { tsunami }),
+                },
+            },
+        });
+    }
+
+    /** Sends a horde of zombies across the map, or (release) stops the one of the room. The server decides the rest. */
+    emitLaunchZombies(zombies: ZombieHordeMessage | undefined, release = false): void {
+        this.send({
+            message: {
+                $case: "launchCatastropheMessage",
+                launchCatastropheMessage: {
+                    kind: CatastropheKind.CATASTROPHE_ZOMBIES,
+                    x: -1,
+                    y: -1,
+                    radiusTiles: 0,
+                    wholeMap: true,
+                    release,
+                    ...(zombies === undefined ? {} : { zombies }),
                 },
             },
         });
