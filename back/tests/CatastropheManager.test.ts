@@ -14,6 +14,10 @@ import {
     HURRICANE_TELL_MS,
     METEOR_FALL_MS,
     METEORS_PER_ROOM,
+    TSUNAMI_BACKWASH_MS,
+    TSUNAMI_MAX_METRES,
+    TSUNAMI_MAX_MINUTES,
+    TSUNAMI_TELL_MS,
 } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { CatastropheMessage, SubToPusherRoomMessage } from "@workadventure/messages";
@@ -809,5 +813,52 @@ describe("CatastropheManager, a hurricane sped up by the speed of the map", () =
         // A third of the passage was gone when it sped up: a third of the new one is.
         expect((101_000 - (told?.startedAt ?? NaN)) / 60_000).toBeCloseTo(101_000 / 300_000, 2);
         expect(sent[sent.length - 1].impactInMs).toBeCloseTo(60_000 * (1 - 101_000 / 300_000), -2);
+    });
+});
+
+describe("CatastropheManager, tsunamis", () => {
+    const TSUNAMI = CatastropheKind.CATASTROPHE_TSUNAMI;
+    const asked = (metres: number, minutes: number) => ({ metres, minutes, startedAt: 0, durationMs: 0 });
+
+    it("sends a tsunami to the coast, told to the room once a second until its backwash is over", () => {
+        const { manager, sent } = harness();
+        expect(manager.request(1, TSUNAMI, 0, 0, 0, true, false, undefined, undefined, asked(8, 3))).toBe(true);
+        expect(sent).toHaveLength(1);
+        expect(sent[0]).toMatchObject({ kind: TSUNAMI, impactInMs: 180_000 + TSUNAMI_BACKWASH_MS, wholeMap: true });
+        expect(sent[0].tsunami).toStrictEqual({ metres: 8, minutes: 3, startedAt: 0, durationMs: 180_000 });
+        expect(manager.tsunami()).toMatchObject({ metres: 8, durationMs: 180_000, startedAt: 0 });
+        vi.advanceTimersByTime(TSUNAMI_TELL_MS);
+        expect(sent).toHaveLength(2);
+        expect(sent[1].impactInMs).toBe(180_000 + TSUNAMI_BACKWASH_MS - TSUNAMI_TELL_MS);
+        vi.advanceTimersByTime(180_000 + TSUNAMI_BACKWASH_MS);
+        expect(manager.tsunami()).toBeUndefined();
+        expect(sent[sent.length - 1].impactInMs).toBe(0);
+        const told = sent.length;
+        vi.advanceTimersByTime(5 * TSUNAMI_TELL_MS);
+        expect(sent).toHaveLength(told);
+    });
+
+    it("keeps its height and its duration within what a tsunami may be", () => {
+        const { manager } = harness();
+        manager.request(1, TSUNAMI, 0, 0, 0, true, false, undefined, undefined, asked(40, 500));
+        expect(manager.tsunami()).toMatchObject({ metres: TSUNAMI_MAX_METRES, durationMs: TSUNAMI_MAX_MINUTES * 60_000 });
+    });
+
+    it("one a room: refused while one goes on, stopped by anyone, and none once the room stops", () => {
+        const { manager, sent } = harness();
+        expect(manager.request(1, TSUNAMI, 0, 0, 0, true, false, undefined, undefined, asked(4, 1))).toBe(true);
+        expect(manager.request(2, TSUNAMI, 0, 0, 0, true, false, undefined, undefined, asked(4, 1))).toBe(false);
+        // No tsunami without its settings.
+        expect(manager.request(2, TSUNAMI, 0, 0, 0, true, true)).toBe(true);
+        expect(sent[sent.length - 1].impactInMs).toBe(0);
+        expect(manager.tsunami()).toBeUndefined();
+        expect(manager.request(2, TSUNAMI, 0, 0, 0, true)).toBe(false);
+        manager.stop();
+        expect(manager.request(1, TSUNAMI, 0, 0, 0, true, false, undefined, undefined, asked(4, 1))).toBe(false);
+    });
+
+    it("waits for the size of the map: no coast before", () => {
+        const { manager } = harness(() => undefined);
+        expect(manager.request(1, TSUNAMI, 0, 0, 0, true, false, undefined, undefined, asked(4, 1))).toBe(false);
     });
 });
