@@ -123,7 +123,7 @@ import { VariablesManager } from "../Services/VariablesManager";
 import type { AreaPropertyVariable } from "../Services/AreaPropertyVariablesManager";
 import { AreaPropertyVariablesManager } from "../Services/AreaPropertyVariablesManager";
 import { getVariablesRepository } from "../Services/Repository/VariablesRepository";
-import { zombieAvatarsOf } from "./PlayerPerception";
+import { playsBasic, zombieAvatarsOf } from "./PlayerPerception";
 import { sameFloor } from "./FloorLevel";
 import { PrivateMessages, PrivateMessageRefusedError } from "./PrivateMessages";
 import { AreaZoneTracker } from "./AreaZoneTracker";
@@ -1426,10 +1426,18 @@ export class GameRoom implements BrothersFinder {
     }
 
     /** A player sends a horde of zombies across the map, or stops the one crossing it (`release`). */
-    public launchZombies(user: Pick<User, "id">, zombies: ZombieHordeMessage | undefined, release = false): void {
+    public launchZombies(
+        user: Pick<User, "id" | "getVariables">,
+        zombies: ZombieHordeMessage | undefined,
+        release = false,
+    ): void {
         if (release) this.catastrophes?.stopZombies();
-        // A grenade shot into the horde, or a new horde.
-        else if (zombies?.grenade) this.catastrophes?.zombieGrenade(user.id, zombies.grenade);
+        // A grenade shot into the horde (never by a player in Basique, for whom it does not exist), or a new horde.
+        else if (zombies?.grenade) {
+            if (!playsBasic(user.getVariables().getVariables())) {
+                this.catastrophes?.zombieGrenade(user.id, zombies.grenade);
+            }
+        } else if (zombies) this.catastrophes?.startZombies(zombies);
         else if (zombies) this.catastrophes?.startZombies(zombies);
     }
 

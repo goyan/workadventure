@@ -50,6 +50,7 @@ import {
 } from "../../../../src/front/Stores/CatastropheStore";
 import type { RoomConnection } from "../../../../src/front/Connection/RoomConnection";
 import { torchEquippedStore } from "../../../../src/front/Stores/TorchStore";
+import { basicModeStore } from "../../../../src/front/Stores/BasicModeStore";
 import type { TorchManager } from "../../../../src/front/Phaser/Game/Torch/TorchManager";
 import { findSeatAtPoint } from "../../../../src/front/Phaser/Player/Seat";
 import {
@@ -592,8 +593,16 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             expect(launcher()?.actionName).toBe(get(LL).actionbar.grenadeLauncher.equip());
             launcher()?.callback();
             expect(get(grenadeLauncherEquippedStore)).toBe(true);
-            zombieShownStore.set(undefined);
             grenadeLauncherEquippedStore.set(false);
+            wokaMenuStore.clear();
+
+            // In Basique the horde does not exist: no launcher to take.
+            basicModeStore.set(true);
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            expect(launcher()).toBeUndefined();
+            basicModeStore.set(false);
+            wokaMenuStore.clear();
+            zombieShownStore.set(undefined);
         });
 
         it("lets one's tamed animals go from the own-avatar wheel, offered only with an animal", () => {

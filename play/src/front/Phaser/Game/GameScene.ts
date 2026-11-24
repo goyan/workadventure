@@ -3965,6 +3965,7 @@ export class GameScene extends DirtyScene {
     public fireZombieGrenade(): void {
         if (
             !get(grenadeLauncherEquippedStore) ||
+            get(basicModeStore) ||
             !this.zombieReceiver?.current() ||
             !this.userInputManager.isControlsEnabled ||
             this.time.now - this.zombieGrenadeShotAt < 1000

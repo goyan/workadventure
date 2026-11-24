@@ -276,6 +276,9 @@ export class ZombieView {
         }
         if (!shown || epoch === undefined) {
             this.hideAll();
+            // The fire of the grenades with it (Basique): drawn again from the next blast only.
+            this.blasts?.destroy();
+            this.blasts = undefined;
             return;
         }
         const target = crowd.stepFor(epoch);

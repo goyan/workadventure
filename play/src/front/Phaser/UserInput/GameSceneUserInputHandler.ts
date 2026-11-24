@@ -11,6 +11,7 @@ import type { UserInputHandlerInterface } from "@wa/front/Interfaces/UserInputHa
 import type { GameScene } from "@wa/front/Phaser/Game/GameScene";
 import { mapEditorModeStore, mapExplorationModeStore } from "@wa/front/Stores/MapEditorStore";
 import { isActivatable } from "@wa/front/Phaser/Game/ActivatableInterface";
+import { basicModeStore } from "@wa/front/Stores/BasicModeStore";
 import { mapManagerActivated } from "@wa/front/Stores/MenuStore";
 import { displayEmote, isEmoteIndex } from "@wa/front/Stores/EmoteStore";
 import { analyticsClient } from "@wa/front/Administration/AnalyticsClient";
@@ -590,7 +591,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             },
         });
         // The launcher exists during a horde only; once held, it can always be put away.
-        if (get(zombieShownStore) !== undefined || get(grenadeLauncherEquippedStore)) {
+        // Not in Basique: the horde does not exist there (PerceptionProtocol).
+        if ((get(zombieShownStore) !== undefined && !get(basicModeStore)) || get(grenadeLauncherEquippedStore)) {
             wokaMenuStore.addAction({
                 actionName: get(grenadeLauncherEquippedStore)
                     ? get(LL).actionbar.grenadeLauncher.unequip()
