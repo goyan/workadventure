@@ -123,6 +123,7 @@ import { VariablesManager } from "../Services/VariablesManager";
 import type { AreaPropertyVariable } from "../Services/AreaPropertyVariablesManager";
 import { AreaPropertyVariablesManager } from "../Services/AreaPropertyVariablesManager";
 import { getVariablesRepository } from "../Services/Repository/VariablesRepository";
+import { zombieAvatarsOf } from "./PlayerPerception";
 import { sameFloor } from "./FloorLevel";
 import { PrivateMessages, PrivateMessageRefusedError } from "./PrivateMessages";
 import { AreaZoneTracker } from "./AreaZoneTracker";
@@ -1450,15 +1451,9 @@ export class GameRoom implements BrothersFinder {
         };
     }
 
-    /** Where the avatars of the room stand, each by the id of its user: what a horde of zombies runs to. */
+    /** Where the avatars of the room stand for a horde of zombies: not those in Basique (zombieAvatarsOf). */
     public zombieAvatars(): { key: number; x: number; y: number }[] {
-        const avatars: { key: number; x: number; y: number }[] = [];
-        for (const user of this.users.values()) {
-            if (user.disconnected === true) continue;
-            const { x, y } = user.getPosition();
-            avatars.push({ key: user.id, x, y });
-        }
-        return avatars;
+        return zombieAvatarsOf(this.users.values());
     }
 
     /** A player casts their fishing line at a point of the map. */
