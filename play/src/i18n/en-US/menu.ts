@@ -67,7 +67,7 @@ const menu: BaseTranslation = {
         rain: {
             title: "Rain (settings for me)",
             perspective: "Rain and snow seen from above, in perspective (big near the eye, finer down to the ground)",
-            amount: "Amount of drops",
+            amount: "Amount of rain and snow (×1: as the sky says, ×32: 32 times the drops and flakes)",
             lean: "Lean with the wind",
             splashes: "Splashes on the ground (0%: none)",
             puddles: "Puddles (0%: none)",

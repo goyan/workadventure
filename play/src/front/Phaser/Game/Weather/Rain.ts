@@ -1,6 +1,7 @@
 import { hash01 } from "../Autumn/LeafPalette";
 import type { WeatherView } from "./WeatherFrame";
 import { PX_PER_METRE } from "./Snowfall";
+import { COPY_SALT } from "./ParticleDensity";
 
 /**
  * How hard the rain falls on the screen, 0 to 1, for a rate in mm an hour: light rain (up to 2.5 mm/h), moderate (up to
@@ -189,7 +190,8 @@ export function rainCell(view: WeatherView): number {
 /**
  * The drops of a rain of this intensity (0 to 1) over the view, fixed to the map: each cell of a plane lets one drop
  * fall at a time, a long way down along its slant in the wind, the next one starting from another place of the cell.
- * The same for everyone at the same server time.
+ * `copies` (the personal density, see densityPlan): that many drops in each cell instead of one, the first being the
+ * drop of the usual rain. The same for everyone at the same server time.
  */
 export function rainDrops(
     epoch: number,
@@ -197,6 +199,7 @@ export function rainDrops(
     intensity: number,
     wind: RainWind,
     local?: RainLocal,
+    copies = 1,
 ): RainDrop[] {
     const base = rainCell(view);
     const time = epoch / 1000;
@@ -218,27 +221,31 @@ export function rainDrops(
         const lastRow = Math.ceil((view.y + view.height - Math.min(0, reachY)) / cell) + 1;
         const firstColumn = Math.floor((view.x - Math.max(0, reachX)) / cell) - 1;
         const lastColumn = Math.ceil((view.x + view.width - Math.min(0, reachX)) / cell) + 1;
-        for (let row = firstRow; row <= lastRow; row++) {
-            for (let column = firstColumn; column <= lastColumn; column++) {
-                // Which drops show is drawn apart from where they are: a light rain is not a corner of a heavy one.
-                const here = local ? shownAt(intensity * local((column + 0.5) * cell, (row + 0.5) * cell)) : shown;
-                if (hash01(column, row, 11 + index) >= here) continue;
-                // Each drop a little faster or slower than its plane: no curtain falling as one.
-                const falls =
-                    hash01(column, row, 3 + index) +
-                    (time * layer.speed * (0.85 + 0.3 * hash01(column, row, 7))) / layer.fall;
-                // Which fall of this cell it is (kept small, so it stays exact in the hash), and how far along.
-                const cycle = Math.floor(falls) % FALL_CYCLES;
-                const fallen = (falls - Math.floor(falls)) * layer.fall;
-                drops.push({
-                    x: (column + hash01(column + cycle, row, 5 + index)) * cell + across * fallen,
-                    y: (row + hash01(column, row + cycle, 13 + index)) * cell + down * fallen,
-                    length: layer.length,
-                    dx: across,
-                    dy: down,
-                    alpha: layer.alpha,
-                    layer: index,
-                });
+        // Each copy is another drop in every cell, drawn apart from the others (copy 0 is the drop of the rain as it was).
+        for (let copy = 0; copy < copies; copy++) {
+            const salt = copy * COPY_SALT;
+            for (let row = firstRow; row <= lastRow; row++) {
+                for (let column = firstColumn; column <= lastColumn; column++) {
+                    // Which drops show is drawn apart from where they are: a light rain is not a corner of a heavy one.
+                    const here = local ? shownAt(intensity * local((column + 0.5) * cell, (row + 0.5) * cell)) : shown;
+                    if (hash01(column, row, 11 + index + salt) >= here) continue;
+                    // Each drop a little faster or slower than its plane: no curtain falling as one.
+                    const falls =
+                        hash01(column, row, 3 + index + salt) +
+                        (time * layer.speed * (0.85 + 0.3 * hash01(column, row, 7 + salt))) / layer.fall;
+                    // Which fall of this cell it is (kept small, so it stays exact in the hash), and how far along.
+                    const cycle = Math.floor(falls) % FALL_CYCLES;
+                    const fallen = (falls - Math.floor(falls)) * layer.fall;
+                    drops.push({
+                        x: (column + hash01(column + cycle, row, 5 + index + salt)) * cell + across * fallen,
+                        y: (row + hash01(column, row + cycle, 13 + index + salt)) * cell + down * fallen,
+                        length: layer.length,
+                        dx: across,
+                        dy: down,
+                        alpha: layer.alpha,
+                        layer: index,
+                    });
+                }
             }
         }
     });

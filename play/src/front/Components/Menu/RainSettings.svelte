@@ -1,7 +1,9 @@
 <script lang="ts">
     import { LL } from "../../../i18n/i18n-svelte";
     import {
-        rainAmountStore,
+        RAIN_AMOUNT_LAST_STEP,
+        rainAmountOfStep,
+        rainAmountStepStore,
         rainCloudsStore,
         rainLeanStore,
         rainPerspectiveStore,
@@ -12,6 +14,8 @@
     import SkyLightSlider from "./SkyLightSlider.svelte";
 
     const percent = (value: number): string => `${Math.round(value * 100)} %`;
+    // The amount goes by steps: ×1, ×2, ×4... ×32.
+    const times = (step: number): string => `×${rainAmountOfStep(step)}`;
 </script>
 
 <div class="flex flex-col gap-2" data-testid="rain-settings">
@@ -25,11 +29,11 @@
     <SkyLightSlider
         id="rain-amount"
         label={$LL.menu.settings.rain.amount()}
-        store={rainAmountStore}
-        min={0.25}
-        max={2}
-        step={0.05}
-        shown={percent}
+        store={rainAmountStepStore}
+        min={0}
+        max={RAIN_AMOUNT_LAST_STEP}
+        step={1}
+        shown={times}
     />
     <SkyLightSlider
         id="rain-lean"

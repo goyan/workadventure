@@ -45,13 +45,40 @@ export const aquaticLifeShownStore = createPersistedSwitchStore("aquaticLifeShow
  */
 export const cloudsHeightStore = createPersistedNumberStore("weatherCloudsHeight", 0, 0, 1);
 
+/** The personal amount of rain and snow goes by steps of a slider: 1, 2, 4... up to 2 to the power of this step. */
+export const RAIN_AMOUNT_LAST_STEP = 5;
+
+/** The step of the slider (0 to RAIN_AMOUNT_LAST_STEP) of an amount: the nearest power of 2, 1 at the least. */
+export function rainAmountStep(amount: number): number {
+    if (!Number.isFinite(amount) || amount <= 1) return 0;
+    return Math.min(RAIN_AMOUNT_LAST_STEP, Math.round(Math.log2(amount)));
+}
+
+/** The amount of a step of the slider: 1, 2, 4, 8, 16, 32 times the usual rain. */
+export function rainAmountOfStep(step: number): number {
+    return 2 ** Math.min(RAIN_AMOUNT_LAST_STEP, Math.max(0, Math.round(step)));
+}
+
 /**
  * Personal settings of the rain, kept in the browser, 1 by default (the rain as designed); they never change the
- * weather of the map for the others. How many drops fall, how much they lean with the wind, how many splash on the
- * ground, how big the puddles get (0: none), and how much more it rains under the clouds than between them (0: the same
- * everywhere).
+ * weather of the map for the others. How many times more drops and flakes fall than the air says (1, 2, 4... 32: it
+ * adds drops, it does not make the rain heavier; what an older version kept, from a quarter to 2, comes to the nearest
+ * step, 1 at the least), how much they lean with the wind, how many splash on the ground, how big the puddles get (0:
+ * none), and how much more it rains under the clouds than between them (0: the same everywhere).
  */
-export const rainAmountStore = createPersistedNumberStore("weatherRainAmount", 1, 0.25, 2);
+export const rainAmountStore = createPersistedNumberStore(
+    "weatherRainAmount",
+    1,
+    1,
+    rainAmountOfStep(RAIN_AMOUNT_LAST_STEP),
+    (value) => rainAmountOfStep(rainAmountStep(value)),
+);
+/** The amount seen as the step of its slider (0 to RAIN_AMOUNT_LAST_STEP): setting it sets the amount of that step. */
+export const rainAmountStepStore: Writable<number> = {
+    subscribe: (run, invalidate) => rainAmountStore.subscribe((amount) => run(rainAmountStep(amount)), invalidate),
+    set: (step) => rainAmountStore.set(rainAmountOfStep(step)),
+    update: (updater) => rainAmountStore.set(rainAmountOfStep(updater(rainAmountStep(get(rainAmountStore))))),
+};
 export const rainLeanStore = createPersistedNumberStore("weatherRainLean", 1, 0, 2);
 export const rainSplashesStore = createPersistedNumberStore("weatherRainSplashes", 1, 0, 2);
 export const rainPuddlesStore = createPersistedNumberStore("weatherRainPuddles", 1, 0, 2);
