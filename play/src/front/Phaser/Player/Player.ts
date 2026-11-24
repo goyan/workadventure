@@ -37,7 +37,12 @@ import { localUserStore } from "@wa/front/Connection/LocalUserStore";
 import { bindingKeys, shortcutsStore } from "@wa/front/Stores/ShortcutsStore";
 import { WalkDestinationMarker } from "@wa/front/Phaser/Components/WalkDestinationMarker";
 import { RunSmokeTrail } from "@wa/front/Phaser/Components/RunSmokeTrail";
-import { findDiveTarget, getWaterRectangles, intersectsWater } from "@wa/front/Phaser/Game/Water/WaterZones";
+import {
+    BODY_CENTER_OFFSET_Y,
+    findDiveTarget,
+    getWaterRectangles,
+    intersectsWater,
+} from "@wa/front/Phaser/Game/Water/WaterZones";
 import { InteractionPrompt } from "@wa/front/Phaser/Game/Water/InteractionPrompt";
 import { iceStep, type Vector } from "@wa/front/Phaser/Game/Ice/IcePhysics";
 import LL from "@wa/i18n/i18n-svelte";
@@ -1141,6 +1146,14 @@ export class Player extends Character {
             const carried = isCanoeAfloat(this.getVehicleState()) ? CANOE_CURRENT_SHARE : 1;
             x += push.x * carried;
             y += push.y * carried;
+        }
+        // A horde of zombies running over the avatar shoves it, in a call too: the keys are added on top.
+        if (!followMode && !this.isInAirplane() && !this.isSeated()) {
+            const shove = this.scene.zombiePushAt?.(this.x, this.y + BODY_CENTER_OFFSET_Y);
+            if (shove) {
+                x += shove.x;
+                y += shove.y;
+            }
         }
 
         if (!followMode && this.vehicleMode === VehicleMode.Off && !this.isSeated() && this.isOnIceHere()) {

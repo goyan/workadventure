@@ -140,6 +140,13 @@ export class ZombieView {
         return this.crowd && !this.dust ? this.walkingNow : undefined;
     }
 
+    /** How the horde shoves an avatar whose body is at (x, y), px/s: nothing while it is not drawn. */
+    public shoveAt(x: number, y: number): { x: number; y: number } {
+        const crowd = this.crowd;
+        if (!crowd || this.dust || !this.shown) return { x: 0, y: 0 };
+        return crowd.shoveAt(x, y);
+    }
+
     /** Where the body of the horde is (the mean of those walking), map pixels; undefined while none walks. */
     public centre(): { x: number; y: number } | undefined {
         const crowd = this.crowd;

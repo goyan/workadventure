@@ -130,6 +130,11 @@ const RUSH_MARGIN = 2;
  */
 const MOST_ON_ONE = 40;
 const RUSH_SECONDS = 10;
+/** A zombie that overlaps an avatar wholly shoves it at this speed (px/s), and carries it this share of its own. */
+const SHOVE_PX_S = 3 * PX;
+const SHOVE_CARRY = 0.5;
+/** An avatar is never shoved faster than a human is when pushed in a crowd (m/s). */
+export const ZOMBIE_SHOVE_MOST_M_S = 2.5;
 /** The avatars a horde follows, at most (the first seen). */
 export const ZOMBIE_MOST_AVATARS = 32;
 /** The fields of the avatars made again at one step, at most: one that moved waits its turn. */
@@ -304,6 +309,40 @@ export class ZombieCrowd {
         this.horde.anchorStep = clock.anchorStep;
         this.horde.anchorAt = clock.anchorAt;
         this.horde.msPerStep = clock.msPerStep;
+    }
+
+    /**
+     * How the zombies running over a point shove an avatar standing there (px/s): out of each body it touches, by
+     * how far they overlap, and carried a little along with it (the body force and the sliding friction of Helbing,
+     * Farkas and Vicsek 2000), at a human pace at most (ZOMBIE_SHOVE_MOST_M_S). Not part of the steps of the crowd:
+     * the browser of the player shoves its own avatar, which moves as it always does.
+     */
+    public shoveAt(px: number, py: number): { x: number; y: number } {
+        const touch = ZOMBIE_RADIUS_PX + AVATAR_RADIUS_PX;
+        let sx = 0;
+        let sy = 0;
+        for (let zombie = 0; zombie < this.count; zombie++) {
+            if (this.state[zombie] !== ZOMBIE_WALKING) continue;
+            const dx = px - this.x[zombie];
+            const dy = py - this.y[zombie];
+            const d2 = dx * dx + dy * dy;
+            if (d2 >= touch * touch) continue;
+            const d = Math.sqrt(d2);
+            const overlap = (touch - d) / touch;
+            if (d > 1e-6) {
+                sx += (dx / d) * overlap * SHOVE_PX_S;
+                sy += (dy / d) * overlap * SHOVE_PX_S;
+            }
+            sx += this.vx[zombie] * overlap * SHOVE_CARRY;
+            sy += this.vy[zombie] * overlap * SHOVE_CARRY;
+        }
+        const speed = Math.sqrt(sx * sx + sy * sy);
+        const most = ZOMBIE_SHOVE_MOST_M_S * PX;
+        if (speed > most) {
+            sx *= most / speed;
+            sy *= most / speed;
+        }
+        return { x: sx, y: sy };
     }
 
     /** The pace of the horde, m/s, as its zombies run it on average. */

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ZOMBIE_GONE, ZOMBIE_WALKING, ZombieCrowd } from "../src/Catastrophe/ZombieCrowd";
+import { ZOMBIE_GONE, ZOMBIE_SHOVE_MOST_M_S, ZOMBIE_WALKING, ZombieCrowd } from "../src/Catastrophe/ZombieCrowd";
 import {
     decodeZombieLog,
     decodeZombieTerrain,
@@ -439,5 +439,31 @@ describe("the grass a horde of zombies goes over", () => {
         expect(meadow.grassAt(1, 1)).toBeCloseTo(0.1, 5);
         meadow.holdGrass(1, 1, 0.5);
         expect(meadow.grassAt(1, 1)).toBeCloseTo(0.1, 5);
+    });
+});
+
+describe("the shove of a horde on an avatar", () => {
+    it("pushes an avatar standing in the way of a dense horde, at a human pace at most, and leaves it alone out of it", () => {
+        // A horde running east over an avatar standing still in the middle of its way.
+        const crowd = new ZombieCrowd(horde({ count: 600 }));
+        const avatar = { x: 60 * TERRAIN_CELL, y: 40 * TERRAIN_CELL };
+        let shoved = 0;
+        let fastest = 0;
+        for (let step = 0; step < 300; step++) {
+            crowd.step();
+            const shove = crowd.shoveAt(avatar.x, avatar.y);
+            const speed = Math.sqrt(shove.x * shove.x + shove.y * shove.y);
+            fastest = Math.max(fastest, speed);
+            if (speed > 0) {
+                shoved++;
+                // Pushed the way the horde runs, as a whole.
+                avatar.x += shove.x * 0.1;
+                avatar.y += shove.y * 0.1;
+            }
+        }
+        expect(shoved).toBeGreaterThan(5);
+        expect(avatar.x).toBeGreaterThan(60 * TERRAIN_CELL);
+        expect(fastest).toBeLessThanOrEqual(ZOMBIE_SHOVE_MOST_M_S * 29.3);
+        expect(crowd.shoveAt(-500, -500)).toEqual({ x: 0, y: 0 });
     });
 });

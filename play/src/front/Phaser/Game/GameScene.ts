@@ -39,6 +39,7 @@ import {
     HURRICANE_GUST_FACTOR,
     hurricaneHere,
     doorLeavesOf,
+    LIFE_DEPTHS_PX,
     zombieCollisionsOf,
     type LifeFire,
     lifeFireOf,
@@ -3917,6 +3918,23 @@ export class GameScene extends DirtyScene {
      */
     public mapDaylightAt(at: number): number {
         return mapDaylightAt(this.getGameMap().getWamFile()?.getWam().settings, new Date(at));
+    }
+
+    /**
+     * How the horde of zombies shoves the avatar of this player whose body is at (x, y), px/s, added to what its keys
+     * ask for (Player): the walls and the collisions of the map hold it as always; never into deep water.
+     */
+    public zombiePushAt(x: number, y: number): { x: number; y: number } | undefined {
+        const view = this.zombieView;
+        if (!view?.active()) return undefined;
+        const shove = view.shoveAt(x, y);
+        if (shove.x === 0 && shove.y === 0) return undefined;
+        const length = Math.sqrt(shove.x * shove.x + shove.y * shove.y);
+        // Half a tile ahead: no shove into water an avatar would swim in.
+        const aheadX = x + (shove.x / length) * 16;
+        const aheadY = y + (shove.y / length) * 16;
+        if (this.terrainWater.depthAt(aheadX, aheadY, this.time.now) >= LIFE_DEPTHS_PX.deep) return undefined;
+        return shove;
     }
 
     /**
