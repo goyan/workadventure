@@ -5,6 +5,7 @@ import {
     copyShown,
     MAX_DRAWN_COPIES,
     RAIN_AMOUNT_BASE,
+    seenAmount,
     shownCopiesBound,
 } from "../../../../../src/front/Phaser/Game/Weather/ParticleDensity";
 import { snowflakes, flakeMix } from "../../../../../src/front/Phaser/Game/Weather/Snowfall";
@@ -35,6 +36,27 @@ describe("cellCopies", () => {
         for (const amount of [0, -3, Number.NaN, Number.POSITIVE_INFINITY]) {
             expect(cellCopies(amount)).toBe(RAIN_AMOUNT_BASE);
         }
+    });
+});
+
+describe("seenAmount", () => {
+    it("draws at most ×4 on foot and ×8 from a plane at its cruise altitude or higher, the steps under it as they are", () => {
+        expect([1, 2, 4, 8, 16, 32].map((amount) => seenAmount(amount, 0))).toEqual([1, 2, 4, 4, 4, 4]);
+        expect([1, 2, 4, 8, 16, 32].map((amount) => seenAmount(amount, 1024))).toEqual([1, 2, 4, 8, 8, 8]);
+        expect(seenAmount(32, 2048)).toBe(8);
+    });
+
+    it("grows with the altitude in between, without a jump", () => {
+        expect(seenAmount(32, 512)).toBeCloseTo(6, 9);
+        let previous = seenAmount(32, 0);
+        for (let altitude = 16; altitude <= 1100; altitude += 16) {
+            const amount = seenAmount(32, altitude);
+            expect(amount).toBeGreaterThanOrEqual(previous);
+            expect(amount - previous).toBeLessThan(0.2);
+            previous = amount;
+        }
+        expect(seenAmount(32, Number.NaN)).toBe(4);
+        expect(seenAmount(32, -50)).toBe(4);
     });
 });
 

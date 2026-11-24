@@ -60,7 +60,7 @@ import {
     rainVeilAlpha,
 } from "./Rain";
 import type { RainLocal, RainWind } from "./Rain";
-import { cellCopies, MAX_DRAWN_COPIES } from "./ParticleDensity";
+import { cellCopies, MAX_DRAWN_COPIES, seenAmount } from "./ParticleDensity";
 import { fallSeconds } from "./FallHash";
 import { offMapRects, PrecipitationLayer } from "./PrecipitationLayer";
 import type { CloudLevels, OutdoorSource } from "./PrecipitationLayer";
@@ -196,6 +196,11 @@ export interface WeatherManagerOptions {
      * ones near 0 °C, fine crystals in a hard frost. A usual snow just under 0 °C when not given.
      */
     precipitationAir?: () => PrecipitationAir | undefined;
+    /**
+     * How high the view is (map pixels): the altitude of the plane the player flies, 0 on foot. The personal amount of
+     * the rain is bounded lower on the ground than from the air (seenAmount).
+     */
+    viewAltitude?: () => number;
     /** Overrides the system "reduced motion" setting (read once from matchMedia otherwise). Used by tests. */
     reducedMotion?: boolean;
 }
@@ -1020,7 +1025,7 @@ export class WeatherManager {
         if (particles) {
             // The personal amount adds drops to the rain as it is (the same sizes, the same wind), it does not make it
             // heavier: the intensity stays what the air says.
-            const copies = cellCopies(this.rainSettings.amount);
+            const copies = cellCopies(this.seenAmount());
             particles.rain(rainPlanes(finer, intensity, wind, local !== undefined, copies), {
                 seconds: fallSeconds(epoch),
                 copies,
@@ -1044,7 +1049,7 @@ export class WeatherManager {
         isOutdoor: ((x: number, y: number) => boolean) | undefined,
         localFine: RainLocal | undefined,
     ): void {
-        const copies = cellCopies(this.rainSettings.amount, this.drawnCopies);
+        const copies = cellCopies(this.seenAmount(), this.drawnCopies);
         // A drop shows where its whole streak is outdoors (head, middle and tail): no trail over the edge of a roof.
         const drops = rainDrops(epoch, finer, intensity, wind, localFine, copies)
             .map((drop) =>
@@ -1076,6 +1081,11 @@ export class WeatherManager {
                 this.graphics.strokePath();
             }
         }
+    }
+
+    /** The personal amount of the rain as drawn from where the view is (seenAmount): ×4 at most on the ground. */
+    private seenAmount(): number {
+        return seenAmount(this.rainSettings.amount, this.options.viewAltitude?.() ?? 0);
     }
 
     /** The layer of the graphics card while its shaders work here; undefined: the processor draws (thinner). */
@@ -1173,7 +1183,7 @@ export class WeatherManager {
         const particles = this.gpuParticles();
         if (particles) {
             // The personal amount adds flakes to the snow as it is, it does not make it heavier (see drawRain).
-            const copies = cellCopies(this.rainSettings.amount);
+            const copies = cellCopies(this.seenAmount());
             const planes = snowPlanes(finer, fall, air, still ? 0 : epoch / 1000, local !== undefined, still, copies);
             particles.snow(planes, {
                 seconds: still ? 0 : fallSeconds(epoch),
@@ -1185,7 +1195,7 @@ export class WeatherManager {
             });
             return;
         }
-        const copies = cellCopies(this.rainSettings.amount, this.drawnCopies);
+        const copies = cellCopies(this.seenAmount(), this.drawnCopies);
         const pixel = 1 / fine;
         for (const flake of snowflakes(epoch, finer, fall, air, localFine, still, copies)) {
             const x = flake.x / fine;
@@ -1215,7 +1225,7 @@ export class WeatherManager {
         const pixel = 1 / this.screenScale();
         const particles = this.gpuParticles();
         if (particles) {
-            const copies = cellCopies(this.rainSettings.amount);
+            const copies = cellCopies(this.seenAmount());
             particles.rainInPerspective(
                 perspectiveDropPlanes(view, camera, intensity, air.shift, local !== undefined, copies),
                 {
@@ -1234,7 +1244,7 @@ export class WeatherManager {
             );
             return;
         }
-        const copies = cellCopies(this.rainSettings.amount, this.drawnCopies);
+        const copies = cellCopies(this.seenAmount(), this.drawnCopies);
         const drops = perspectiveDrops(still ? 0 : epoch, view, camera, intensity, air, local, copies).filter(
             (drop) => !isOutdoor || isOutdoor(drop.landX, drop.landY),
         );
@@ -1287,7 +1297,7 @@ export class WeatherManager {
         const still = this.reducedMotion;
         const particles = this.gpuParticles();
         if (particles) {
-            const copies = cellCopies(this.rainSettings.amount);
+            const copies = cellCopies(this.seenAmount());
             particles.snowInPerspective(perspectiveFlakePlanes(view, fall, air.shift, local !== undefined, copies), {
                 seconds: still ? 0 : fallSeconds(epoch),
                 copies,
@@ -1301,7 +1311,7 @@ export class WeatherManager {
             });
             return;
         }
-        const copies = cellCopies(this.rainSettings.amount, this.drawnCopies);
+        const copies = cellCopies(this.seenAmount(), this.drawnCopies);
         for (const flake of perspectiveFlakes(epoch, view, camera, fall, air, local, still, copies)) {
             if (isOutdoor && !isOutdoor(flake.landX, flake.landY)) continue;
             const kind = FLAKE_KINDS[flake.kind];

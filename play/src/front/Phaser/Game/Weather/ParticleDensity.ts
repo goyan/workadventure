@@ -8,6 +8,23 @@ export const RAIN_AMOUNT_BASE = 5;
 export const COPY_SALT = 997;
 
 /**
+ * The most the personal amount draws (a share of ×32), seen from the ground and from a plane at its cruise altitude
+ * (AIRPLANE_ALTITUDE) or higher: a choice of the players, the screen was white past these; in between it grows with the
+ * altitude, so that a climb or a landing thickens or thins the rain little by little.
+ */
+export const GROUND_MOST_AMOUNT = 4;
+export const AIR_MOST_AMOUNT = 8;
+/** The altitude (map pixels) from which the rain is seen at its thickest: the cruise altitude of a plane. */
+export const AIR_MOST_AT_ALTITUDE = 1024;
+
+/** The amount drawn for a personal amount seen from this altitude (0 on the ground): never over its bound. */
+export function seenAmount(amount: number, altitude: number): number {
+    const height = Number.isFinite(altitude) ? Math.max(0, Math.min(1, altitude / AIR_MOST_AT_ALTITUDE)) : 0;
+    const most = GROUND_MOST_AMOUNT + (AIR_MOST_AMOUNT - GROUND_MOST_AMOUNT) * height;
+    return Math.min(Number.isFinite(amount) && amount > 0 ? amount : 1, most);
+}
+
+/**
  * The most drops (or flakes) the processor draws in each cell when the graphics card cannot draw them
  * (PrecipitationLayer): each is a line or a few squares to work out at every image, so the rain is thinner there.
  */

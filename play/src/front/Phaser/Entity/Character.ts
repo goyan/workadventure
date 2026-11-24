@@ -1045,6 +1045,11 @@ export abstract class Character extends Container implements OutlineableInterfac
         return this.vehicleState?.vehicle === Vehicle.Airplane && this.vehicleMode !== VehicleMode.Off;
     }
 
+    /** How high the plane of this character is drawn (map pixels, following its altitude smoothly), 0 on the ground. */
+    public shownFlightAltitude(): number {
+        return this.displayedFlightAltitude;
+    }
+
     protected get flightAltitude(): number {
         return this.isInAirplane() ? (this.vehicleState.altitude ?? AIRPLANE_ALTITUDE) : 0;
     }
