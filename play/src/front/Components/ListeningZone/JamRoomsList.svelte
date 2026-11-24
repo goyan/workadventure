@@ -338,6 +338,8 @@
                         session={jamAudioSession}
                         micDeviceId={$requestedMicrophoneDeviceIdStore}
                         captureState={jamMusicCaptureState}
+                        captureSilent={jamMusicCapture.silent}
+                        trackPlaying={!live && !!hostTrack}
                     />
                 {/if}
                 {#if mine}

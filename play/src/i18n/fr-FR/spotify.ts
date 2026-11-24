@@ -330,6 +330,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         audioUnmute: "Réactiver la musique",
         audioErrorDenied: "L'accès à l'entrée audio a été refusé.",
         audioErrorDevice: "Cette entrée audio est introuvable ou indisponible.",
+        audioSilent:
+            "Aucun son n'arrive depuis quelques secondes : vérifiez que l'application source joue. Le partage reprend tout seul quand le son revient.",
         audioErrorMicrophone: "Choisissez une entrée différente de votre micro.",
         audioErrorSession: "La connexion audio de la Jam n'est pas prête.",
         remove: "Retirer",
