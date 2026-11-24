@@ -1,7 +1,8 @@
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const KEY = "weatherRainAmount";
+const KEY = "weatherRainAmountSteps";
+const FIRST_VERSION_KEY = "weatherRainAmount";
 
 /** The stores as a page that has just loaded with this in the browser storage (null: nothing kept). */
 async function loadWith(kept: string | null) {
@@ -42,20 +43,14 @@ describe("the personal amount of rain and snow", () => {
         expect(get(rainAmountStore)).toBe(2);
     });
 
-    it.each([
-        ["0.25", 1],
-        ["0.5", 1],
-        ["1", 1],
-        ["1.4", 1],
-        ["1.5", 2],
-        ["2", 2],
-        ["3", 4],
-    ])(
-        "brings %s, kept by an older version (a quarter to 2), to the valid step %d, ×1 at the least",
-        async (kept, expected) => {
-            const { rainAmountStore, rainAmountStepStore } = await loadWith(kept);
-            expect(get(rainAmountStore)).toBe(expected);
-            expect(2 ** get(rainAmountStepStore)).toBe(expected);
+    it.each(["0.25", "1", "1.5", "2"])(
+        "starts again at ×1 whatever the first version kept (%s): its values are all under the new ×1",
+        async (kept) => {
+            vi.resetModules();
+            localStorage.clear();
+            localStorage.setItem(FIRST_VERSION_KEY, kept);
+            const { rainAmountStore } = await import("../../../src/front/Stores/WeatherStore");
+            expect(get(rainAmountStore)).toBe(1);
         },
     );
 
