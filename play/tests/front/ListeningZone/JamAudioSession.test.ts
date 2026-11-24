@@ -31,6 +31,8 @@ function setup(overrides: Partial<JamAudioSessionDependencies> = {}) {
     const capture: JamMusicCapture = {
         state: captureState,
         sharedMusic: writable(undefined),
+        silent: writable(false),
+        inputLost: writable(false),
         start: captureStart,
         stop: captureStop,
     };
@@ -140,12 +142,14 @@ describe("JamAudioSession", () => {
             const capture: JamMusicCapture = {
                 state: captureState,
                 sharedMusic: writable(undefined),
+                silent: writable(false),
+                inputLost: writable(false),
                 start: vi.fn().mockResolvedValue(undefined),
                 stop: vi.fn().mockResolvedValue(undefined),
             };
             const { session } = setup({ capture });
             await session.shareMusic(jam, "blackhole");
-            captureState.set({ status: "error", reason: "ended" });
+            captureState.set({ status: "error", reason: "unavailable" });
             await vi.advanceTimersByTimeAsync(0);
             expect(get(session.sharingSpaceName)).toBeUndefined();
         });
@@ -211,6 +215,8 @@ describe("JamAudioSession", () => {
             const capture: JamMusicCapture = {
                 state: captureState,
                 sharedMusic: writable(undefined),
+                silent: writable(false),
+                inputLost: writable(false),
                 start: vi.fn().mockImplementation(() => {
                     captureState.set({ status: "active", label: "BlackHole" });
                     return Promise.resolve();
@@ -219,7 +225,7 @@ describe("JamAudioSession", () => {
             };
             const { session, leaveSpace } = setup({ capture });
             await session.shareMusic(jam, "blackhole");
-            captureState.set({ status: "error", reason: "ended" });
+            captureState.set({ status: "error", reason: "unavailable" });
             await vi.advanceTimersByTimeAsync(0);
             expect(leaveSpace).toHaveBeenCalledTimes(1);
         });
@@ -263,6 +269,8 @@ describe("JamAudioSession", () => {
             const capture: JamMusicCapture = {
                 state: captureState,
                 sharedMusic: writable(undefined),
+                silent: writable(false),
+                inputLost: writable(false),
                 start: vi.fn().mockImplementation(() => {
                     captureState.set({ status: "error", reason: "denied" });
                     return Promise.resolve();

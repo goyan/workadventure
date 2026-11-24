@@ -325,6 +325,9 @@ const spotify: BaseTranslation = {
         audioUnmute: "Unmute the music",
         audioErrorDenied: "Access to the audio input was denied.",
         audioErrorDevice: "This audio input is missing or unavailable.",
+        audioLost: "The audio input is gone: sharing resumes by itself as soon as it is back.",
+        audioSilent:
+            "No sound has come in for a few seconds: check that the source app is playing. Sharing resumes by itself when the sound is back.",
         audioErrorMicrophone: "Pick an input other than your microphone.",
         audioErrorSession: "The audio connection of the Jam is not ready.",
         remove: "Remove",
