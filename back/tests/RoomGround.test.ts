@@ -95,7 +95,8 @@ describe("the ground of a room behind its door (RoomGround)", () => {
         // Both trees stood in gusts over 130 km/h while the hurricane blew, and each lies the way the wind of the air
         // blew at its foot then (its own way: the trees are on either side of the track of the eye), still lying a
         // minute later. Laid by the formula of the hurricane, they lay from 57 and 122 to 127 degrees; by its air,
-        // turned by its inflow and the wind of the room, from about 98 at the tree west of the lake.
+        // turned by its inflow and the wind of the room, from 110 west of the lake and 126 south-east of it (98 and 121
+        // while the drag of the land was held in a layer as deep as over the sea: AirSimulation.dragAt).
         for (const id of ["oak-west", "oak-south-east"]) {
             const tree = trees.find((told) => told.id === id);
             expect(tree, id).toMatchObject({ fire: 0, damage: 16 });
@@ -107,7 +108,7 @@ describe("the ground of a room behind its door (RoomGround)", () => {
         }
         const west = trees.find((told) => told.id === "oak-west")?.fallen ?? 0;
         const southEast = trees.find((told) => told.id === "oak-south-east")?.fallen ?? 0;
-        expect(Math.abs(west - southEast)).toBeGreaterThan(20);
+        expect(Math.abs(west - southEast)).toBeGreaterThan(10);
     }, 60_000);
 
     it("rains on the water at the real rate of a hurricane, and not at all in its eye", async () => {

@@ -2,7 +2,7 @@ import type { HurricaneAirMessage, SubToPusherRoomMessage } from "@workadventure
 import { describe, expect, it, vi } from "vitest";
 import type { Hurricane } from "../src/Catastrophe/Hurricane";
 import { HURRICANE_RMAX_M, hurricaneAt } from "../src/Catastrophe/Hurricane";
-import { AIR_CELL_PX, AIR_DRAG } from "../src/Weather/AirSimulation";
+import { AIR_CELL_PX, AIR_ROUGHNESS_M } from "../src/Weather/AirSimulation";
 import {
     hurricaneAirMessageOf,
     hurricaneAirWindAt,
@@ -214,10 +214,10 @@ describe("the air of a map while a hurricane crosses it (MapAir)", () => {
         for (let x = 768; x < 1024; x += 64) for (let y = 0; y < 512; y += 32) trees.push({ x: x + 16, y: y + 16 });
         const surface = mapSurfaceOf(size, depthAt, trees, 8, 16, 32);
         expect(surface(256, 256)).toBe("sea");
-        expect(surface(640, 256)).toBe(AIR_DRAG.land);
-        expect(surface(896, 256)).toBe(AIR_DRAG.forest);
+        expect(surface(640, 256)).toBe(AIR_ROUGHNESS_M.land);
+        expect(surface(896, 256)).toBe(AIR_ROUGHNESS_M.forest);
         // Past the edges, the surface of the nearest edge.
         expect(surface(-640, 256)).toBe("sea");
-        expect(surface(4000, 256)).toBe(AIR_DRAG.forest);
+        expect(surface(4000, 256)).toBe(AIR_ROUGHNESS_M.forest);
     });
 });

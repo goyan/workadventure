@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { HURRICANE_RMAX_M, hurricaneHere, hurricaneMaxWind } from "../src/Catastrophe/Hurricane";
 import type { Hurricane } from "../src/Catastrophe/Hurricane";
-import { AIR_DRAG, AIR_SURFACE_RATIO, AirSimulation } from "../src/Weather/AirSimulation";
+import {
+    AIR_CORIOLIS,
+    AIR_LAYER_M,
+    AIR_ROUGHNESS_M,
+    AIR_STEP_S,
+    AIR_SURFACE_RATIO,
+    AirSimulation,
+    landFriction,
+    seaDrag,
+} from "../src/Weather/AirSimulation";
 
 /** The map of Antoine: 240 x 160 tiles of 32 px; map pixels in a metre. */
 const MAP = { width: 7680, height: 5120 };
@@ -28,7 +37,7 @@ function standing(category: number, southern = false, x = 3840, y = 2560): Hurri
 
 /** The air of the map under a standing hurricane, from the formula of the wind, after `seconds` of its own physics. */
 function spun(hurricane: Hurricane, drag: number | "sea", seconds = 120): AirSimulation {
-    const air = new AirSimulation({ ...MAP, drag: () => drag });
+    const air = new AirSimulation({ ...MAP, roughness: () => drag });
     air.fill((x, y) => {
         const here = hurricaneHere(hurricane, EPOCH, x, y);
         if (!here) return { east: 0, north: 0 };
@@ -92,7 +101,7 @@ describe("the air of a map under a hurricane (AirSimulation)", () => {
     }, 60_000);
 
     it("keeps its eye calm over the sea, the land and a forest, from category 1 to 5", () => {
-        for (const drag of ["sea", AIR_DRAG.land, AIR_DRAG.forest] as const) {
+        for (const drag of ["sea", AIR_ROUGHNESS_M.land, AIR_ROUGHNESS_M.forest] as const) {
             for (const category of [1, 4, 5]) {
                 const eye = ring(spun(standing(category), drag), 0.2);
                 expect(Math.hypot(eye.round, eye.out), `${drag} ${category}`).toBeLessThan(
@@ -112,10 +121,13 @@ describe("the air of a map under a hurricane (AirSimulation)", () => {
             expect(inflow("sea", category), `category ${category}`).toBeGreaterThan(15);
             expect(inflow("sea", category), `category ${category}`).toBeLessThan(25);
         }
+        // Rougher, more: measured 20.0° over the sea, 22.0° over open land, 25.8° over a forest in category 4. The
+        // geostrophic drag law gives 17.7°, 20.5° and 27.1° across the isobars of a straight wind of 50 m/s over the
+        // same surfaces (sin a = B u* / (κ G)): the same order, not the same flow (a vortex is not an Ekman layer).
         const sea = inflow("sea");
-        const land = inflow(AIR_DRAG.land);
-        expect(land).toBeGreaterThan(sea + 5);
-        expect(inflow(AIR_DRAG.forest)).toBeGreaterThan(land);
+        const land = inflow(AIR_ROUGHNESS_M.land);
+        expect(land).toBeGreaterThan(sea + 1);
+        expect(inflow(AIR_ROUGHNESS_M.forest)).toBeGreaterThan(land + 1);
     }, 60_000);
 
     /** The wind at 1.2 radii east and west of an eye going north at 3 m/s for half a minute, and in the eye. */
@@ -126,7 +138,7 @@ describe("the air of a map under a hurricane (AirSimulation)", () => {
             fromY: 4200 - 0.5 * travel,
             toY: 4200 + 0.5 * travel,
         };
-        const air = new AirSimulation({ ...MAP, drag: () => drag });
+        const air = new AirSimulation({ ...MAP, roughness: () => drag });
         air.fill((x, y) => {
             const here = hurricaneHere(hurricane, EPOCH, x, y);
             if (!here) return { east: 0, north: 0 };
@@ -149,45 +161,27 @@ describe("the air of a map under a hurricane (AirSimulation)", () => {
     }
 
     it("blows harder on the right of a low that moves in the north, on its left in the south; calm in its eye", () => {
-        for (const drag of ["sea", AIR_DRAG.land] as const) {
+        for (const drag of ["sea", AIR_ROUGHNESS_M.land] as const) {
             const north = moving(drag);
             const south = moving(drag, true);
             expect(north.east, `${drag}`).toBeGreaterThan(north.west);
             expect(south.west, `${drag}`).toBeGreaterThan(south.east);
         }
-        for (const drag of ["sea", AIR_DRAG.land] as const) {
+        for (const drag of ["sea", AIR_ROUGHNESS_M.land] as const) {
             expect(moving(drag).eye, `${drag}`).toBeLessThan(0.15 * hurricaneMaxWind(4));
         }
     }, 60_000);
 
-    // Known, not explained, not hidden: over a forest, a moving eye contracts (51 km/h at a fifth of the radius of the
-    // strongest winds, 22 % of the strongest, after 30 s) and its asymmetry turns round (stronger on its left in the
-    // north). These two assertions fail today: vitest's `fails` keeps them in sight.
-    // Same for a standing low over a forest: its wall contracts to 0.55 of the radius and its wind at 10 m (223 km/h in
-    // category 4) passes that over the sea (195), the reverse of a landfall. Two reasons not settled: the pressure is
-    // imposed (no decay without the heat of the sea), and 0.80 is the ratio measured over the sea, not over a forest.
-    it.fails(
-        "keeps the radius of the strongest winds over a forest",
-        () => {
-            expect(strongest(spun(standing(4), AIR_DRAG.forest)).radii).toBeGreaterThan(0.7);
-        },
-        60_000,
-    );
-    it.fails(
-        "keeps the eye of a low moving over a forest calm",
-        () => {
-            expect(moving(AIR_DRAG.forest).eye).toBeLessThan(0.15 * hurricaneMaxWind(4));
-        },
-        60_000,
-    );
-    it.fails(
-        "blows harder on the right of a low moving over a forest, in the north",
-        () => {
-            const forest = moving(AIR_DRAG.forest);
-            expect(forest.east).toBeGreaterThan(forest.west);
-        },
-        60_000,
-    );
+    it("keeps the radius of the strongest winds over a forest", () => {
+        expect(strongest(spun(standing(4), AIR_ROUGHNESS_M.forest)).radii).toBeGreaterThan(0.7);
+    }, 60_000);
+    it("keeps the eye of a low moving over a forest calm", () => {
+        expect(moving(AIR_ROUGHNESS_M.forest).eye).toBeLessThan(0.15 * hurricaneMaxWind(4));
+    }, 60_000);
+    it("blows harder on the right of a low moving over a forest, in the north", () => {
+        const forest = moving(AIR_ROUGHNESS_M.forest);
+        expect(forest.east).toBeGreaterThan(forest.west);
+    }, 60_000);
 });
 
 describe("the air of a map without a hurricane", () => {
@@ -202,29 +196,55 @@ describe("the air of a map without a hurricane", () => {
         expect(most).toBeLessThan(1e-3);
     }, 60_000);
 
+    /**
+     * The wind a uniform wind of the room settles to over a surface of roughness `z0` (m), the pressure that keeps it
+     * over the sea: where that pressure, the Coriolis force and the drag balance in a step of the air,
+     * (1 + k dt) u − R u = P dt, R turning by f dt, k = Cd F |u| / h (Cd the sea's, F its landFriction).
+     */
+    function settledOver(z0: number, room: { east: number; north: number }): { east: number; north: number } {
+        const [pe, pn] = AirSimulation.roomPressureForce(room);
+        const dt = AIR_STEP_S;
+        const c = Math.cos(AIR_CORIOLIS * dt);
+        const s = Math.sin(AIR_CORIOLIS * dt);
+        let { east, north } = room;
+        for (let turn = 0; turn < 100; turn++) {
+            const k0 = (seaDrag(Math.hypot(east, north)) * Math.hypot(east, north)) / AIR_LAYER_M;
+            // The drag is that of the wind before it (1 + k dt times this one).
+            const before = Math.hypot(east, north) * (1 + k0 * dt);
+            const k = (seaDrag(before) * landFriction(before, z0) * before) / AIR_LAYER_M;
+            const m = 1 + k * dt - c;
+            const det = m * m + s * s;
+            east = ((m * pe + s * pn) * dt) / det;
+            north = ((m * pn - s * pe) * dt) / det;
+        }
+        return { east, north };
+    }
+
     it("slows a wind over a forest and turns it towards the low, and nowhere else", () => {
-        // A forest over a square in the middle of the map, the sea around.
+        // A forest over a square in the middle of the map, the sea around. The wind crosses it in 8 s, far less than
+        // the 90 s its drag takes to settle it: slowed and turned a little, not yet settled.
         const patch = (x: number, y: number): number | "sea" =>
-            Math.abs(x - 3840) < 1200 && Math.abs(y - 2560) < 1200 ? AIR_DRAG.forest : "sea";
-        const air = new AirSimulation({ ...MAP, drag: patch });
+            Math.abs(x - 3840) < 1200 && Math.abs(y - 2560) < 1200 ? AIR_ROUGHNESS_M.forest : "sea";
+        const air = new AirSimulation({ ...MAP, roughness: patch });
         air.fill(() => ({ east: 10, north: 0 }));
         for (let step = 0; step < 1200; step++) air.step({ epoch: step * 100, room: { east: 10, north: 0 } });
         const inside = air.windAt(3840, 2560);
         const outside = air.windAt(600, 300);
-        expect(Math.hypot(inside.east, inside.north)).toBeLessThan(Math.hypot(outside.east, outside.north) - 0.5);
+        expect(Math.hypot(inside.east, inside.north)).toBeLessThan(Math.hypot(outside.east, outside.north) - 0.05);
         // The low of a west wind in the north lies to its north: the wind slowed turns that way.
         expect(inside.north).toBeGreaterThan(0);
         expect(Math.abs(outside.east - 10)).toBeLessThan(0.05);
         expect(Math.abs(outside.north)).toBeLessThan(0.05);
-        // A forest all over: the wind settles slower, turned towards the low by the angle of its drag to the
-        // Coriolis force (tan a = k / f, about 20° here).
-        const wood = new AirSimulation({ ...MAP, drag: () => AIR_DRAG.forest });
+        // A forest all over: the wind settles where its drag, the Coriolis force and the pressure balance (measured
+        // 9.82 m/s, turned 5.9° towards the low: tan a = k / f grows from 0.12 over the sea to 0.23 over a forest).
+        const wood = new AirSimulation({ ...MAP, roughness: () => AIR_ROUGHNESS_M.forest });
         wood.fill(() => ({ east: 10, north: 0 }));
-        for (let step = 0; step < 3000; step++) wood.step({ epoch: step * 100, room: { east: 10, north: 0 } });
+        for (let step = 0; step < 6000; step++) wood.step({ epoch: step * 100, room: { east: 10, north: 0 } });
         const settled = wood.windAt(3840, 2560);
-        const turned = (Math.atan2(settled.north, settled.east) * 180) / Math.PI;
-        expect(Math.hypot(settled.east, settled.north)).toBeLessThan(9.5);
-        expect(turned).toBeGreaterThan(5);
-        expect(turned).toBeLessThan(45);
+        const balance = settledOver(AIR_ROUGHNESS_M.forest, { east: 10, north: 0 });
+        expect(Math.hypot(settled.east, settled.north)).toBeLessThan(10 - 0.1);
+        expect(Math.abs(settled.east - balance.east)).toBeLessThan(0.01);
+        expect(Math.abs(settled.north - balance.north)).toBeLessThan(0.01);
+        expect((Math.atan2(settled.north, settled.east) * 180) / Math.PI).toBeGreaterThan(3);
     }, 60_000);
 });

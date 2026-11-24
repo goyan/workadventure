@@ -10,11 +10,11 @@ import type { Hurricane } from "../Catastrophe/Hurricane";
  *   du/dt + (u·∇)u = −∇p/ρ − f k×u − (C_d / h) |u| u
  *
  * the pressure force (the low of a hurricane, its Holland profile in pressure, moving with its eye, and the large
- * scale pressure that drives the wind of the room), the Coriolis force, the drag of the surface (by its kind: the
- * sea drags less than the land, the land less than a forest), and the advection of the wind by itself (from which the
- * centrifugal force comes). What emerges and is not given: the rotation the way of the hemisphere, the balance of the
- * gradient wind, the inflow across the isobars by the drag (stronger over land than over the sea), the calm of the
- * eye, the asymmetry of a low that moves.
+ * scale pressure that drives the wind of the room), the Coriolis force, the drag of the surface (by its roughness: the
+ * sea drags less than open land, open land less than a forest, and the layer is deeper over a rougher surface: see
+ * dragAt), and the advection of the wind by itself (from which the centrifugal force comes). What emerges and is not
+ * given: the rotation the way of the hemisphere, the balance of the gradient wind, the inflow across the isobars by
+ * the drag (stronger over land than over the sea), the calm of the eye, the asymmetry of a low that moves.
  *
  * The scale, a CHOICE: the hurricane of the map is a thousand times smaller than a real one (30 m to its strongest
  * winds instead of 30 km). With the real Coriolis parameter (5·10⁻⁵ s⁻¹ in the tropics) nothing would turn at that
@@ -51,25 +51,72 @@ export const AIR_CORIOLIS = 0.05;
  * (Smith 2003): where it converges, its air rises out at the top (the eyewall); where it diverges, the air above
  * sinks in with its own wind, the gradient wind. Without that exchange (a slab of two dimensions only), the inflow ran
  * on into the eye and filled it (measured: 53° of inflow over the sea, the eye no longer calm). With it, at 1 m: the
- * eye stays calm over the sea and the land, the inflow over the sea is 19 to 32°; but a forest fills the eye half way
- * (53 km/h in it). At 2 m (a CHOICE, twice the similarity): calm everywhere, from category 1 to 5, the inflow over the
- * sea 17 to 24° in categories 4 and 5 (about 20° measured on real hurricanes), more over land, more again over a
- * forest; the strongest wind over the sea above that of its category at the eyewall, the more the stronger it is
+ * eye stays calm over the sea and the land, the inflow over the sea is 19 to 32°; but a forest filled the eye half way
+ * (53 km/h in it, with the drag of a forest then put in a layer as deep as over the sea: see dragAt). At 2 m (a
+ * CHOICE, twice the similarity): calm everywhere, from category 1 to 5, the inflow over the sea 17 to 24° in
+ * categories 4 and 5 (about 20° measured on real hurricanes), more over land, more again over a forest; the strongest
+ * wind over the sea above that of its category at the eyewall, the more the stronger it is
  * (+4 % in category 1, +14 % in category 4, +18 % in category 5: the supergradient jet of a boundary layer, Kepert
  * 2001), where the slab without exchange at 5 m kept it within 6 % but with an inflow of only 8 to 15°.
  */
 export const AIR_LAYER_M = 2;
-/**
- * The drag coefficient of each surface (Large and Pond 1981 over the sea, capped at 2.5·10⁻³ past 31 m/s as Powell
- * 2003 measured in hurricanes; an order of magnitude over land and a forest, rougher).
- */
-export const AIR_DRAG = { sea: 1.5e-3, land: 5e-3, forest: 1e-2 } as const;
-
-/** The drag over the sea at a wind (m/s): Large and Pond, rising with the wind, capped in a hurricane. */
+/** The drag over the sea at a wind (m/s): Large and Pond 1981, rising with the wind, capped at 2.5·10⁻³ past 31 m/s as
+ * Powell 2003 measured in hurricanes. */
 export function seaDrag(speed: number): number {
     if (speed <= 11) return 1.2e-3;
     return Math.min(2.5e-3, (0.49 + 0.065 * speed) * 1e-3);
 }
+
+/**
+ * The roughness length of each surface of land the air crosses, m: class 3 "open" (flat land, low vegetation) 0.03 m
+ * and class 7 "closed" (a mature forest, its obstacles about as tall as they are apart) 1.0 m of the Davenport
+ * classification as Wieringa updated it (J. Wieringa 1992, "Updating the Davenport roughness classification", J. Wind
+ * Eng. Ind. Aerodyn. 41-44, pp. 357-368; reproduced in the WMO guide No. 8, summed up by Gemini, to be checked). The
+ * sea's follows its wind (seaRoughness).
+ */
+export const AIR_ROUGHNESS_M = { land: 0.03, forest: 1 } as const;
+
+/** The von Kármán constant. */
+const KARMAN = 0.4;
+/**
+ * The constants of the neutral geostrophic drag law (Blackadar and Tennekes 1968, "Asymptotic similarity in neutral
+ * barotropic planetary boundary layers", J. Atmos. Sci. 25): the classic A = 1.8, B = 4.5 (Garratt 1992, The
+ * Atmospheric Boundary Layer; Hess and Garratt 2002, Boundary-Layer Meteorol. 104, fit A = 1.3, B = 4.4: summed up by
+ * Gemini, to be checked; the ratio of two friction velocities, landFriction, moves by less than 1.5 % between the two).
+ */
+const DRAG_LAW_A = 1.8;
+const DRAG_LAW_B = 4.5;
+/**
+ * The Coriolis parameter of the tropics, s⁻¹. The Rossby number of a surface, U / (f z0), is the same for the reduced
+ * hurricane (f a thousand times, every length a thousandth: see above) as for a real one over real roughness lengths.
+ */
+const TROPICS_CORIOLIS = AIR_CORIOLIS / 1000;
+
+/** The roughness length of the sea under a wind of the slab (m/s), m: from its drag at 10 m, Cd = (κ / ln(10/z0))². */
+export function seaRoughness(speed: number): number {
+    return 10 * Math.exp(-KARMAN / Math.sqrt(seaDrag(speed * AIR_SURFACE_RATIO)));
+}
+
+/**
+ * The friction velocity over a surface of roughness `z0` (m) under a wind `speed` (m/s) above its surface layer, as a
+ * share of that wind: the neutral geostrophic drag law, G / u* = (1 / κ) √((ln(u* / (f z0)) − A)² + B²), by iteration.
+ */
+export function frictionShare(speed: number, z0: number): number {
+    const wind = Math.max(0.5, speed);
+    let share = 0.03;
+    for (let turn = 0; turn < 30; turn++) {
+        share = KARMAN / Math.hypot(Math.log((wind * share) / (TROPICS_CORIOLIS * z0)) - DRAG_LAW_A, DRAG_LAW_B);
+    }
+    return share;
+}
+
+/** The friction of the slab over a land of roughness `z0` (m), as a multiple of the sea's, under a wind (m/s). */
+export function landFriction(speed: number, z0: number): number {
+    return frictionShare(speed, z0) / frictionShare(speed, seaRoughness(speed));
+}
+
+/** The winds (m/s) at which landFriction is tabulated: one per m/s, up to this. */
+const FRICTION_TABLE_MS = 120;
 
 /**
  * The low of the hurricane is the pressure drop of hurricanePressureDrop (Holland 1980, V² = B Δp / (ρ e), the drop
@@ -91,8 +138,8 @@ export interface AirSetup {
     /** The size of the map, map pixels. */
     width: number;
     height: number;
-    /** The drag coefficient of the surface at a map point (pixels); the sea's by default. */
-    drag?: (x: number, y: number) => number | "sea";
+    /** The roughness length of the surface at a map point (pixels), m (AIR_ROUGHNESS_M), or the sea (by default). */
+    roughness?: (x: number, y: number) => number | "sea";
     /** The depth of the slab (m): AIR_LAYER_M by default. */
     layerM?: number;
     /** The exchange of the slab with the air above it (Smith 2003): true by default. */
@@ -120,8 +167,10 @@ export class AirSimulation {
     public north: Float32Array;
     private nextEast: Float32Array;
     private nextNorth: Float32Array;
-    /** The drag of each cell: a coefficient, or −1 for the sea (it depends on the wind there). */
-    private readonly drag: Float32Array;
+    /** The surface of each cell: 0 for the sea, otherwise 1 + the index of its roughness in `friction`. */
+    private readonly surface: Uint8Array;
+    /** For each roughness of land, its landFriction at each m/s of wind up to FRICTION_TABLE_MS. */
+    private readonly friction: Float32Array[] = [];
     private readonly layerM: number;
     private readonly exchange: boolean;
 
@@ -137,12 +186,23 @@ export class AirSimulation {
         this.north = new Float32Array(cells);
         this.nextEast = new Float32Array(cells);
         this.nextNorth = new Float32Array(cells);
-        this.drag = new Float32Array(cells).fill(-1);
-        if (setup.drag) {
+        this.surface = new Uint8Array(cells);
+        if (setup.roughness) {
+            const kinds = new Map<number, number>();
             for (let row = 0; row < this.rows; row++) {
                 for (let column = 0; column < this.columns; column++) {
-                    const kind = setup.drag(this.originX + column * AIR_CELL_PX, this.originY + row * AIR_CELL_PX);
-                    this.drag[row * this.columns + column] = kind === "sea" ? -1 : kind;
+                    const z0 = setup.roughness(this.originX + column * AIR_CELL_PX, this.originY + row * AIR_CELL_PX);
+                    if (z0 === "sea") continue;
+                    let kind = kinds.get(z0);
+                    if (kind === undefined) {
+                        if (this.friction.length >= 255) throw new Error("AirSimulation: over 255 roughness lengths");
+                        const table = new Float32Array(FRICTION_TABLE_MS + 1);
+                        for (let speed = 0; speed <= FRICTION_TABLE_MS; speed++) table[speed] = landFriction(speed, z0);
+                        this.friction.push(table);
+                        kind = this.friction.length;
+                        kinds.set(z0, kind);
+                    }
+                    this.surface[row * this.columns + column] = kind;
                 }
             }
         }
@@ -186,10 +246,37 @@ export class AirSimulation {
         return top + (bottom - top) * fy;
     }
 
-    /** The drag coefficient of a cell for a wind of that speed (m/s). */
+    /**
+     * The drag of a cell for a wind of that speed (m/s), as the coefficient it has over the slab of AIR_LAYER_M: the
+     * sea's; over land, the stress of the sea times F² over a layer F times deeper (F its landFriction), so F times it.
+     *
+     * Why deeper. A neutral boundary layer is as deep as its friction velocity over the Coriolis parameter,
+     * h ≈ c u* / |f| with c about 0.25 to 0.3 (Rossby-number similarity: Blackadar and Tennekes 1968; Zilitinkevich
+     * 1972; Tennekes 1973; Garratt 1992), u* over the inertial stability in a vortex; and the boundary layer of a
+     * hurricane is found deeper over land than over the sea at a landfall (Giammanco et al. 2013, Weather and
+     * Forecasting 28: its jet about 500 m up over the sea, about 1 km over land; c and these heights summed up by
+     * Gemini, to be checked). At one point and one wind, f or the inertial stability is the same over either surface:
+     * the depths are as the friction velocities. The stress grows as u*², the depth as u*: the slowing of the slab, stress over depth, as u*.
+     * F = u* / u*_sea comes from the geostrophic drag law (landFriction), the depth growing with u* in it: 1.15 over
+     * open land and 1.5 over a forest at the winds of a hurricane, 1.44 and 1.92 at 10 m/s.
+     *
+     * The slab first kept one depth everywhere, with a drag coefficient of 10⁻² over a forest (four times the sea's in
+     * a hurricane): the stress of a forest held in the depth of the sea. Its inflow ran to 52° in category 4, brought
+     * the angular momentum of the vortex in to 0.55 of the radius of the strongest winds, and its wall contracted and
+     * outran the sea's (223 km/h at 10 m, 195 over the sea); the eye of a moving low filled (57 km/h at a fifth of
+     * the radius), its strongest side turned round. With the layer deepening (measured, category 4): its strongest
+     * wind at 0.85 of the radius (0.90 over the sea), 205 km/h at 10 m, its inflow 25.8° (20.0° over the sea, 22.0°
+     * over open land), its eye calm moving or not, its strongest side on its right in the north. The continuity of the
+     * slab does not see the change of its depth from one cell to the next (w / h = −div u): a simplification.
+     */
     private dragAt(at: number, speed: number): number {
-        const kind = this.drag[at];
-        return kind < 0 ? seaDrag(speed) : kind;
+        const kind = this.surface[at];
+        const sea = seaDrag(speed);
+        if (kind === 0) return sea;
+        const table = this.friction[kind - 1];
+        const s = Math.min(FRICTION_TABLE_MS, Math.max(0, speed));
+        const low = Math.min(FRICTION_TABLE_MS - 1, Math.floor(s));
+        return sea * (table[low] + (table[low + 1] - table[low]) * (s - low));
     }
 
     /**

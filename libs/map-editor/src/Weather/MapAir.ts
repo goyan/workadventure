@@ -1,7 +1,7 @@
 import type { HurricaneAirMessage, SubToPusherRoomMessage } from "@workadventure/messages";
 import type { Hurricane } from "../Catastrophe/Hurricane";
 import { blendedWind, hurricaneHere } from "../Catastrophe/Hurricane";
-import { AIR_CELL_PX, AIR_DRAG, AIR_STEP_S, AIR_SURFACE_RATIO, AirSimulation } from "./AirSimulation";
+import { AIR_CELL_PX, AIR_ROUGHNESS_M, AIR_STEP_S, AIR_SURFACE_RATIO, AirSimulation } from "./AirSimulation";
 
 /** The wind of the air is told to the room twice a second: every fifth step of the water (ten a second). */
 export const MAP_AIR_STEPS_PER_MESSAGE = 5;
@@ -41,7 +41,10 @@ export interface MapAirSetup {
     roomWind(): RoomWind;
     /** The size of the map in pixels, once read. */
     mapSize(): { width: number; height: number } | undefined;
-    /** The surface of the map as it is when a hurricane starts (asked once for it): the drag at a point (pixels). */
+    /**
+     * The surface of the map as it is when a hurricane starts (asked once for it): its roughness length (m) at a point
+     * (pixels), or the sea.
+     */
     surface(): (x: number, y: number) => number | "sea";
     /** The most steps of its air a sped up hurricane lives in a step: MAP_AIR_MOST_TIMES by default. */
     mostTimes?: number;
@@ -179,7 +182,7 @@ export class MapAir {
         if (!this.air || this.forId !== hurricane.id) {
             const size = this.setup.mapSize();
             if (!size) return;
-            const air = new AirSimulation({ ...size, drag: this.setup.surface() });
+            const air = new AirSimulation({ ...size, roughness: this.setup.surface() });
             // From the formula of the wind (at 10 m) brought to the slab, mixed into the room's as the storm is grown
             // (its share), the room's wind where it does not blow.
             air.fill((x, y) => {
@@ -218,7 +221,7 @@ export class MapAir {
 }
 
 /**
- * The surface of a map under the air, from its water and its trees: the drag of each point (pixels), counted over
+ * The surface of a map under the air, from its water and its trees: the roughness of each point (pixels), counted over
  * the cell of the air around it. Past the edges of the map, that of its nearest edge.
  */
 export function mapSurfaceOf(
@@ -242,7 +245,7 @@ export function mapSurfaceOf(
                 if (treesByTile.has(`${tx},${ty}`)) wooded++;
             }
         }
-        if (tiles > 0 && wooded / tiles >= MAP_AIR_FOREST_SHARE) return AIR_DRAG.forest;
+        if (tiles > 0 && wooded / tiles >= MAP_AIR_FOREST_SHARE) return AIR_ROUGHNESS_M.forest;
         let cells = 0;
         let wet = 0;
         for (let cy = Math.floor((y - half) / reliefCellPx); cy < Math.floor((y + half) / reliefCellPx); cy++) {
@@ -251,6 +254,6 @@ export function mapSurfaceOf(
                 if (depthAt(cx, cy) >= seaDepthPx) wet++;
             }
         }
-        return cells > 0 && wet / cells >= MAP_AIR_SEA_SHARE ? "sea" : AIR_DRAG.land;
+        return cells > 0 && wet / cells >= MAP_AIR_SEA_SHARE ? "sea" : AIR_ROUGHNESS_M.land;
     };
 }
