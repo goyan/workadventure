@@ -31,6 +31,7 @@ function setup(overrides: Partial<JamAudioSessionDependencies> = {}) {
     const capture: JamMusicCapture = {
         state: captureState,
         sharedMusic: writable(undefined),
+        silent: writable(false),
         start: captureStart,
         stop: captureStop,
     };
@@ -140,6 +141,7 @@ describe("JamAudioSession", () => {
             const capture: JamMusicCapture = {
                 state: captureState,
                 sharedMusic: writable(undefined),
+                silent: writable(false),
                 start: vi.fn().mockResolvedValue(undefined),
                 stop: vi.fn().mockResolvedValue(undefined),
             };
@@ -211,6 +213,7 @@ describe("JamAudioSession", () => {
             const capture: JamMusicCapture = {
                 state: captureState,
                 sharedMusic: writable(undefined),
+                silent: writable(false),
                 start: vi.fn().mockImplementation(() => {
                     captureState.set({ status: "active", label: "BlackHole" });
                     return Promise.resolve();
@@ -263,6 +266,7 @@ describe("JamAudioSession", () => {
             const capture: JamMusicCapture = {
                 state: captureState,
                 sharedMusic: writable(undefined),
+                silent: writable(false),
                 start: vi.fn().mockImplementation(() => {
                     captureState.set({ status: "error", reason: "denied" });
                     return Promise.resolve();

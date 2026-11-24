@@ -88,6 +88,8 @@ function musicConstraints(deviceId: string): MediaStreamConstraints {
     };
 }
 
+type Flag = "reopening" | "waitingForDevice";
+
 interface RunningCapture {
     spaceName: string;
     deviceId: string;
@@ -199,6 +201,11 @@ export function createJamMusicCapture({
         }, REOPEN_DELAY_MS);
     }
 
+    // Flags are set through here: they are read by timers, so a write after an await is intended.
+    function mark(running: RunningCapture, flags: Partial<Pick<RunningCapture, Flag>>): void {
+        Object.assign(running, flags);
+    }
+
     /**
      * Opens the input again and hands the new stream to the Jam in place of the old one, which is stopped: one
      * publication and one live track at any time. Returns whether the new stream is the one being shared.
@@ -207,7 +214,7 @@ export function createJamMusicCapture({
         if (current !== running || running.reopening) {
             return false;
         }
-        running.reopening = true;
+        mark(running, { reopening: true });
         const mine = generation;
         try {
             let stream: MediaStream;
@@ -216,7 +223,7 @@ export function createJamMusicCapture({
             } catch (error) {
                 // Not back yet: the next device change gets its turn.
                 console.warn("Could not reopen the input of the Jam music", error);
-                running.waitingForDevice = true;
+                mark(running, { waitingForDevice: true });
                 return false;
             }
             if (current !== running || mine !== generation) {
@@ -241,14 +248,14 @@ export function createJamMusicCapture({
                 stopTracks(stream);
                 return false;
             }
-            running.waitingForDevice = false;
+            mark(running, { waitingForDevice: false });
             running.silentTicks = 0;
             silent.set(false);
             sharedMusic.set({ spaceName: running.spaceName, stream });
             state.set({ status: "active", label: stream.getAudioTracks()[0]?.label ?? "" });
             return true;
         } finally {
-            running.reopening = false;
+            mark(running, { reopening: false });
         }
     }
 
