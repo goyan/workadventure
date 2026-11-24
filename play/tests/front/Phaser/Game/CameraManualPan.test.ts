@@ -341,8 +341,8 @@ describe("manual camera pan", () => {
             expect(get(cameraDetachedStore)).toBe(true);
         });
 
-        it("brings the zoom back to the game's minimum, around the view and not the avatar", () => {
-            const { camera, manager, player, advanceTween } = setup(0.28, true);
+        it("leaves the zoom alone, and saves none as the user's choice", () => {
+            const { camera, manager, advanceTween, saveZoom } = setup(0.28, true);
             mapEditorModeStore.set(true);
             manager.scrollCamera(500, 0);
             camera.preRender();
@@ -350,12 +350,55 @@ describe("manual camera pan", () => {
             mapEditorModeStore.set(false);
             advanceTween(1);
             camera.preRender();
-            expect(camera.zoom).toBeCloseTo(manager.resistanceEndZoomLevel);
+            expect(camera.zoom).toBe(0.28);
             expect(camera.midPoint.x).toBeCloseTo(centre);
-            expect(camera.midPoint.x).not.toBeCloseTo(player.x);
+            expect(saveZoom).not.toHaveBeenCalled();
         });
 
-        it("goes back to the avatar when it moves, or on the recenter button, as after a drag", () => {
+        it("keeps following an avatar near a map edge, where the clamped view is not centred on it", () => {
+            const { camera, manager, player, advanceTween } = setup(1, true);
+            player.x = 100;
+            player.y = 100;
+            manager.startFollowPlayer(player as unknown as Player, 0);
+            advanceTween(1);
+            camera.preRender();
+            mapEditorModeStore.set(true);
+            mapEditorModeStore.set(false);
+            advanceTween(1);
+            camera.preRender();
+            expect(get(cameraDetachedStore)).toBe(false);
+            player.x = 300;
+            camera.preRender();
+            expect(camera.midPoint.x).toBe(400);
+        });
+
+        it("keeps following the avatar with a layout follow offset", () => {
+            const { camera, manager, player, advanceTween } = setup(1, true);
+            camera.setFollowOffset(100, 0);
+            manager.startFollowPlayer(player as unknown as Player, 0);
+            advanceTween(1);
+            mapEditorModeStore.set(true);
+            mapEditorModeStore.set(false);
+            advanceTween(1);
+            camera.preRender();
+            expect(get(cameraDetachedStore)).toBe(false);
+            expect(camera.midPoint.x).toBe(player.x - 100);
+        });
+
+        it("stays detached when the view was already dragged away before the editor opened", () => {
+            const { camera, manager } = setup(1, true);
+            manager.startManualPan();
+            manager.panBy(400, 0);
+            camera.preRender();
+            const centre = camera.midPoint.x;
+            mapEditorModeStore.set(true);
+            mapEditorModeStore.set(false);
+            camera.preRender();
+            expect(camera.midPoint.x).toBeCloseTo(centre);
+            expect(get(cameraDetachedStore)).toBe(true);
+        });
+
+        it("goes back to the avatar on the recenter button, as after a drag", () => {
             const { camera, manager, player, advanceTween } = setup(1, true);
             mapEditorModeStore.set(true);
             manager.scrollCamera(500, 0);
@@ -400,11 +443,27 @@ describe("manual camera pan", () => {
         mapEditorModeStore.set(true);
         manager.scrollCamera(500, 0);
         camera.preRender();
-        expect(camera.midPoint.x).toBe(player.x + 500);
         mapEditorModeStore.set(false);
         mapEditorModeStore.set(true);
         camera.preRender();
         expect(camera.midPoint.x).toBe(player.x + 500);
+        expect(camera.midPoint.y).toBe(player.y);
+    });
+
+    it("ends on the avatar when the editor reopens while the view glides back to it", () => {
+        const { camera, manager, player, advanceTween } = setup(1, true);
+        manager.startFollowPlayer(player as unknown as Player, 0);
+        advanceTween(1);
+        manager.startManualPan();
+        manager.panBy(500, 0);
+        camera.preRender();
+        manager.resumePlayerFollow();
+        advanceTween(0.5);
+        camera.preRender();
+        expect(camera.midPoint.x).toBeGreaterThan(player.x);
+        mapEditorModeStore.set(true);
+        camera.preRender();
+        expect(camera.midPoint.x).toBe(player.x);
         expect(camera.midPoint.y).toBe(player.y);
     });
 

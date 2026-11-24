@@ -113,13 +113,10 @@ export class CameraManager extends EventEmitter {
     /** Key scrolling in the map editor, in world units per ms at zoom modifier 1 (same on-screen speed at any zoom). */
     private readonly KEY_SCROLL_SPEED = 0.6;
     private mapEditorOpen = false;
-    private zoomBeforeMapEditor: number | undefined;
     // The camera bounds last set in game mode (see updateGameBounds).
     private gameBounds: { x: number; y: number; width: number; height: number } | undefined;
 
     private readonly unsubscribeMapEditorModeStore: () => void;
-
-    private _resistanceEndZoomLevel = 0.3;
 
     // The free point the view follows when it does not follow a player: after a drag, or in the map editor.
     private explorerFocusOn: { x: number; y: number } = { x: 0, y: 0 };
@@ -426,7 +423,6 @@ export class CameraManager extends EventEmitter {
     /** In the map editor the view is free: the move keys scroll it and the wheel zooms on the cursor. */
     private enterMapEditor(): void {
         this.stopWalkFraming();
-        this.zoomBeforeMapEditor = this.waScaleManager.zoomModifier;
         // Unless the user dragged the view away, start where a following camera would be: on its target, with its
         // offset. A small map holds the game-mode view away from the avatar, and a camera reopened while gliding back
         // to the avatar (just after closing the editor) would otherwise stop halfway.
@@ -440,35 +436,26 @@ export class CameraManager extends EventEmitter {
     }
 
     /**
-     * Closing the editor keeps the view where it was, detached from the avatar as after a drag (the bounds of the game
-     * were just restored: a view past the map edges was brought back inside by the clamping). A view already on the
-     * avatar keeps following it, and a focus zone keeps its usual priority.
+     * Closing the editor keeps the view, and the zoom, where they were: detached from the avatar as after a drag. The
+     * bounds of the game are back, so the clamping brings a view left past the map edges inside the map. A view that
+     * was on the avatar keeps following it, and a focus zone keeps its usual priority.
      */
     private leaveMapEditor(): void {
-        // Zoomed out past the resistance level (to see the whole map, say): the game allows no further than that.
-        const zoomOutFactor =
-            this.waScaleManager.zoomModifier < this.resistanceEndZoomLevel
-                ? this.resistanceEndZoomLevel / this.waScaleManager.zoomModifier
-                : undefined;
+        const player = this.scene.CurrentPlayer;
+        // The editor's free point is not touched by the bounds: unlike the rendered view, it tells whether the avatar
+        // was the editor's centre (a small map or an avatar near an edge holds the rendered view elsewhere).
+        const onAvatar =
+            Math.abs(this.explorerFocusOn.x - player.x) < 1 &&
+            Math.abs(this.explorerFocusOn.y - (player.visualY ?? player.y)) < 1;
+        if (this.waScaleManager.getFocusTarget() || onAvatar) this.followFocusOrPlayer(500);
+        else this.startManualPan();
+    }
 
+    /** Back on the focus zone as it was framed while one is active, otherwise on the avatar. */
+    private followFocusOrPlayer(duration: number): void {
         const focus = this.waScaleManager.getFocusTarget();
-        if (focus) {
-            this.animateToFocus({ x: focus.x, y: focus.y }, 1000);
-        } else {
-            // Apply the restored bounds before reading where the view is.
-            this.camera.preRender();
-            const player = this.scene.CurrentPlayer;
-            const { followOffset } = this.camera;
-            const onAvatar =
-                Math.abs(this.camera.midPoint.x + followOffset.x - player.x) < 1 &&
-                Math.abs(this.camera.midPoint.y + followOffset.y - (player.visualY ?? player.y)) < 1;
-            if (onAvatar) {
-                this.startFollowPlayer(player, 0);
-            } else {
-                this.startManualPan();
-            }
-        }
-        if (zoomOutFactor) this.zoomByFactor(zoomOutFactor, 1000);
+        if (focus) this.animateToFocus({ x: focus.x, y: focus.y }, duration);
+        else this.startFollowPlayer(this.scene.CurrentPlayer, duration);
     }
 
     public startFollowPlayer(player: Player | RemotePlayer, duration = 0): void {
@@ -860,9 +847,7 @@ export class CameraManager extends EventEmitter {
     public resumePlayerFollow(): void {
         if (!this.manuallyDetached) return;
         // Still in a focus zone: back on the zone as it was framed, not on the avatar.
-        const focus = this.waScaleManager.getFocusTarget();
-        if (focus) this.animateToFocus({ x: focus.x, y: focus.y }, 500);
-        else this.startFollowPlayer(this.scene.CurrentPlayer, 500);
+        this.followFocusOrPlayer(500);
     }
 
     private setManuallyDetached(detached: boolean): void {
@@ -1193,10 +1178,6 @@ export class CameraManager extends EventEmitter {
 
         this.emit(CameraManagerEvent.CameraUpdate, this.getCameraUpdateEventData());
     };
-
-    get resistanceEndZoomLevel(): number {
-        return this._resistanceEndZoomLevel;
-    }
 
     setSpeed(speed: { x: number; y: number }) {
         this.cameraAnimation?.onInterrupt();
