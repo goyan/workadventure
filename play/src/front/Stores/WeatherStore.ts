@@ -45,6 +45,13 @@ export const aquaticLifeShownStore = createPersistedSwitchStore("aquaticLifeShow
  */
 export const cloudsHeightStore = createPersistedNumberStore("weatherCloudsHeight", 0, 0, 1);
 
+/**
+ * Where the amount is kept. The key of the first version (a quarter to 2 times the rain, weatherRainAmount) is left
+ * alone: its values are all under the new ×1, which is RAIN_AMOUNT_BASE times the rain of that version at 100 %, so
+ * everyone starts again at ×1.
+ */
+const RAIN_AMOUNT_KEY = "weatherRainAmountSteps";
+
 /** The personal amount of rain and snow goes by steps of a slider: 1, 2, 4... up to 2 to the power of this step. */
 export const RAIN_AMOUNT_LAST_STEP = 5;
 
@@ -62,12 +69,11 @@ export function rainAmountOfStep(step: number): number {
 /**
  * Personal settings of the rain, kept in the browser, 1 by default (the rain as designed); they never change the
  * weather of the map for the others. How many times more drops and flakes fall than the air says (1, 2, 4... 32: it
- * adds drops, it does not make the rain heavier; what an older version kept, from a quarter to 2, comes to the nearest
- * step, 1 at the least), how much they lean with the wind, how many splash on the ground, how big the puddles get (0:
+ * adds drops, it does not make the rain heavier; what is kept is snapped to the nearest step, 1 at the least), how much they lean with the wind, how many splash on the ground, how big the puddles get (0:
  * none), and how much more it rains under the clouds than between them (0: the same everywhere).
  */
 export const rainAmountStore = createPersistedNumberStore(
-    "weatherRainAmount",
+    RAIN_AMOUNT_KEY,
     1,
     1,
     rainAmountOfStep(RAIN_AMOUNT_LAST_STEP),

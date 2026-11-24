@@ -5,6 +5,7 @@ import {
     COPY_SALT,
     densityPlan,
     MAX_COPIES,
+    RAIN_AMOUNT_BASE,
 } from "../../../../../src/front/Phaser/Game/Weather/ParticleDensity";
 import { snowflakes, flakeMix } from "../../../../../src/front/Phaser/Game/Weather/Snowfall";
 import { rainDrops } from "../../../../../src/front/Phaser/Game/Weather/Rain";
@@ -23,26 +24,25 @@ const stillAir = { shift: { x: 0, y: 0 }, wind: { x: 0, y: 0 } };
 const key = (...parts: number[]): string => parts.map((part) => part.toFixed(6)).join("|");
 
 describe("densityPlan", () => {
-    it("draws as many copies as the amount up to MAX_COPIES, each as it is", () => {
-        for (const amount of [1, 2, 4]) {
-            const copies = Math.min(amount, MAX_COPIES);
-            expect(densityPlan(amount)).toEqual({ copies, boost: amount / copies });
-        }
-        expect(densityPlan(1)).toEqual({ copies: 1, boost: 1 });
+    it("draws ×1 as RAIN_AMOUNT_BASE times the rain of the first version, in at most MAX_COPIES copies", () => {
+        expect(RAIN_AMOUNT_BASE).toBe(5);
+        const plan = densityPlan(1);
+        expect(plan.copies).toBe(Math.min(MAX_COPIES, RAIN_AMOUNT_BASE));
+        expect(plan.copies * plan.boost).toBeCloseTo(RAIN_AMOUNT_BASE, 9);
     });
 
     it("draws the amount over the cap as fewer copies, each thicker, whatever the amount", () => {
         for (const amount of [1, 2, 4, 8, 16, 32]) {
             const plan = densityPlan(amount);
             expect(plan.copies).toBeLessThanOrEqual(MAX_COPIES);
-            expect(plan.copies * plan.boost).toBeCloseTo(amount, 9);
+            expect(plan.copies * plan.boost).toBeCloseTo(amount * RAIN_AMOUNT_BASE, 9);
         }
         expect(densityPlan(32).boost).toBeGreaterThan(densityPlan(8).boost);
     });
 
     it("never draws less than the rain as it is, whatever it is given", () => {
         for (const amount of [0, -3, Number.NaN, Number.POSITIVE_INFINITY, 0.25]) {
-            expect(densityPlan(amount)).toEqual({ copies: 1, boost: 1 });
+            expect(densityPlan(amount)).toEqual(densityPlan(1));
         }
     });
 });
