@@ -142,8 +142,15 @@ export function hollandShape(s: number): number {
     return HOLLAND_SHAPE[low] + (HOLLAND_SHAPE[low + 1] - HOLLAND_SHAPE[low]) * (x - low);
 }
 
-/** The winds (m/s) at which landFriction is tabulated: one per m/s, up to this. */
+/** The winds (m/s) at which landFriction and surfaceRatio are tabulated: one per m/s, up to this. */
 const FRICTION_TABLE_MS = 120;
+
+/** A table of FRICTION_TABLE_MS + 1 values, one per m/s, at a wind (m/s): linear between. */
+function tableAt(table: Float32Array, speed: number): number {
+    const s = Math.min(FRICTION_TABLE_MS, Math.max(0, speed));
+    const low = Math.min(FRICTION_TABLE_MS - 1, Math.floor(s));
+    return table[low] + (table[low + 1] - table[low]) * (s - low);
+}
 
 /**
  * The low of the hurricane is the pressure drop of hurricanePressureDrop (Holland 1980, V² = B Δp / (ρ e), the drop
@@ -157,9 +164,35 @@ const FRICTION_TABLE_MS = 120;
  * the debris, the water, the rain) and what the category of a hurricane is defined on is the wind at 10 m: "This mean
  * boundary layer (MBL) wind speed is then multiplied by 0.80, the mean ratio of the 10-m speed to the MBL speed
  * determined from the sample of eyewall dropsondes" (Franklin, Black and Valde 2003, Weather and Forecasting 18,
- * p. 42; the MBL is the mean over the lowest 500 m). The one place it is applied: surfaceWindAt.
+ * p. 42; the MBL is the mean over the lowest 500 m). Measured over the sea: there, the ratio of the wind at 10 m to
+ * that of the slab (surfaceRatio over land). Applied in one place: surfaceWindAt.
  */
 export const AIR_SURFACE_RATIO = 0.8;
+
+/**
+ * The height of the obstacles of a surface (its plants, its trees) over its roughness length, and the height its wind
+ * is displaced by over those obstacles: h ≈ 10 z0 and d ≈ 2/3 h, the rules of thumb for vegetation (Garratt 1992,
+ * The Atmospheric Boundary Layer, §4.2; Raupach 1994, "Simplified expressions for vegetation roughness length and
+ * zero-plane displacement as functions of canopy height and area index", Boundary-Layer Meteorol. 71: the ratios at
+ * a dense canopy; sections and values to be checked). A forest of z0 = 1 m is 10 m tall: its 10 m is its top.
+ */
+const OBSTACLE_HEIGHT_PER_Z0 = 10;
+const DISPLACEMENT_PER_HEIGHT = 2 / 3;
+
+/**
+ * The wind at 10 m over a surface of roughness `z0` (m) or over the sea, as a share of the wind of the slab (m/s)
+ * above it. Over the sea, AIR_SURFACE_RATIO (measured). Over land, from the sea's: under the same slab its friction
+ * velocity is F times the sea's (landFriction), and the log law of the surface layer, U(z) = (u* / κ) ln((z − d)/z0),
+ * puts the 10 m of a rougher surface lower in its profile, U10 / U10_sea = F ln((10 − d)/z0) / ln(10/z0_sea). Measured:
+ * 0.80 to 0.84 of the sea's over open land (a wind falling by 15 to 20 % at a landfall), 0.22 over a forest (the top
+ * of its canopy). No constant of its own.
+ */
+export function surfaceRatio(speed: number, z0: number | "sea"): number {
+    if (z0 === "sea") return AIR_SURFACE_RATIO;
+    const above = 10 - DISPLACEMENT_PER_HEIGHT * OBSTACLE_HEIGHT_PER_Z0 * z0;
+    const profile = above > z0 ? Math.log(above / z0) : 0;
+    return (AIR_SURFACE_RATIO * landFriction(speed, z0) * profile) / Math.log(10 / seaRoughness(speed));
+}
 
 export interface AirSetup {
     /** The size of the map, map pixels. */
@@ -198,6 +231,8 @@ export class AirSimulation {
     private readonly surface: Uint8Array;
     /** For each roughness of land, its landFriction at each m/s of wind up to FRICTION_TABLE_MS. */
     private readonly friction: Float32Array[] = [];
+    /** For each roughness of land, its surfaceRatio at each m/s of wind up to FRICTION_TABLE_MS. */
+    private readonly surfaceShares: Float32Array[] = [];
     private readonly layerM: number;
     private readonly exchange: boolean;
 
@@ -224,8 +259,13 @@ export class AirSimulation {
                     if (kind === undefined) {
                         if (this.friction.length >= 255) throw new Error("AirSimulation: over 255 roughness lengths");
                         const table = new Float32Array(FRICTION_TABLE_MS + 1);
-                        for (let speed = 0; speed <= FRICTION_TABLE_MS; speed++) table[speed] = landFriction(speed, z0);
+                        const shares = new Float32Array(FRICTION_TABLE_MS + 1);
+                        for (let speed = 0; speed <= FRICTION_TABLE_MS; speed++) {
+                            table[speed] = landFriction(speed, z0);
+                            shares[speed] = surfaceRatio(speed, z0);
+                        }
                         this.friction.push(table);
+                        this.surfaceShares.push(shares);
                         kind = this.friction.length;
                         kinds.set(z0, kind);
                     }
@@ -254,10 +294,45 @@ export class AirSimulation {
         return { east: this.sample(this.east, gx, gy), north: this.sample(this.north, gx, gy) };
     }
 
-    /** The wind at 10 m at a map point (pixels): that of the layer times AIR_SURFACE_RATIO. East and north, m/s. */
+    /**
+     * The wind at 10 m at a map point (pixels), east and north, m/s: that of the layer of each cell around times the
+     * share of its surface (surfaceRatio), bilinear between the cells. Over the sea, the layer's times
+     * AIR_SURFACE_RATIO.
+     */
     public surfaceWindAt(x: number, y: number): { east: number; north: number } {
-        const layer = this.windAt(x, y);
-        return { east: layer.east * AIR_SURFACE_RATIO, north: layer.north * AIR_SURFACE_RATIO };
+        const gx = Math.min(this.columns - 1.000001, Math.max(0, (x - this.originX) / AIR_CELL_PX));
+        const gy = Math.min(this.rows - 1.000001, Math.max(0, (y - this.originY) / AIR_CELL_PX));
+        const x0 = Math.floor(gx);
+        const y0 = Math.floor(gy);
+        const at = y0 * this.columns + x0;
+        const below = at + this.columns;
+        const { surface } = this;
+        if (surface[at] === 0 && surface[at + 1] === 0 && surface[below] === 0 && surface[below + 1] === 0) {
+            const layer = this.windAt(x, y);
+            return { east: layer.east * AIR_SURFACE_RATIO, north: layer.north * AIR_SURFACE_RATIO };
+        }
+        const fx = gx - x0;
+        const fy = gy - y0;
+        let east = 0;
+        let north = 0;
+        const add = (cell: number, weight: number): void => {
+            const e = this.east[cell];
+            const n = this.north[cell];
+            const share = weight * this.surfaceShareAt(cell, Math.hypot(e, n));
+            east += e * share;
+            north += n * share;
+        };
+        add(at, (1 - fx) * (1 - fy));
+        add(at + 1, fx * (1 - fy));
+        add(below, (1 - fx) * fy);
+        add(below + 1, fx * fy);
+        return { east, north };
+    }
+
+    /** The share of the wind of the layer of a cell found at 10 m (surfaceRatio), for a wind of that speed (m/s). */
+    private surfaceShareAt(at: number, speed: number): number {
+        const kind = this.surface[at];
+        return kind === 0 ? AIR_SURFACE_RATIO : tableAt(this.surfaceShares[kind - 1], speed);
     }
 
     private sample(field: Float32Array, gx: number, gy: number): number {
@@ -287,6 +362,13 @@ export class AirSimulation {
      * F = u* / u*_sea comes from the geostrophic drag law (landFriction), the depth growing with u* in it: 1.15 over
      * open land and 1.5 over a forest at the winds of a hurricane, 1.44 and 1.92 at 10 m/s.
      *
+     * A CHOICE of closure: the depth of each cell is that of a layer in balance with its own surface, cell by cell. A
+     * layer that has just crossed onto a forest has not grown yet (an internal boundary layer grows over kilometres):
+     * its stress is already the forest's, its depth still near the sea's; the truth lies between F and F² times the
+     * drag of the sea, the closure takes F. A known limit: the drag law is that of a straight wind under the planetary
+     * f (TROPICS_CORIOLIS); in the vortex the depth goes with u* over its inertial stability, many times f near the
+     * wall. Only the ratio of two surfaces at one point is taken from it, where that stability is the same over both.
+     *
      * The slab first kept one depth everywhere, with a drag coefficient of 10⁻² over a forest (four times the sea's in
      * a hurricane): the stress of a forest held in the depth of the sea. Its inflow ran to 52° in category 4, brought
      * the angular momentum of the vortex in to 0.55 of the radius of the strongest winds, and its wall contracted and
@@ -300,10 +382,7 @@ export class AirSimulation {
         const kind = this.surface[at];
         const sea = seaDrag(speed);
         if (kind === 0) return sea;
-        const table = this.friction[kind - 1];
-        const s = Math.min(FRICTION_TABLE_MS, Math.max(0, speed));
-        const low = Math.min(FRICTION_TABLE_MS - 1, Math.floor(s));
-        return sea * (table[low] + (table[low + 1] - table[low]) * (s - low));
+        return sea * tableAt(this.friction[kind - 1], speed);
     }
 
     /**
@@ -339,13 +418,14 @@ export class AirSimulation {
         const spin = forcing.hurricane?.southern ? -1 : 1;
         const f = AIR_CORIOLIS * spin;
         // The low: Holland in pressure, p = pc + Δp exp(−(R/r)^B); its force per kilogram, towards the eye. It deepens
-        // and fills with the storm (its share), as the low the water feels (hurricanePressure).
+        // and fills with the storm, its drop times its share, as the low the water feels (hurricanePressure): its wind
+        // in balance goes as the square root of that drop (V² = B Δp / (ρ e)), the square root of the share.
         const dropOverRho =
             storm && forcing.hurricane
-                ? (hurricanePressureDrop(forcing.hurricane.category) * Math.max(0, storm.share)) / AIR_DENSITY
+                ? (hurricanePressureDrop(forcing.hurricane.category) * Math.max(0, share)) / AIR_DENSITY
                 : 0;
-        // The force of the low at r: Δp B / (ρ R) × hollandShape(r / R), grown with the storm (its share).
-        const force = (dropOverRho * HURRICANE_HOLLAND_B * share) / HURRICANE_RMAX_M;
+        // The force of the low at r: Δp B / (ρ R) × hollandShape(r / R), the share in Δp alone.
+        const force = (dropOverRho * HURRICANE_HOLLAND_B) / HURRICANE_RMAX_M;
         const cell = AIR_CELL_M;
         const cos = Math.cos(f * dt);
         const sin = Math.sin(f * dt);

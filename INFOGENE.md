@@ -6209,19 +6209,28 @@ mailles marge comprise sur la carte d'Antoine).
   ressent déjà, `hurricanePressureDrop`) et par la pression de grande échelle qui tient le vent de la salle. Y
   s'ajoutent la force de Coriolis, le frottement du sol selon sa nature et le transport du vent par lui-même. Là où la
   dalle diverge, l'air du dessus, au vent de gradient, y descend (Smith 2003). Le frottement vaut Large et Pond sur
-  la mer, plafonné à 2,5·10⁻³ ; 5·10⁻³ sur la terre ; 10⁻² en forêt.
+  la mer, plafonné à 2,5·10⁻³. Sur terre, il vaut celui de la mer × F, où F = u*/u*mer vient de la loi de traînée
+  géostrophique (Blackadar et Tennekes 1968) et de la longueur de rugosité (Wieringa 1992 : 0,03 m pour un sol ouvert,
+  1 m pour une forêt). F vaut 1,15 sur sol ouvert et 1,5 en forêt aux vents d'un ouragan. La contrainte croît comme
+  u*² et l'épaisseur de la couche comme u* (h ≈ 0,25 u*/f) ; c'est un choix de fermeture, maille par maille (la vérité
+  est entre F et F²).
 - **Choix**, l'ouragan étant mille fois plus petit qu'un vrai : similitude de Rossby (f* = 0,05 s⁻¹ à R = 30 m) et
   épaisseur de la dalle h = 2 m (le double de la similitude à 1 m, sans quoi l'air remplit l'œil). Aucun autre
   réglage : la catégorie sort de la pression.
-- Vent à 10 m = vent de la dalle × 0,80 (Franklin, Black et Valde 2003, Weather and Forecasting 18, p. 42 :
+- Vent à 10 m sur mer = vent de la dalle × 0,80 (Franklin, Black et Valde 2003, Weather and Forecasting 18, p. 42 :
   rapport moyen du vent à 10 m au vent moyen des 500 m inférieurs, dans le mur), appliqué en un seul endroit
   (`surfaceWindAt`). Mesuré sur mer à 10 m : 104 km/h pour 126 en catégorie 1 (−17 %), 195 pour 214 en
   catégorie 4 (−9 %), 235 pour 250 en catégorie 5 (−6 %) ; rayon du maximum de 0,85 à 1,05 Rmax, œil calme,
   entrée de 15 à 25° sur mer, plus forte sur terre et en forêt.
-- **Défauts connus et non expliqués**, gardés visibles par des tests en échec attendu (`it.fails`) : en forêt, le mur
-  se contracte à 0,55 Rmax et y souffle plus fort que sur mer (223 km/h en catégorie 4), l'œil d'un ouragan mobile
-  n'y est pas calme, et l'asymétrie gauche-droite s'inverse. Le rapport 0,80 est mesuré sur mer, pas en forêt. Lot
-  séparé à venir.
+- Sur terre, le vent à 10 m vient de celui de la mer par la loi logarithmique : U10/U10mer = F·ln((10 − d)/z0)/ln(10/z0mer),
+  avec des obstacles hauts de h ≈ 10 z0 et un déplacement d ≈ 2/3 h (Garratt 1992, Raupach 1994, à vérifier). Une
+  forêt de z0 = 1 m mesure 10 m : son « 10 m » est le sommet de sa canopée. Mesuré en catégorie 4 : 195 km/h sur mer,
+  165 sur sol ouvert (−15 %, comme à un atterrissage), 46 au sommet d'une forêt ; en catégorie 5 : 235, 198, 54.
+- Les défauts de la forêt (mur contracté à 0,55 Rmax, œil mobile rempli, asymétrie inversée) venaient de
+  l'épaisseur unique de la couche : corrigés le 2026-11-24 (PR #554). Rayon du maximum 0,85 Rmax en forêt (0,90
+  sur mer), œil calme, côté fort à droite dans le nord ; entrée 20,0° sur mer, 22,0° sur sol ouvert, 25,8° en forêt.
+- Le fondu : la dépression vaut sa chute × la part de l'ouragan (`share`), comme sur l'eau ; le vent à l'équilibre
+  en suit la racine. Elle était appliquée deux fois jusqu'au 2026-11-24.
 - Sur le serveur (`MapAir`) : l'air est créé au début d'un ouragan, sa surface lue alors dans la carte (mer là où
   l'eau du relief a la profondeur d'un poisson sur la moitié d'une maille, forêt là où un arbre occupe le quart des
   cases, terre ailleurs, deux seuils choisis). Il avance avec chaque pas de l'eau, donc de la même façon avec ou sans

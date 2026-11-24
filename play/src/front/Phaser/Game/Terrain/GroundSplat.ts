@@ -1485,6 +1485,7 @@ export class GroundSplat {
         this.seaFoam?.destroy();
         if (this.scene.textures.exists(this.key)) this.scene.textures.remove(this.key);
         if (this.scene.textures.exists(this.heightsKey)) this.scene.textures.remove(this.heightsKey);
+        if (this.scene.textures.exists(this.airKey)) this.scene.textures.remove(this.airKey);
     }
 
     /** The textures of the two shaders: the weights first, the heights last (a blank one until the relief is in 3/4). */

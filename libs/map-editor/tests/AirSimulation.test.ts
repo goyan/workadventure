@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { HURRICANE_HOLLAND_B, HURRICANE_RMAX_M, hurricaneHere, hurricaneMaxWind } from "../src/Catastrophe/Hurricane";
+import {
+    HURRICANE_HOLLAND_B,
+    HURRICANE_RMAX_M,
+    hurricaneAt,
+    hurricaneHere,
+    hurricaneMaxWind,
+} from "../src/Catastrophe/Hurricane";
 import type { Hurricane } from "../src/Catastrophe/Hurricane";
 import {
     AIR_CORIOLIS,
@@ -96,6 +102,56 @@ describe("the air of a map under a hurricane (AirSimulation)", () => {
         expect(Math.abs(weak.kmh / hurricaneMaxWind(1) - 1)).toBeLessThan(0.2);
     }, 60_000);
 
+    it("blows, a storm grown in part, as the square root of its low grown in part, in balance", () => {
+        /** The strongest mean wind round the eye (km/h at 10 m) of a hurricane held at `progress` of its life, and its
+         * share then, after five minutes of the air from rest: in balance with its low, whatever it started from. */
+        const held = (progress: number): { kmh: number; share: number } => {
+            const life = 1e12;
+            const hurricane: Hurricane = { ...standing(4), startedAt: EPOCH - progress * life, durationMs: life };
+            const air = new AirSimulation({ ...MAP });
+            for (let step = 0; step < 3000; step++) air.step({ hurricane, epoch: EPOCH, room: { east: 0, north: 0 } });
+            return { kmh: strongest(air).kmh, share: hurricaneAt(hurricane, EPOCH)?.share ?? 0 };
+        };
+        const whole = held(0.5);
+        expect(whole.share).toBe(1);
+        for (const progress of [0.01, 0.02]) {
+            const part = held(progress);
+            expect(part.share, `${progress}`).toBeGreaterThan(0.1);
+            expect(part.share, `${progress}`).toBeLessThan(0.9);
+            // The low a share of its drop, its wind in balance the square root of that share (V² = B Δp / (ρ e)):
+            // within 10 % (the drag and the inflow do not scale exactly with it). The share itself would be 0.26 at 1 %.
+            expect(part.kmh / whole.kmh / Math.sqrt(part.share), `${progress}`).toBeGreaterThan(0.9);
+            expect(part.kmh / whole.kmh / Math.sqrt(part.share), `${progress}`).toBeLessThan(1.1);
+        }
+    }, 120_000);
+
+    it("blows less at 10 m over open land than over the sea, and less again over a forest, as at a landfall", () => {
+        /** The strongest mean speed at 10 m (km/h) round the eye, as surfaceWindAt tells it. */
+        const at10 = (drag: number | "sea"): number => {
+            const air = spun(standing(4), drag);
+            let best = 0;
+            for (let radii = 0.3; radii <= 3; radii += 0.05) {
+                let sum = 0;
+                for (let at = 0; at < 72; at++) {
+                    const angle = (at / 72) * 2 * Math.PI;
+                    const r = radii * HURRICANE_RMAX_M * PX_PER_M;
+                    const wind = air.surfaceWindAt(3840 + r * Math.cos(angle), 2560 - r * Math.sin(angle));
+                    sum += Math.hypot(wind.east, wind.north) * 3.6;
+                }
+                best = Math.max(best, sum / 72);
+            }
+            return best;
+        };
+        const sea = at10("sea");
+        const land = at10(AIR_ROUGHNESS_M.land);
+        const forest = at10(AIR_ROUGHNESS_M.forest);
+        // Measured in category 4: 195 km/h over the sea, 165 over open land (−15 %: the 15 to 20 % a landfall takes
+        // off the wind at 10 m), 46 at the top of a forest. The slab alone blows harder over the rougher surfaces.
+        expect(land).toBeLessThan(sea * 0.9);
+        expect(land).toBeGreaterThan(sea * 0.75);
+        expect(forest).toBeLessThan(land * 0.5);
+    }, 60_000);
+
     it("turns anticlockwise in the north, clockwise in the south", () => {
         expect(ring(spun(standing(4), "sea"), 1).round).toBeGreaterThan(150);
         expect(ring(spun(standing(4, true), "sea"), 1).round).toBeLessThan(-150);
@@ -125,10 +181,16 @@ describe("the air of a map under a hurricane (AirSimulation)", () => {
         // Rougher, more: measured 20.0° over the sea, 22.0° over open land, 25.8° over a forest in category 4. The
         // geostrophic drag law gives 17.7°, 20.5° and 27.1° across the isobars of a straight wind of 50 m/s over the
         // same surfaces (sin a = B u* / (κ G)): the same order, not the same flow (a vortex is not an Ekman layer).
-        const sea = inflow("sea");
-        const land = inflow(AIR_ROUGHNESS_M.land);
-        expect(land).toBeGreaterThan(sea + 1);
-        expect(inflow(AIR_ROUGHNESS_M.forest)).toBeGreaterThan(land + 1);
+        // The drag of the slab is F times the sea's (landFriction): the tangent of the inflow grows by F at most
+        // (all of it turned by the drag), a little less as the exchange with the air above and the advection take
+        // their share (measured 0.96 F over open land, 0.89 F over a forest).
+        const tan = (degrees: number): number => Math.tan((degrees * Math.PI) / 180);
+        const sea = tan(inflow("sea"));
+        for (const z0 of [AIR_ROUGHNESS_M.land, AIR_ROUGHNESS_M.forest]) {
+            const friction = landFriction(60, z0);
+            expect(tan(inflow(z0)) / sea, `${z0}`).toBeGreaterThan(0.85 * friction);
+            expect(tan(inflow(z0)) / sea, `${z0}`).toBeLessThan(friction);
+        }
     }, 60_000);
 
     /** The wind at 1.2 radii east and west of an eye going north at 3 m/s for half a minute, and in the eye. */
