@@ -25,6 +25,8 @@
         /** The input the user speaks into: it is never offered, it would carry their voice and not the music. */
         micDeviceId: string | undefined;
         captureState: Readable<JamMusicCaptureState>;
+        /** The shared input is gone and the capture waits for it (see JamMusicCapture.inputLost). */
+        captureLost?: Readable<boolean>;
         /** The shared input delivers nothing (see JamMusicCapture.silent). */
         captureSilent?: Readable<boolean>;
         /** The Jam is playing a track now: without it a silence is a pause, not a problem. */
@@ -41,6 +43,7 @@
         session,
         micDeviceId,
         captureState,
+        captureLost = readable(false),
         captureSilent = readable(false),
         trackPlaying = false,
         live = false,
@@ -109,6 +112,7 @@
         $jamMusicMutedStore ? $LL.spotify.listeningZone.audioUnmute() : $LL.spotify.listeningZone.audioMute(),
     );
 
+    let lostWarning = $derived(mine && sharing && $captureLost);
     let silenceWarning = $derived(mine && sharing && trackPlaying && $captureSilent);
 
     let errorMessage = $derived(
@@ -229,7 +233,11 @@
         {$LL.spotify.listeningZone.audioListen()}
     </Button>
 {/if}
-{#if silenceWarning}
+{#if lostWarning}
+    <p class="m-0 text-xs text-amber-300" data-testid="jam-audio-lost">
+        {$LL.spotify.listeningZone.audioLost()}
+    </p>
+{:else if silenceWarning}
     <p class="m-0 text-xs text-amber-300" data-testid="jam-audio-silent">
         {$LL.spotify.listeningZone.audioSilent()}
     </p>

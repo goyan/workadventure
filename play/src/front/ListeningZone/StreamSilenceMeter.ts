@@ -7,7 +7,10 @@ export interface SilenceMeter {
     destroy(): void;
 }
 
-/** About -90 dBFS: a quiet passage is far above it, only an input that delivers nothing is under it. */
+/**
+ * About -90 dBFS, on the last 2048 samples read once a second: a quiet passage is far above it, only an input that
+ * delivers nothing is under it.
+ */
 const SILENCE_PEAK = 3e-5;
 const FFT_SIZE = 2048;
 

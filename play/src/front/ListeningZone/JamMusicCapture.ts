@@ -12,9 +12,7 @@ export type JamMusicCaptureError =
     /** The chosen input is the one the user speaks into: it would carry their voice, not music. */
     | "microphone"
     /** The space of the Jam has no LiveKit connection to share the music through. */
-    | "no-session"
-    /** The source went away while sharing (device unplugged, app closed). */
-    | "ended";
+    | "no-session";
 
 export type JamMusicCaptureState =
     | { status: "idle" }
@@ -53,8 +51,10 @@ export interface JamMusicCapture {
      * does not receive their own stream back from the Jam.
      */
     readonly sharedMusic: Readable<SharedJamMusic | undefined>;
-    /** True while the shared input delivers nothing (a reopening did not help) or is gone and not back yet. */
+    /** True while the shared input delivers nothing although it is open (a reopening did not help). */
     readonly silent: Readable<boolean>;
+    /** True while the shared input is gone (device unplugged, app closed) and the capture waits for it to be back. */
+    readonly inputLost: Readable<boolean>;
     /** Opens the input and shares it as the music of the Jam whose space is named. Replaces a running capture. */
     start(spaceName: string, deviceId: string, options?: { forbiddenDeviceIds?: readonly string[] }): Promise<void>;
     /** Stops sharing the music and releases the input: the microphone and the screens are not touched. */
@@ -88,7 +88,7 @@ function musicConstraints(deviceId: string): MediaStreamConstraints {
     };
 }
 
-type Flag = "reopening" | "waitingForDevice";
+type Flag = "reopening" | "waitingForDevice" | "retryPending";
 
 interface RunningCapture {
     spaceName: string;
@@ -101,6 +101,8 @@ interface RunningCapture {
     reopening: boolean;
     /** The input is gone or could not be reopened: the next device change is worth one attempt. */
     waitingForDevice: boolean;
+    /** A reopening was asked while another one was running: it is replayed if the running one fails. */
+    retryPending: boolean;
     silentTicks: number;
     /** The input was already reopened for the silence going on. */
     reopenedForSilence: boolean;
@@ -116,6 +118,7 @@ export function createJamMusicCapture({
     const state = writable<JamMusicCaptureState>({ status: "idle" });
     const sharedMusic = writable<SharedJamMusic | undefined>(undefined);
     const silent = writable(false);
+    const inputLost = writable(false);
     // Every start and stop takes a number: what comes back from a slower one is dropped, so an old capture never
     // comes back to life over a newer decision.
     let generation = 0;
@@ -149,6 +152,7 @@ export function createJamMusicCapture({
         stopWatching();
         sharedMusic.set(undefined);
         silent.set(false);
+        inputLost.set(false);
         if (!running) {
             return;
         }
@@ -183,8 +187,9 @@ export function createJamMusicCapture({
                 if (current !== running || running.stream !== stream) {
                     return;
                 }
-                running.waitingForDevice = true;
-                silent.set(true);
+                mark(running, { waitingForDevice: true });
+                silent.set(false);
+                inputLost.set(true);
                 scheduleReopen(running);
             },
             { once: true },
@@ -197,6 +202,13 @@ export function createJamMusicCapture({
         }
         reopenTimer = setTimeout(() => {
             reopenTimer = undefined;
+            if (current !== running || !running.waitingForDevice) {
+                return;
+            }
+            if (running.reopening) {
+                mark(running, { retryPending: true });
+                return;
+            }
             reopen(running).catch(console.error);
         }, REOPEN_DELAY_MS);
     }
@@ -206,9 +218,15 @@ export function createJamMusicCapture({
         Object.assign(running, flags);
     }
 
+    function isEnded(stream: MediaStream): boolean {
+        return stream.getAudioTracks()[0]?.readyState === "ended";
+    }
+
     /**
      * Opens the input again and hands the new stream to the Jam in place of the old one, which is stopped: one
-     * publication and one live track at any time. Returns whether the new stream is the one being shared.
+     * publication and one live track at any time. The old track is stopped before the new one is requested when it is
+     * still open (a silent input): the browser may serve the same capture source to both. Returns whether the new
+     * stream is the one being shared.
      */
     async function reopen(running: RunningCapture): Promise<boolean> {
         if (current !== running || running.reopening) {
@@ -217,13 +235,24 @@ export function createJamMusicCapture({
         mark(running, { reopening: true });
         const mine = generation;
         try {
+            if (!isEnded(running.stream)) {
+                stopTracks(running.stream);
+            }
             let stream: MediaStream;
             try {
                 stream = await getUserMedia(musicConstraints(running.deviceId));
             } catch (error) {
-                // Not back yet: the next device change gets its turn.
+                if (errorReason(error) === "denied") {
+                    fail(running, "denied");
+                    return false;
+                }
+                // Not back yet: the next device change gets its turn. The old track is dead by now.
                 console.warn("Could not reopen the input of the Jam music", error);
-                mark(running, { waitingForDevice: true });
+                if (current === running && isEnded(running.stream)) {
+                    mark(running, { waitingForDevice: true });
+                    silent.set(false);
+                    inputLost.set(true);
+                }
                 return false;
             }
             if (current !== running || mine !== generation) {
@@ -233,12 +262,16 @@ export function createJamMusicCapture({
             const previous = running.stream;
             running.stream = stream;
             watch(running);
+            const publisher = running.publisher;
             try {
-                await running.publisher.publishJamMusic(stream);
+                await publisher.publishJamMusic(stream);
             } catch (error) {
                 console.error("Could not publish the Jam music again", error);
                 stopTracks(previous);
-                fail(running, "unavailable");
+                // A reconnection replaced the publisher meanwhile: the new one already got this stream.
+                if (running.publisher === publisher) {
+                    fail(running, "unavailable");
+                }
                 return false;
             }
             stopTracks(previous);
@@ -251,11 +284,18 @@ export function createJamMusicCapture({
             mark(running, { waitingForDevice: false });
             running.silentTicks = 0;
             silent.set(false);
+            inputLost.set(false);
             sharedMusic.set({ spaceName: running.spaceName, stream });
             state.set({ status: "active", label: stream.getAudioTracks()[0]?.label ?? "" });
             return true;
         } finally {
             mark(running, { reopening: false });
+            if (running.retryPending) {
+                mark(running, { retryPending: false });
+                if (current === running && running.waitingForDevice) {
+                    scheduleReopen(running);
+                }
+            }
         }
     }
 
@@ -287,6 +327,7 @@ export function createJamMusicCapture({
         state,
         sharedMusic,
         silent,
+        inputLost,
 
         async start(spaceName, deviceId, options = {}) {
             const mine = ++generation;
@@ -328,6 +369,7 @@ export function createJamMusicCapture({
                 publisher,
                 reopening: false,
                 waitingForDevice: false,
+                retryPending: false,
                 silentTicks: 0,
                 reopenedForSilence: false,
             };

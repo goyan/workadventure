@@ -147,7 +147,7 @@ describe("JamAudioSession", () => {
             };
             const { session } = setup({ capture });
             await session.shareMusic(jam, "blackhole");
-            captureState.set({ status: "error", reason: "ended" });
+            captureState.set({ status: "error", reason: "unavailable" });
             await vi.advanceTimersByTimeAsync(0);
             expect(get(session.sharingSpaceName)).toBeUndefined();
         });
@@ -222,7 +222,7 @@ describe("JamAudioSession", () => {
             };
             const { session, leaveSpace } = setup({ capture });
             await session.shareMusic(jam, "blackhole");
-            captureState.set({ status: "error", reason: "ended" });
+            captureState.set({ status: "error", reason: "unavailable" });
             await vi.advanceTimersByTimeAsync(0);
             expect(leaveSpace).toHaveBeenCalledTimes(1);
         });

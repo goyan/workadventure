@@ -13,7 +13,32 @@ const SPACE = "world.jam-space";
 
 function fakeTrack() {
     const target = new EventTarget();
-    return Object.assign(target, { stop: vi.fn(), label: "BlackHole 2ch", kind: "audio" });
+    const track = Object.assign(target, {
+        readyState: "live",
+        stop: vi.fn(),
+        label: "BlackHole 2ch",
+        kind: "audio",
+    });
+    track.stop.mockImplementation(() => {
+        track.readyState = "ended";
+    });
+    return track;
+}
+
+/** The browser ends a track by itself (device unplugged, app closed). */
+function endTrack(stream: { track: ReturnType<typeof fakeTrack> }): void {
+    stream.track.readyState = "ended";
+    stream.track.dispatchEvent(new Event("ended"));
+}
+
+function deferred<T>() {
+    let resolve: (value: T) => void = () => undefined;
+    let reject: (error: unknown) => void = () => undefined;
+    const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+    });
+    return { promise, resolve, reject };
 }
 
 function fakeStream(track = fakeTrack()) {
@@ -263,6 +288,8 @@ describe("JamMusicCapture", () => {
 
     describe("when the source goes away or goes quiet", () => {
         let deviceChange: () => void;
+        let unwatchDevices: Mock<() => void>;
+        let publisherChanged: (publisher: JamMusicPublisher) => void;
         let silentNow: boolean;
         let meterDestroy: Mock<() => void>;
         let streams: ReturnType<typeof fakeStream>[];
@@ -270,6 +297,8 @@ describe("JamMusicCapture", () => {
         beforeEach(() => {
             vi.useFakeTimers();
             deviceChange = () => undefined;
+            unwatchDevices = vi.fn();
+            publisherChanged = () => undefined;
             silentNow = false;
             meterDestroy = vi.fn();
             streams = [];
@@ -283,6 +312,10 @@ describe("JamMusicCapture", () => {
                 getPublisher: (name) => (name === SPACE ? publisher : undefined),
                 onDeviceChange: (callback) => {
                     deviceChange = callback;
+                    return unwatchDevices;
+                },
+                onPublisherRegistered: (_space, callback) => {
+                    publisherChanged = callback;
                     return () => undefined;
                 },
                 createSilenceMeter: () => ({ isSilent: () => silentNow, destroy: meterDestroy }),
@@ -298,9 +331,10 @@ describe("JamMusicCapture", () => {
             await capture.start(SPACE, "blackhole-id");
             // The input is gone: the first attempt fails, the device coming back gets one more.
             getUserMedia.mockRejectedValueOnce(domError("NotFoundError"));
-            streams[0].track.dispatchEvent(new Event("ended"));
+            endTrack(streams[0]);
             await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS);
             expect(get(capture.state)).toMatchObject({ status: "active" });
+            expect(get(capture.inputLost)).toBe(true);
 
             deviceChange();
             await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS);
@@ -313,26 +347,28 @@ describe("JamMusicCapture", () => {
             expect(get(capture.sharedMusic)).toEqual({ spaceName: SPACE, stream: streams[1] });
             expect(get(capture.state)).toMatchObject({ status: "active" });
             expect(get(capture.silent)).toBe(false);
+            expect(get(capture.inputLost)).toBe(false);
         });
 
         it("tries once per device change, not in a loop", async () => {
             await capture.start(SPACE, "blackhole-id");
             getUserMedia.mockRejectedValue(domError("NotFoundError"));
-            streams[0].track.dispatchEvent(new Event("ended"));
+            endTrack(streams[0]);
             await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS * 10);
             expect(getUserMedia).toHaveBeenCalledTimes(2);
 
             deviceChange();
             await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS * 10);
             expect(getUserMedia).toHaveBeenCalledTimes(3);
-            expect(get(capture.silent)).toBe(true);
+            expect(get(capture.inputLost)).toBe(true);
+            expect(get(capture.silent)).toBe(false);
         });
 
         it("keeps a single live track and a single publication after two reopenings", async () => {
             await capture.start(SPACE, "blackhole-id");
-            streams[0].track.dispatchEvent(new Event("ended"));
+            endTrack(streams[0]);
             await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS);
-            streams[1].track.dispatchEvent(new Event("ended"));
+            endTrack(streams[1]);
             await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS);
 
             expect(streams).toHaveLength(3);
@@ -386,6 +422,192 @@ describe("JamMusicCapture", () => {
             expect(vi.getTimerCount()).toBe(0);
             await vi.advanceTimersByTimeAsync(SILENCE_LIMIT_MS * 3);
             expect(streams).toHaveLength(2);
+        });
+
+        it("stops the silent track before asking for the input again", async () => {
+            const stoppedWhenAsked: boolean[] = [];
+            await capture.start(SPACE, "blackhole-id");
+            getUserMedia.mockImplementationOnce(() => {
+                stoppedWhenAsked.push(streams[0].track.stop.mock.calls.length > 0);
+                const stream = fakeStream();
+                streams.push(stream);
+                return Promise.resolve(stream);
+            });
+            silentNow = true;
+
+            await vi.advanceTimersByTimeAsync(SILENCE_LIMIT_MS);
+
+            expect(stoppedWhenAsked).toEqual([true]);
+            expect(streams).toHaveLength(2);
+        });
+
+        it("does not stop an input that already ended before asking for it again", async () => {
+            await capture.start(SPACE, "blackhole-id");
+            endTrack(streams[0]);
+            await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS);
+            // Already dead: only the replacement logic stops it, once the new one is published.
+            expect(streams[0].track.stop).toHaveBeenCalledTimes(1);
+            expect(streams).toHaveLength(2);
+        });
+
+        it("fails with a refusal when the permission was withdrawn", async () => {
+            await capture.start(SPACE, "blackhole-id");
+            getUserMedia.mockRejectedValueOnce(domError("NotAllowedError"));
+            endTrack(streams[0]);
+            await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS);
+            expect(get(capture.state)).toEqual({ status: "error", reason: "denied" });
+            expect(get(capture.inputLost)).toBe(false);
+        });
+
+        it("waits for the input like a vanished one when reopening a silent input failed", async () => {
+            await capture.start(SPACE, "blackhole-id");
+            silentNow = true;
+            getUserMedia.mockRejectedValueOnce(domError("NotFoundError"));
+            await vi.advanceTimersByTimeAsync(SILENCE_LIMIT_MS);
+            // The old track was stopped to free the source: the input is waited for like a vanished one.
+            expect(get(capture.inputLost)).toBe(true);
+            deviceChange();
+            await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS);
+            expect(streams).toHaveLength(2);
+            expect(get(capture.inputLost)).toBe(false);
+        });
+
+        it("reopens once for a burst of device changes arriving during a reopening", async () => {
+            await capture.start(SPACE, "blackhole-id");
+            const asking = deferred<MediaStream>();
+            getUserMedia.mockReturnValueOnce(asking.promise);
+            endTrack(streams[0]);
+            await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS);
+            expect(getUserMedia).toHaveBeenCalledTimes(2);
+
+            for (let burst = 0; burst < 5; burst++) {
+                deviceChange();
+            }
+            await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS * 2);
+            const stream = fakeStream();
+            streams.push(stream);
+            asking.resolve(stream);
+            await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS * 4);
+
+            expect(getUserMedia).toHaveBeenCalledTimes(2);
+            expect(get(capture.inputLost)).toBe(false);
+        });
+
+        it("replays an attempt whose timer fell during a reopening that then failed", async () => {
+            await capture.start(SPACE, "blackhole-id");
+            const asking = deferred<MediaStream>();
+            getUserMedia.mockReturnValueOnce(asking.promise);
+            endTrack(streams[0]);
+            await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS);
+
+            deviceChange();
+            await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS * 2);
+            expect(getUserMedia).toHaveBeenCalledTimes(2);
+            asking.reject(domError("NotFoundError"));
+            await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS * 2);
+
+            expect(getUserMedia).toHaveBeenCalledTimes(3);
+            expect(get(capture.inputLost)).toBe(false);
+            expect(get(capture.state)).toMatchObject({ status: "active" });
+        });
+
+        it("does not fail when the publisher was replaced during the republication", async () => {
+            await capture.start(SPACE, "blackhole-id");
+            const publishing = deferred<void>();
+            publisher.publishJamMusic.mockReturnValueOnce(publishing.promise);
+            endTrack(streams[0]);
+            await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS);
+            const replacement = { publishJamMusic: vi.fn().mockResolvedValue(undefined) };
+            publisherChanged(replacement);
+            publishing.reject(new Error("room destroyed"));
+            await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS);
+
+            expect(get(capture.state)).toMatchObject({ status: "active" });
+            expect(replacement.publishJamMusic).toHaveBeenCalledWith(streams[1]);
+        });
+
+        it("fails when the republication is refused by the publisher in use", async () => {
+            await capture.start(SPACE, "blackhole-id");
+            publisher.publishJamMusic.mockRejectedValueOnce(new Error("refused"));
+            endTrack(streams[0]);
+            await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS);
+            expect(get(capture.state)).toEqual({ status: "error", reason: "unavailable" });
+            expect(streams[1].track.stop).toHaveBeenCalled();
+        });
+
+        it("drops a reopening whose input arrives after the stop", async () => {
+            await capture.start(SPACE, "blackhole-id");
+            const asking = deferred<MediaStream>();
+            getUserMedia.mockReturnValueOnce(asking.promise);
+            endTrack(streams[0]);
+            await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS);
+
+            await capture.stop();
+            const late = fakeStream();
+            asking.resolve(late);
+            await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS);
+
+            expect(late.track.stop).toHaveBeenCalled();
+            expect(get(capture.state)).toEqual({ status: "idle" });
+            expect(publisher.publishJamMusic).not.toHaveBeenCalledWith(late);
+        });
+
+        it("drops a reopening that is stopped during the republication", async () => {
+            await capture.start(SPACE, "blackhole-id");
+            const publishing = deferred<void>();
+            publisher.publishJamMusic.mockReturnValueOnce(publishing.promise);
+            endTrack(streams[0]);
+            await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS);
+
+            const stopping = capture.stop();
+            publishing.resolve();
+            await stopping;
+            await vi.advanceTimersByTimeAsync(REOPEN_DELAY_MS);
+
+            expect(streams[1].track.stop).toHaveBeenCalled();
+            expect(get(capture.state)).toEqual({ status: "idle" });
+            expect(get(capture.sharedMusic)).toBeUndefined();
+        });
+
+        it("stops listening to device changes when it stops", async () => {
+            await capture.start(SPACE, "blackhole-id");
+            expect(unwatchDevices).not.toHaveBeenCalled();
+            await capture.stop();
+            expect(unwatchDevices).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe("while starting", () => {
+        it("fails when the permission is refused", async () => {
+            getUserMedia.mockRejectedValue(domError("NotAllowedError"));
+            await capture.start(SPACE, "blackhole-id");
+            expect(get(capture.state)).toEqual({ status: "error", reason: "denied" });
+        });
+
+        it("fails and releases the input when the publication fails", async () => {
+            const stream = fakeStream();
+            getUserMedia.mockResolvedValue(stream);
+            publisher.publishJamMusic.mockRejectedValueOnce(new Error("refused"));
+            await capture.start(SPACE, "blackhole-id");
+            expect(get(capture.state)).toEqual({ status: "error", reason: "unavailable" });
+            expect(stream.track.stop).toHaveBeenCalled();
+        });
+
+        it("releases the input when it is stopped during the publication", async () => {
+            const stream = fakeStream();
+            getUserMedia.mockResolvedValue(stream);
+            const publishing = deferred<void>();
+            publisher.publishJamMusic.mockReturnValueOnce(publishing.promise);
+            const starting = capture.start(SPACE, "blackhole-id");
+            await vi.waitFor(() => expect(publisher.publishJamMusic).toHaveBeenCalledWith(stream));
+
+            const stopping = capture.stop();
+            publishing.resolve();
+            await Promise.all([starting, stopping]);
+
+            expect(stream.track.stop).toHaveBeenCalled();
+            expect(get(capture.state)).toEqual({ status: "idle" });
+            expect(get(capture.sharedMusic)).toBeUndefined();
         });
     });
 });
