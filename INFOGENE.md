@@ -1740,6 +1740,13 @@ Limites :
 - Une zone ajoutée par un autre éditeur ne s'allume qu'après rechargement.
 - En marchant, les trous du voile peuvent suivre la caméra avec une image de retard.
 
+**Jour et nuit accélérés** (pour soi seul) : dans la barre d'actions, à gauche du widget « > >> >>> », un bouton
+soleil et lune fait défiler le ciel de 1 à 10 minutes par seconde (curseur ×1 à ×10), avec l'heure du ciel vu à
+côté. Il n'agit qu'à un endroit, l'instant du ciel de `NightManager` (`FastDayClock`) : soleil, lune, nuit, ombres
+du ciel et des objets, lampes qui s'éteignent par économie d'énergie le suivent ; l'heure de la carte, sa météo, la
+glace, l'eau et tout ce que calcule le serveur restent réels, et rien n'est envoyé. Coupé, le ciel revient à l'heure
+réelle ; une page rechargée le montre réel aussi. En mode Basique, ce bouton et le widget « > >> >>> » sont masqués.
+
 ### Coucou et notifications système
 
 Pour faire revenir sur la carte un collègue dont l'onglet est en arrière-plan.
@@ -4152,6 +4159,22 @@ de 0 à 100 %, avec sauvegarde personnelle. Les appels et les Jams conservent le
 « Outils → Cycle jour/nuit » ouvre directement le choix personnel serveur / ordinateur / désactivé.
 Cette première version couvre toute la carte, sans accumulation de neige ni distinction entre intérieur et extérieur.
 
+**Pluie et neige vues de dessus, en perspective** (2026-11-23, `Weather/PerspectiveFall.ts`). Réglage
+personnel « Pluie et neige vues de dessus, en perspective », dans les réglages de la pluie, mémorisé par le navigateur,
+**allumé par défaut** depuis le 2026-11-24 (choix de l’utilisateur) ; qui l’a déjà éteint le garde éteint. Allumé, la pluie et la neige sont vues d'une caméra
+au-dessus du milieu de l'écran, à la hauteur d'un champ de 60° sur la largeur de la vue (≈ 33 m au zoom habituel ; elle
+monte quand on dézoome). Une goutte à la hauteur z est dessinée à c + (p − c)·H/(H − z) : grosse et rapide près de la
+caméra, elle rétrécit en tombant, glisse vers le milieu de l'écran (le nadir, où les verticales se rejoignent) et
+touche le sol à sa vraie position ; sa traînée (ce qu'elle parcourt en 0,1 s, le temps d'intégration de l'œil) suit la
+droite qui mène au milieu : un point au nadir, un trait vers les bords. Elles tombent de 0,8·H (dessinées jusqu'à 5 fois
+plus grosses) à leur vitesse terminale (Atlas 1973), portées par l'air. Part de chaque taille selon Marshall et Palmer
+(1948, Λ = 4,1 R^−0,21 mm⁻¹) : presque toutes petites, les grosses avec les averses. Autant de gouttes à l'écran que la
+pluie plate à la même intensité (`rainDropsExpected`), autant de flocons que la neige plate. Neige : mêmes flocons
+(Locatelli et Hobbs), à environ 1 m/s, en tourbillon, leurs pixels grossis près de la caméra (au plus 4 fois).
+Éclaboussures, flaques et voile inchangés. Vue 3/4 : le nadir reste au milieu de l'écran (à recaler). Coût mesuré
+(dessin de la météo, Mac M4 Max, averse et vent de 40 km/h) : 1,6 ms par dessin contre 1,1 ; neige 0,54 contre 0,46.
+Non validé à l'œil par l'utilisateur.
+
 **Pluie au vent réel** (2026-11-22, `Weather/Rain.ts` `rainSlant`, `followWind`). Les gouttes suivent le même vent
 que la neige (`groundWind` : vent réel près du sol, ≈ 0,8 du vent à 10 m, ses deux composantes ; nord-ouest à
 10 km/h quand il n'est pas connu ; réglage personnel « inclinaison » appliqué). Pour chaque pixel de chute, une goutte
@@ -6063,12 +6086,62 @@ de l'œil, comme le vent, et prend de l'ordre de 0,2 m/s en une minute au rayon 
 garanties que la pression : rien sans ouragan, TypeScript et C identiques au bit (`Move` : 168 octets).
 
 **Effet sur l'eau exagéré, à la demande** (réglage du panneau de l'ouragan, « Effet sur l'eau (pression et vent) » :
-Réaliste, Exagéré ×2, ×4, ×6, ×8 ; `HurricaneTrackMessage.waterEffect`, champ 15, **le protobuf change**). Multiplie la
+Réaliste, Exagéré ×5, ×10, ×20 (recalés le 2026-11-23 : en réaliste le dôme d'une catégorie 4 fait environ 0,7 m sur
+un lac de la carte, invisible d'en haut ; ×20 testé : dôme de 15 m dans un bassin muré au plus profond du relief,
+volume gardé, vitesses bornées, repos, théorie à 10 %, la pression amenée en 30 s comme le fondu de l'ouragan) ; `HurricaneTrackMessage.waterEffect`, champ 15, **le protobuf change**). Multiplie la
 hauteur de pression et la poussée du vent sur l'eau, rien d'autre (le vent, la pluie, le ciel restent ceux d'un vrai
 ouragan). Choisi par le joueur qui lance l'ouragan, gardé par le serveur parmi les cinq valeurs, le même pour tous. À ×8
 une catégorie 4 creuse un dôme de 6 m (pentes d'un dixième) : le modèle tient (test : volume conservé dans un bassin
 qui le contient, vitesses bornées, au repos ensuite, dôme conforme à 10 % près) ; sur la carte, un tel dôme déborde des
 rives et inonde les terres basses, ce qui est voulu par l'exagération.
+
+**Similitude du fetch : le vent pousse l'eau comme sur une baie** (`Hurricane.HURRICANE_FETCH_SIMILITUDE`, un
+choix, comme la réduction de l'ouragan à la carte ; décidé le 2026-11-23 après « je voudrais voir descendre l'eau
+beaucoup plus »). Le vent tient l'eau d'un bassin fermé penchée de dh/dx = τ / (ρ g h) : quelques centimètres sur un
+lac de 150 m, quand un vrai ouragan sur une baie de dizaines de kilomètres retire l'eau de mètres et laisse le fond à
+sec. Référence : Irma (2017) à Tampa, l'eau à St. Petersburg « about 5 ft below normal » (Cangialosi, Latto et Berg,
+rapport NHC AL112017, 2018, relu dans le PDF), pour une baie de 3,7 m de fond moyen (USGS, Britannica [Gemini, non
+relu]) : un retrait de 0,41 de la profondeur. Le facteur est dérivé, pas tapé : pour le lac de référence (150 m dans
+le vent, 1,5 m de fond, vent maximal d'une catégorie 4), l'équilibre exact d'un canal fermé, h(x)² = h(0)² + 2 k x
+avec la profondeur moyenne gardée, donne le k qui retire l'eau de 0,41 h au vent (`drawdownSlope`, environ 0,7), et
+F = k ρ g h² / (τ L) ≈ 10 sur la contrainte du vent seule ; l'eau monte d'environ un tiers de la profondeur sous le
+vent. Le simple rapport des longueurs (×100 à ×400) viderait le lac : une vraie baie n'atteint jamais son équilibre
+sous un vent de quelques heures qui tourne. Les crans d'effet sur l'eau se multiplient par-dessus. Tests : canal du
+lac de référence (retrait 0,41 h à 10 % près, montée en face à 15 %, volume gardé) ; vent qui s'inverse au passage
+de l'œil, le mascaret revient, volume gardé ; au cran ×20 (vent ×200) le mascaret monte de 10 m contre la rive d'en
+face et passe par-dessus les plus hauts murs du relief : l'eau perdue est comptée, rien ne casse ; identité au bit
+TypeScript/WebAssembly à ×20. Le vent et la pression sur l'eau sont refaits au moins chaque seconde (le vent tourne au
+passage de l'œil même quand la dépression bouge peu).
+
+**La crue se lit** (`Terrain/HurricaneFlood.ts`, `HurricaneFloodView.ts`). Chaque navigateur garde l'eau telle
+qu'elle était au début de l'ouragan, cellule par cellule, et la plus haute depuis : le badge des niveaux sous le
+pointeur dit « +0,7 m » (l'eau plus haute qu'avant l'ouragan), le panneau de l'ouragan « Eau : +0,7 m au plus haut
+depuis le début ». Là où l'eau a couvert une terre sèche puis s'est retirée, le sol reste sombre et noyé, et une laisse
+de crue (écume et débris) marque la ligne la plus haute atteinte ; les deux s'effacent en 4 minutes. Le panneau
+rappelle que le dôme ne se forme qu'aux vitesses lentes du widget (un œil plus rapide que les ondes du lac, environ
+3 à 4 m/s, le devance : c'est physique). Le volume d'eau de la carte reste fermé (pas de mer qui l'alimente) : la
+carte d'Antoine n'a de l'eau qu'aux bords nord (35 m) et sud (15 m).
+
+**Le dôme se lit par la lumière sur sa pente** (2026-11-23, `GroundSplat.ts` : `waterFacing`, `waterLevels`,
+`writeSlopes`). Avant, l'eau fonçait linéairement avec la profondeur jusqu'à 2,2 m : un dôme d'eau, plus profond,
+se lisait comme un trou sombre. Désormais :
+- **Absorption de Beer-Lambert** (`WATER_ATTENUATION_PX`) : la part de couleur d'eau profonde est
+  1 − exp(−profondeur / 1,1 m). La lumière traverse la profondeur deux fois, d'où un coefficient d'atténuation de
+  0,45 par mètre, une valeur de lac (Kirk, *Light and Photosynthesis in Aquatic Ecosystems*). La couleur sature au
+  lieu de foncer sans fin. **Choix de l'utilisateur (« go la nouvelle »), aussi pour l'eau ordinaire** : les
+  hauts-fonds sont un peu plus foncés et plus opaques, l'eau de 2 m un peu plus claire (±0,14 vers la teinte
+  profonde, ±0,06 d'opacité).
+- **Loi du cosinus sur la pente de la surface** : la pente de la surface (sol + eau) est calculée sur le processeur
+  à partir des profondeurs exactes, puis rangée dans le vert et le bleu du paquet 11 (`SLOPE_PACK`). La part de
+  couleur propre à l'eau est éclairée selon le cosinus de sa face, lumière du nord-ouest comme le relief, à 45° de
+  hauteur (`WATER_LIGHT_ELEVATION_DEG`, un choix).
+- **Pas de reflet lié à la pente**, et c'est voulu : vu d'en haut, la part de ciel reflétée (Fresnel) passe seulement
+  de 2 à 2,4 % jusqu'à 40° d'inclinaison.
+- **Les marches ne sont pas éclairées** : une surface plus raide que 30° (la plus raide des vagues, Stokes) est de
+  l'eau qui tombe d'une marche. Elle est rendue de niveau.
+- **Ce qu'on voit** : au cran Réaliste, le dôme reste invisible (une pente de 0,04 donne 4 % de lumière en plus ou
+  en moins). À ×10, son flanc nord-ouest s'éclaircit et son flanc sud-est s'assombrit. Une marche d'eau de 10 à
+  18 px garde un liseré d'une case.
 
 **Ce que ça ne modélise pas, ou pas encore.**
 - **La pluie par position sur l'eau, le feu par position** : le sol du serveur lit une seule valeur pour la salle, au
@@ -6114,7 +6187,13 @@ ses couleurs, éclairé d'en haut ; sur le côté de l'écran la moitié au-dess
 largeur ; raccourci à 0,7 vers le haut et le bas de l'écran (`LYING_DEPTH`, la même géométrie pour l'ombre du soleil
 et les feuilles). L'objet de la carte ne montre rien pendant ce temps (`uprootedTexture`). La chute : l'image debout,
 sans son ombre peinte, tourne sur son pied, puis le dessin couché la remplace pendant le rebond (avant qu'elle ne se
-retourne pour une chute vers le joueur). Il repousse en 8 tailles depuis son vrai pied (`growingTreeTexture`).
+retourne pour une chute vers le joueur). Il repousse en 8 tailles depuis son vrai pied (`growingTreeTexture`). Deux
+autres dessins, choisis par la forme de l'image et non par son nom : un **arbre nu** (moins de 35 % de pixels de
+feuillage vert, d'automne vif ou de neige) se couche en branches, une maîtresse et sept de biais avec un rameau chacune ;
+un **palmier** (`isPalm` : feuillu, son tronc visible depuis le pied jusqu'à 60 % de sa hauteur ou plus, 0,64 pour `nature-4` contre 0,57 au plus pour les autres arbres feuillus de la carte, ses palmes
+seulement en haut) se couche en palmes arquées depuis le bout du tronc, nervure claire et folioles en dents, la moitié
+tournée vers le ciel. L'ombre du soleil de ces deux-là suit leurs branches ou leurs palmes et leur tronc
+(`ShadowTree.limbs`), pas l'ovale d'un houppier.
 
 **Débris emportés** (même demande). Des feuilles, brindilles et éclats sombres, 150 au plus, arrachés dans la vue là où
 la rafale dépasse 120 km/h (force 12 de Beaufort), d'autant plus que la rafale est forte : ils vont au vent de

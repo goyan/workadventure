@@ -59,6 +59,8 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 hurricaneWaterEffectLabel: label("Effect on the water (pressure and wind)"),
                 hurricaneWaterRealistic: label("Realistic"),
                 hurricaneWaterExaggerated: ({ times }: { times: number }) => `Exaggerated ×${times}`,
+                hurricaneWaterEffectHelp: label("The dome of water under the eye only forms at the slow speeds"),
+                hurricaneRise: ({ rise }: { rise: string }) => `Water: +${rise} m at the highest since it began`,
                 hurricaneStart: label("Launch the hurricane"),
                 hurricaneStop: label("Stop the hurricane"),
                 hurricaneHelp: label("A hurricane reduced to the size of the map"),
@@ -81,7 +83,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
             },
         },
     });
-    return { default: LL, LL };
+    return { default: LL, LL, locale: readable("en-US") };
 });
 
 const stopColdSnap = vi.hoisted(() => vi.fn());
@@ -101,6 +103,7 @@ import {
     coldLyingStore,
     coldRadiusTilesStore,
     fireRadiusTilesStore,
+    hurricaneHighestRiseStore,
     hurricaneShownStore,
     hurricaneWaterEffectStore,
     downpourWholeMapStore,
@@ -376,6 +379,53 @@ describe("CatastrophePanel", () => {
         expect(target.querySelector('[data-testid="catastrophe-hurricane-stop"]')).toBeNull();
     });
 
+    it("tells how high the water rose since the hurricane began, only while one goes and the water has risen", () => {
+        renderOpen();
+        hurricaneShownStore.set({
+            hurricane: {
+                id: 1,
+                startedAt: 0,
+                category: 4,
+                durationMs: 300_000,
+                heading: 290,
+                southern: false,
+                fromX: 0,
+                fromY: 0,
+                toX: 1,
+                toY: 1,
+                anchorX: 0,
+                anchorY: 0,
+            },
+            here: {
+                progress: 0.5,
+                share: 1,
+                eyeX: 0,
+                eyeY: 0,
+                speedKmh: 3,
+                after: false,
+                phase: "wall",
+                distanceM: 30,
+                windSpeed: 213.6,
+                gust: 262.7,
+                windFrom: 90,
+                rainRate: 12,
+                cloudCover: 1,
+            },
+        });
+        hurricaneHighestRiseStore.set(0.7);
+        flushSync();
+        const rise = target.querySelector('[data-testid="catastrophe-hurricane-rise"]');
+        expect(rise?.textContent).toContain("Water: +0.7 m at the highest since it began");
+        hurricaneHighestRiseStore.set(0.02);
+        flushSync();
+        expect(target.querySelector('[data-testid="catastrophe-hurricane-rise"]')).toBeNull();
+        hurricaneHighestRiseStore.set(undefined);
+        flushSync();
+        expect(target.querySelector('[data-testid="catastrophe-hurricane-rise"]')).toBeNull();
+        hurricaneShownStore.set(undefined);
+        flushSync();
+    });
+
     it("chooses how much the hurricane acts on the water, realistic by default, and keeps it a number", () => {
         hurricaneWaterEffectStore.set(1);
         renderOpen();
@@ -386,17 +436,16 @@ describe("CatastrophePanel", () => {
         expect(select?.selectedOptions[0]?.textContent?.trim()).toBe("Realistic");
         expect(Array.from(select?.options ?? []).map((option) => option.textContent?.trim())).toEqual([
             "Realistic",
-            "Exaggerated ×2",
-            "Exaggerated ×4",
-            "Exaggerated ×6",
-            "Exaggerated ×8",
+            "Exaggerated ×5",
+            "Exaggerated ×10",
+            "Exaggerated ×20",
         ]);
         if (select) {
-            select.value = "4";
+            select.value = "10";
             select.dispatchEvent(new Event("change", { bubbles: true }));
         }
         flushSync();
-        expect(get(hurricaneWaterEffectStore)).toBe(4);
+        expect(get(hurricaneWaterEffectStore)).toBe(10);
         hurricaneWaterEffectStore.set(1);
     });
 

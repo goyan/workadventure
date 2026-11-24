@@ -56,3 +56,9 @@ export const rainLeanStore = createPersistedNumberStore("weatherRainLean", 1, 0,
 export const rainSplashesStore = createPersistedNumberStore("weatherRainSplashes", 1, 0, 2);
 export const rainPuddlesStore = createPersistedNumberStore("weatherRainPuddles", 1, 0, 2);
 export const rainCloudsStore = createPersistedNumberStore("weatherRainClouds", 1, 0, 1);
+
+/**
+ * Whether this player sees the rain and the snow in perspective, from a camera above the map (Weather/PerspectiveFall):
+ * big and fast near the camera, finer down to the ground. Personal, kept in the browser, on by default.
+ */
+export const rainPerspectiveStore = createPersistedSwitchStore("weatherRainPerspective", true);

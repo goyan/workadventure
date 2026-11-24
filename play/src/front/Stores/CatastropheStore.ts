@@ -12,6 +12,7 @@ import {
 } from "@workadventure/map-editor";
 import type { Hurricane, HurricaneHere, WaterBall } from "@workadventure/map-editor";
 import { derived, get, writable } from "svelte/store";
+import { basicActiveStore } from "./BasicModeStore";
 
 /** "meteor" is the comet, which brings water; "fireball" is the burning meteor, which sets its crater on fire. */
 export type CatastropheChoice = "meteor" | "fireball" | "downpour" | "fire" | "drain" | "ball" | "cold";
@@ -61,6 +62,13 @@ export const hurricaneHeadingStore = writable<number>(HURRICANE_DEFAULT_HEADING)
  * effect, 2 to 8 an exaggeration to see it better (HURRICANE_WATER_EFFECTS). Sent with the hurricane, for everyone.
  */
 export const hurricaneWaterEffectStore = writable<number>(1);
+/**
+ * The flood of the hurricane as this browser saw it (Terrain/HurricaneFloodView): the most the water has risen over
+ * a cell of the map since the hurricane began (m), and how much higher than before it the water stands under the
+ * pointer (m). Undefined while there is no hurricane (nor its marks) to tell.
+ */
+export const hurricaneHighestRiseStore = writable<number | undefined>(undefined);
+export const pointerFloodRiseStore = writable<number | undefined>(undefined);
 
 /**
  * The hurricane crossing the map, and what it is where this player looks, as of the last word of the server (once a
@@ -85,11 +93,12 @@ export const forgetChoiceSubscriptions = [
 
 /**
  * The catastrophe the next click on the map throws: the chosen one while the panel is shown. In the map editor too:
- * the editor puts its tool aside while one is armed (see MapEditorModeManager).
+ * the editor puts its tool aside while one is armed (see MapEditorModeManager). Never in Basique: the panel is hidden
+ * there, a click on the map must not throw what it no longer shows.
  */
 export const armedCatastropheStore = derived(
-    [chosenCatastropheStore, catastrophePanelStore],
-    ([$chosen, $panelShown]) => ($panelShown ? $chosen : undefined),
+    [chosenCatastropheStore, catastrophePanelStore, basicActiveStore],
+    ([$chosen, $panelShown, $basic]) => ($panelShown && !$basic ? $chosen : undefined),
 );
 
 /** Arms the catastrophe, or disarms it when it is already the armed one. */

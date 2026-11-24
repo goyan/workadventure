@@ -68,7 +68,7 @@ export function flakeCapacity(kind: FlakeKind): number {
  * Flakes of each kind in a view at the heaviest fall of that kind alone, for one unit of capacity: a heavy wet snow
  * shows about 900 big flakes on a usual screen, a heavy fall of fine crystals about 2 000 specks.
  */
-const FLAKES_PER_CAPACITY = 860;
+export const FLAKES_PER_CAPACITY = 860;
 
 /**
  * Which kinds fall, by wet-bulb temperature (°C, the temperature a falling flake feels: it cools as it evaporates).

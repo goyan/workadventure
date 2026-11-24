@@ -230,7 +230,8 @@ export function createJamAudioSession({
         }
         sharingSpaceName.set(lease.spaceName);
         remember({ sharing: { spaceName: lease.spaceName, deviceId } });
-        // A capture that fails or ends by itself (device unplugged, refused) no longer needs the space.
+        // A capture that fails (input refused, publication impossible) no longer needs the space; an input that goes
+        // away is waited for, and the host stops sharing when they want.
         unwatchCapture = capture.state.subscribe((state) => {
             if (state.status === "error" && shareLease === lease) {
                 shareLease = undefined;

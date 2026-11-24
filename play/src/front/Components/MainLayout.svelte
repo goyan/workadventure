@@ -542,8 +542,10 @@
                         stack={$floorLevelsStore}
                         onSelectFloor={$mapEditorModeStore ? chooseEditorLevel : undefined}
                     />
-                    <!-- The weather now, in one hour and in four hours (apps menu, "Weather"). -->
-                    <WeatherForecastBanner />
+                    <!-- The weather now, in one hour and in four hours (apps menu, "Weather"); none in Basique. -->
+                    {#if !$basicActiveStore}
+                        <WeatherForecastBanner />
+                    {/if}
                     <!-- The disaster picker and what to draw over the map (apps menu, "Disaster", "Visualisation"):
                          a chip each, their controls in a popover under it. -->
                     {#if !$basicActiveStore}

@@ -251,6 +251,8 @@ const FASTEST_CELLS_PER_MOVE = 0.5;
  * the computation rocks by itself (measured: a small basin never calms down); at a third it calms down.
  */
 const WAVE_CELLS_PER_MOVE = 0.35;
+/** The heights of the pressure and the push of the wind over the water are made again at least this often (steps). */
+const FILL_HEADS_STEPS = 10;
 /**
  * The speed of the water with inertia is told to the browsers by blocks of this many cells a side, one byte for
  * each of its two parts (east, south), in this many units a cell a second: within about 32 cells a second, to a
@@ -598,7 +600,9 @@ export class WaterGrid implements WaterView {
     private windEast: Float32Array = new Float32Array(0);
     private windSouth: Float32Array = new Float32Array(0);
     private pressure: AirPressure | undefined;
-    private headFor: { pressure: AirPressure; x: number; y: number; width: number; height: number } | undefined;
+    private headFor:
+        | { pressure: AirPressure; x: number; y: number; width: number; height: number; steps: number }
+        | undefined;
     /** The friction of the ground of each cell: the square of the roughness of its soil, times MANNING. */
     private readonly rough: Float32Array;
     /**
@@ -2185,13 +2189,17 @@ export class WaterGrid implements WaterView {
     /**
      * The heights the pressure holds over the cells, made again when the low has moved by half a cell, its drop
      * changed by a hundredth, or the grid changed: the low of a hurricane crosses a cell in about half a second, so
-     * every third step or so (1.5 ms each on 480 x 320 cells, measured on the Mac of the study).
+     * every third step or so, and every FILL_HEADS_STEPS steps whatever (1.5 ms for the heights, 1.2 ms for the
+     * wind, on 480 x 320 cells, measured on the Mac of the study).
      */
     private fillHeads(pressure: AirPressure): void {
         const { x, y, width, height } = this.bounds;
         const last = this.headFor;
+        if (last) last.steps++;
         if (
             last &&
+            // Made again every second at least: the wind over the water may turn while the low stays (its eye passing).
+            last.steps < FILL_HEADS_STEPS &&
             last.x === x &&
             last.y === y &&
             last.width === width &&
@@ -2207,7 +2215,7 @@ export class WaterGrid implements WaterView {
         }
         pressureHeads(pressure, x, y, width, height, TERRAIN_CELL, this.head);
         windPushes(pressure, x, y, width, height, TERRAIN_CELL, this.windEast, this.windSouth);
-        this.headFor = { pressure, x, y, width, height };
+        this.headFor = { pressure, x, y, width, height, steps: 0 };
     }
 
     /** Moves the water one step. Returns whether any moved. */

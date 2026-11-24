@@ -1,6 +1,6 @@
 import type * as Phaser from "phaser";
 import { fallVector, lyingVector } from "./FallenTreeShape";
-import { fallingTreeTexture, lyingTreeTexture, treeBody, treeFoot } from "./FallenTreeTexture";
+import { fallingTreeTexture, lyingLimbs, lyingTreeTexture, treeBody, treeFoot } from "./FallenTreeTexture";
 
 /** How the ground darkens a tree lying on it: its crown seen against the ground, not against the sky. */
 const LYING_TINT = 0xc8c8c8;
@@ -78,6 +78,7 @@ interface Shown {
     lying: Phaser.GameObjects.Image | undefined;
     /** While it falls: its standing image turned on its foot. */
     falling: Phaser.GameObjects.Image | undefined;
+    textureKey: string;
     toward: number;
     fellAt: number | undefined;
     shed: boolean;
@@ -138,6 +139,7 @@ export class FallenTreeView {
         const next: Shown = {
             lying,
             falling,
+            textureKey: tree.textureKey,
             toward: tree.toward,
             fellAt,
             shed: shown?.shed ?? false,
@@ -155,6 +157,23 @@ export class FallenTreeView {
         const shown = this.shown.get(id);
         if (!shown) return undefined;
         return shown.fellAt === undefined ? Math.PI / 2 : fallTilt(this.scene.time.now - shown.fellAt);
+    }
+
+    /**
+     * The branches or fronds of the tree `id` lying, on the map (map pixels), for its shadow; undefined while it falls,
+     * and for a crown of leaves (its shadow is that of a crown).
+     */
+    public limbsOf(
+        id: string,
+    ): { from: { x: number; y: number }; to: { x: number; y: number }; width: number }[] | undefined {
+        const shown = this.shown.get(id);
+        if (!shown || shown.fellAt !== undefined) return undefined;
+        const at = (point: { x: number; y: number }) => ({ x: shown.footX + point.x, y: shown.footY + point.y });
+        return lyingLimbs(this.scene, shown.textureKey, shown.toward)?.map((limb) => ({
+            from: at(limb.from),
+            to: at(limb.to),
+            width: limb.width,
+        }));
     }
 
     /** At each image: the trees falling move on, the leaves they shed fly and fade. */

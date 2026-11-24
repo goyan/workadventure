@@ -1,6 +1,6 @@
 import type * as Phaser from "phaser";
-import { lyingLayout, treeBodyOf } from "./FallenTreeShape";
-import type { LyingLayout, Point, TreeBody } from "./FallenTreeShape";
+import { isFoliage, isPalm, lyingLayout, treeBodyOf } from "./FallenTreeShape";
+import type { CrownKind, LyingLayout, Point, TreeBody } from "./FallenTreeShape";
 import { treePixelPart } from "./SnowyTreeTexture";
 
 /** A tree growing back is drawn at one of these many sizes. */
@@ -52,8 +52,11 @@ interface ReadTree {
     standing: HTMLCanvasElement;
     /** The colours of its leaves, from their shade to their light, and of their outline (CSS). */
     palette: { outline: string; shade: string; middle: string; light: string };
-    /** A crown with hardly any leaves (a bare tree in winter): drawn lying in branches, not in tufts. */
-    bare: boolean;
+    /**
+     * Its crown: leaves (tufts), hardly any leaves (a bare tree in winter: branches), or a palm (fronds), read from its
+     * image (isPalm), not its name.
+     */
+    kind: CrownKind;
 }
 
 const read = new Map<string, ReadTree | null>();
@@ -75,15 +78,6 @@ function paletteOf(leaves: [number, number, number][]): ReadTree["palette"] {
         return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
     };
     return { outline: at(0.03), shade: at(0.2), middle: at(0.5), light: at(0.85) };
-}
-
-/** Whether a colour of a crown is foliage: green, a bright autumn leaf, or snow; not the brown of bare wood. */
-function isFoliage([red, green, blue]: [number, number, number]): boolean {
-    const max = Math.max(red, green, blue) / 255;
-    const min = Math.min(red, green, blue) / 255;
-    const lightness = (max + min) / 2;
-    const saturation = max === min ? 0 : (max - min) / (1 - Math.abs(2 * lightness - 1));
-    return green >= red || (lightness > 0.4 && saturation > 0.5) || lightness > 0.6;
 }
 
 /** The image of a tree read by part, once; undefined while it is not loaded. */
@@ -115,7 +109,10 @@ function readTree(scene: Phaser.Scene, sourceKey: string): ReadTree | undefined 
             const part = treePixelPart([pixel[0], pixel[1], pixel[2], pixel[3]], row / height);
             if (part === "clear" || part === "shadow") continue;
             standing.data.set(pixel, at);
-            if (row >= body.trunkTop - 3 && Math.abs(column + 0.5 - body.footX) <= trunkHalf) wood.data.set(pixel, at);
+            const inTrunk =
+                Math.abs(column + 0.5 - body.footX) <= trunkHalf &&
+                (row >= body.trunkTop - 3 || (row >= body.trunkSeenTop && !isFoliage([pixel[0], pixel[1], pixel[2]])));
+            if (inTrunk) wood.data.set(pixel, at);
             else if (row <= body.crownBottom) leaves.push([pixel[0], pixel[1], pixel[2]]);
         }
     }
@@ -131,7 +128,12 @@ function readTree(scene: Phaser.Scene, sourceKey: string): ReadTree | undefined 
         wood: put(wood),
         standing: put(standing),
         palette: paletteOf(leaves),
-        bare: leaves.filter(isFoliage).length < BARE_FOLIAGE * leaves.length,
+        kind:
+            leaves.filter((rgb) => isFoliage(rgb)).length < BARE_FOLIAGE * leaves.length
+                ? "bare"
+                : isPalm(body)
+                  ? "palm"
+                  : "leafy",
     };
     read.set(sourceKey, tree);
     return tree;
@@ -309,12 +311,74 @@ function drawBranches(context: CanvasRenderingContext2D, tree: ReadTree, layout:
     context.restore();
 }
 
+/** How long the leaflets of a frond are, against its length, at its middle; they shorten to its tip. */
+const LEAFLET_SHARE = 0.16;
+
+/**
+ * The fronds of a palm lying, in the colours of its leaves: each a midrib, lighter, arched from the top of the trunk,
+ * its leaflets as teeth slanting back to both sides, an outline under them.
+ */
+function drawFronds(context: CanvasRenderingContext2D, tree: ReadTree, layout: LyingLayout): void {
+    const { palette } = tree;
+    context.save();
+    context.lineCap = "round";
+    for (const frond of layout.fronds) {
+        const length = frond
+            .slice(1)
+            .reduce((sum, point, index) => sum + Math.hypot(point.x - frond[index].x, point.y - frond[index].y), 0);
+        const leaflets: [Point, Point][] = [];
+        for (let index = 1; index < frond.length; index++) {
+            const from = frond[index - 1];
+            const to = frond[index];
+            const step = Math.hypot(to.x - from.x, to.y - from.y);
+            if (step < 1e-6) continue;
+            const along = { x: (to.x - from.x) / step, y: (to.y - from.y) / step };
+            for (let at = 0; at < step; at += 2) {
+                const share = (index - 1 + at / step) / (frond.length - 1);
+                const reach = length * LEAFLET_SHARE * Math.sin(Math.PI * Math.min(1, 0.15 + share));
+                const base = { x: from.x + along.x * at, y: from.y + along.y * at };
+                for (const side of [1, -1]) {
+                    // Slanting back to the tip: teeth, not a comb.
+                    leaflets.push([
+                        base,
+                        {
+                            x: base.x - along.y * side * reach + along.x * reach * 0.5,
+                            y: base.y + along.x * side * reach + along.y * reach * 0.5,
+                        },
+                    ]);
+                }
+            }
+        }
+        for (const [width, colour, lift] of [
+            [3, palette.outline, -1],
+            [1.5, palette.middle, 0],
+        ] as const) {
+            context.lineWidth = width;
+            context.strokeStyle = colour;
+            context.beginPath();
+            for (const [from, to] of leaflets) {
+                context.moveTo(from.x, from.y - lift);
+                context.lineTo(to.x, to.y - lift);
+            }
+            context.stroke();
+        }
+        context.lineWidth = 1.5;
+        context.strokeStyle = palette.light;
+        context.beginPath();
+        frond.forEach((point, index) =>
+            index === 0 ? context.moveTo(point.x, point.y) : context.lineTo(point.x, point.y),
+        );
+        context.stroke();
+    }
+    context.restore();
+}
+
 /** The trunk on the ground from the foot, its bark stretched along it. */
 function drawTrunk(context: CanvasRenderingContext2D, tree: ReadTree, layout: LyingLayout): void {
     const { body } = tree;
     const length = Math.hypot(layout.trunkEnd.x, layout.trunkEnd.y);
     if (length < 1) return;
-    const top = Math.max(0, body.trunkTop - 3);
+    const top = Math.max(0, Math.min(body.trunkTop, body.trunkSeenTop) - 3);
     const barkHeight = Math.max(1, body.footY - top);
     const half = Math.max(1, Math.ceil(body.trunkWidth / 2) + 1);
     context.save();
@@ -391,6 +455,14 @@ function drawContactShadow(context: CanvasRenderingContext2D, layout: LyingLayou
     context.lineTo(layout.trunkEnd.x, layout.trunkEnd.y + 2);
     context.stroke();
     if (bare) {
+        for (const frond of layout.fronds) {
+            context.lineWidth = 4;
+            context.beginPath();
+            frond.forEach((point, index) =>
+                index === 0 ? context.moveTo(point.x, point.y + 3) : context.lineTo(point.x, point.y + 3),
+            );
+            context.stroke();
+        }
         for (const branch of layout.branches) {
             context.lineWidth = branch.width + 1;
             context.beginPath();
@@ -422,18 +494,43 @@ export function lyingTreeTexture(scene: Phaser.Scene, sourceKey: string, toward:
     const way = lyingWay(toward);
     const size = lyingSize(tree);
     return madeTexture(scene, `tree-lying:${sourceKey}:${way}`, size, size, (context) => {
-        const layout = lyingLayout(tree.body, way);
+        const layout = lyingLayout(tree.body, way, tree.kind);
         context.translate(size / 2, size / 2);
         context.beginPath();
         context.ellipse(layout.pit.x, layout.pit.y, layout.pit.width, layout.pit.height, 0, 0, 2 * Math.PI);
         context.fillStyle = PIT;
         context.fill();
-        drawContactShadow(context, layout, tree.bare);
+        drawContactShadow(context, layout, tree.kind !== "leafy");
         const parts = [
             () => drawPlate(context, layout),
             () => drawTrunk(context, tree, layout),
-            () => (tree.bare ? drawBranches(context, tree, layout) : drawCrown(context, tree, layout)),
+            () =>
+                tree.kind === "bare"
+                    ? drawBranches(context, tree, layout)
+                    : tree.kind === "palm"
+                      ? drawFronds(context, tree, layout)
+                      : drawCrown(context, tree, layout),
         ];
         for (const draw of layout.crownFirst ? parts.reverse() : parts) draw();
     });
+}
+
+/**
+ * What of a tree lying the way `toward` throws its shadow as lines, from its foot (screen pixels): for bare branches
+ * or the fronds of a palm, the same lines as drawn (lyingTreeTexture), and its trunk; undefined for a crown of leaves.
+ */
+export function lyingLimbs(
+    scene: Phaser.Scene,
+    sourceKey: string,
+    toward: number,
+): { from: Point; to: Point; width: number }[] | undefined {
+    const tree = readTree(scene, sourceKey);
+    if (!tree || tree.kind === "leafy") return undefined;
+    const layout = lyingLayout(tree.body, lyingWay(toward), tree.kind);
+    const limbs = [{ from: { x: 0, y: 0 }, to: layout.trunkEnd, width: layout.trunkWidth }, ...layout.branches];
+    for (const frond of layout.fronds) {
+        for (let index = 1; index < frond.length; index++)
+            limbs.push({ from: frond[index - 1], to: frond[index], width: 4 });
+    }
+    return limbs;
 }

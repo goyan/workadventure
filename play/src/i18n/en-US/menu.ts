@@ -66,6 +66,7 @@ const menu: BaseTranslation = {
         },
         rain: {
             title: "Rain (settings for me)",
+            perspective: "Rain and snow seen from above, in perspective (big near the eye, finer down to the ground)",
             amount: "Amount of drops",
             lean: "Lean with the wind",
             splashes: "Splashes on the ground (0%: none)",

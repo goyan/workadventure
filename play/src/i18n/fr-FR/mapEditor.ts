@@ -952,6 +952,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             pointerIce: "Surface de la glace",
             pointerNoWater: "Pas d’eau",
             pointerDepth: "Profondeur {depth}",
+            pointerFloodRise: "Eau plus haute qu'avant l'ouragan",
             pointerOff: "Curseur hors du jeu",
             pointerUnpainted: "{soil} (non peint)",
             pointerRoughness: "Rugosité (Manning) {n}",

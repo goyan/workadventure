@@ -160,6 +160,24 @@ describe("shadowPolygons", () => {
         });
     });
 
+    it("throws the shadow of bare branches lying along them, not that of a crown", () => {
+        const tree = { x: 200, y: 300, crownRadius: 20, crownHeight: 60, trunkWidth: 6 };
+        const light = { azimuth: 180, elevation: 45 };
+        // A trunk lying east, and a branch from its middle to the north-east.
+        const limbs = [
+            { from: { x: 200, y: 300 }, to: { x: 260, y: 300 }, width: 6 },
+            { from: { x: 230, y: 300 }, to: { x: 250, y: 280 }, width: 2 },
+        ];
+        const lying = posedTree(tree, { towardX: 1, towardY: 0, tilt: Math.PI / 2, size: 1, limbs });
+        const polygons = shadowPolygons({ boxes: [], trees: [lying] }, light);
+        expect(polygons).toHaveLength(2);
+        // Under the trunk and the branch, a little away from the light (north, the sun in the south)...
+        expect(inAny(polygons, 255, 298)).toBe(true);
+        expect(inAny(polygons, 244, 285)).toBe(true);
+        // ...and nothing where the crown would lie, between the branches.
+        expect(inAny(polygons, 255, 270)).toBe(false);
+    });
+
     it("throws the shadow of a tree growing back at its size", () => {
         const tree = { x: 200, y: 300, crownRadius: 20, crownHeight: 60, trunkWidth: 6 };
         const young = posedTree(tree, { towardX: 0, towardY: 1, tilt: 0, size: 0.5 });

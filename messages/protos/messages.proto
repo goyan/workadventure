@@ -925,7 +925,7 @@ message HurricaneTrackMessage {
   double durationMs = 13;
   double times = 14;
   // How many times stronger than in reality its low and its wind act on the water, to see it better: 1 (or absent:
-  // the real effect), 2, 4, 6 or 8 (Hurricane.HURRICANE_WATER_EFFECTS). Asked by the player, kept by the server.
+  // the real effect), 5, 10 or 20 (Hurricane.HURRICANE_WATER_EFFECTS). Asked by the player, kept by the server.
   int32 waterEffect = 15;
 }
 

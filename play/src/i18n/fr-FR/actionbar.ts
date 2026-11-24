@@ -129,6 +129,12 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         minutes: "{count} min",
         seconds: "{count} s",
     },
+    fastDay: {
+        start: "Accélérer le jour et la nuit, pour toi seul : le soleil, la lune et leurs ombres défilent",
+        stop: "Revenir au ciel réel",
+        speed: "Vitesse du jour et de la nuit : {speed} minutes de ciel par seconde",
+        sky: "Heure du ciel que tu vois : {time}",
+    },
     basicMode: {
         label: "Basique",
         switch: "Mode basique : aucun effet",
@@ -500,6 +506,9 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         hurricaneWaterEffectLabel: "Effet sur l'eau (pression et vent)",
         hurricaneWaterRealistic: "Réaliste",
         hurricaneWaterExaggerated: "Exagéré ×{times}",
+        hurricaneWaterEffectHelp:
+            "Le dôme d'eau sous l'œil ne se forme qu'aux vitesses lentes du widget « > » : un œil plus rapide que les vagues du lac va trop vite pour lui.",
+        hurricaneRise: "Eau : +{rise} m au plus haut depuis le début",
         hurricaneHeadingLabel: "Vers où va l'ouragan",
         hurricaneHeading: "Il va vers {point} ({degrees}°)",
         hurricaneStart: "Lancer l'ouragan",

@@ -6,6 +6,8 @@
     import { LL, locale } from "../../../i18n/i18n-svelte";
     import { altitudeLabel, metresLabel, SOIL_NAME_CH } from "../../Phaser/Game/Floors/AvatarAltitude";
     import { SOIL_TINTS } from "../../Phaser/Game/Terrain/TerrainShading";
+    import { pointerFloodRiseStore } from "../../Stores/CatastropheStore";
+    import { basicActiveStore } from "../../Stores/BasicModeStore";
     import { floorLevelViewedStore, levelChangePulses } from "../../Stores/FloorLevelsStore";
     import { IconCheck, IconChevronDown, IconDroplet, IconSnowflake } from "@wa-icons";
 
@@ -47,6 +49,9 @@
               ? `< ${metresLabel(0.1, $locale, false)}`
               : metresLabel(pointer.depth, $locale, false),
     );
+    // How much higher the water is here than before the hurricane (negative: lower), when one is followed; not in
+    // Basique, which shows no catastrophe.
+    let floodRise = $derived($basicActiveStore ? undefined : $pointerFloodRiseStore);
     let waterName = $derived(
         pointer?.ice
             ? $LL.mapEditor.mapLayer.floorLevel.pointerIce()
@@ -255,6 +260,16 @@
                             <path d="M12 4v16M8 8l4-4 4 4M8 16l4 4 4-4" />
                         </svg>
                         {depthFigure}
+                    </span>
+                {/if}
+                {#if floodRise !== undefined && Math.abs(floodRise) >= 0.05}
+                    <span
+                        class="shrink-0 text-sky-300"
+                        title={$LL.mapEditor.mapLayer.floorLevel.pointerFloodRise()}
+                        aria-label={$LL.mapEditor.mapLayer.floorLevel.pointerFloodRise()}
+                        data-testid="pointer-flood-rise"
+                    >
+                        {metresLabel(floodRise, $locale)}
                     </span>
                 {/if}
             </div>

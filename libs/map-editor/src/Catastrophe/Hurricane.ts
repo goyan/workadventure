@@ -1,7 +1,7 @@
 import { TILE_PX } from "../types";
 import type { FireConditions } from "../Weather/FireConditions";
 import { TILE_AREA_M2 } from "../Terrain/Scale";
-import { waterHeightOfPressure } from "../Terrain/AirPressure";
+import { waterHeightOfPressure, windStress } from "../Terrain/AirPressure";
 import type { AirPressure } from "../Terrain/AirPressure";
 
 /**
@@ -172,8 +172,11 @@ export interface HurricaneTrack {
     waterEffect?: number;
 }
 
-/** The effects on the water a player may ask for: the real one, then exaggerated two to eight times. */
-export const HURRICANE_WATER_EFFECTS: readonly number[] = [1, 2, 4, 6, 8];
+/**
+ * The effects on the water a player may ask for: the real one, then exaggerated five to twenty times. Real, the dome
+ * under the eye of a category 4 is some 0.7 m on a lake of the map, hard to see from above: exaggerated, it floods.
+ */
+export const HURRICANE_WATER_EFFECTS: readonly number[] = [1, 5, 10, 20];
 
 /** The effect on the water asked, as one of HURRICANE_WATER_EFFECTS (the nearest under it; the real one otherwise). */
 export function hurricaneWaterEffect(asked: number | undefined): number {
@@ -514,6 +517,57 @@ export function hurricanePressureDrop(category: number): number {
 }
 
 /**
+ * How far the water of a bay draws back under the wind of a hurricane blowing from the land, as a share of its
+ * depth: Irma (2017) at Tampa Bay, the water at St. Petersburg about 5 ft below normal (Cangialosi, Latto and Berg,
+ * National Hurricane Center Tropical Cyclone Report AL112017, 2018), the bay 3.7 m deep on the mean (USGS,
+ * Britannica [Gemini, not read]): 0.41.
+ */
+export const HURRICANE_DRAWDOWN_SHARE = (5 * 0.3048) / 3.7;
+
+/**
+ * The lake the hurricane crosses on the map, as the similitude of the fetch takes it: 150 m across the wind, 1.5 m
+ * deep (the lake of the map of the team), under the strongest wind of a category 4 (m/s, averaged over 10 minutes).
+ */
+export const HURRICANE_REFERENCE_LAKE = {
+    fetchM: 150,
+    depthM: 1.5,
+    windMs: hurricaneMaxWind(4) / 3.6,
+} as const;
+
+/**
+ * The slope a steady wind holds the water of a closed channel at, in units of the mean depth over the length:
+ * at rest d(h²/2)/dx = τ / (ρ g), so h(x)² = h(0)² + 2 k x, and the mean of h over the channel is its depth at rest.
+ * The k at which the water upwind stands `share` lower than at rest (h(0) = 1 - share), by halving: about 0.7 for 0.41.
+ */
+export function drawdownSlope(share: number): number {
+    const upwind = 1 - share;
+    // The mean depth of the channel for a k: ((a² + 2k)^(3/2) - a³) / (3k).
+    const mean = (k: number): number => ((upwind * upwind + 2 * k) ** 1.5 - upwind ** 3) / (3 * k);
+    let low = 1e-6;
+    let high = 10;
+    for (let step = 0; step < 60; step++) {
+        const middle = (low + high) / 2;
+        if (mean(middle) < 1) low = middle;
+        else high = middle;
+    }
+    return (low + high) / 2;
+}
+
+/**
+ * A SIMILITUDE OF THE FETCH, a choice (as the hurricane is reduced to the map). The wind holds the water of a closed
+ * basin aslant, dh/dx = τ / (ρ g h) at rest: a few centimetres over the lakes of a map of 260 m, where a real
+ * hurricane over a bay tens of kilometres long draws the water back by metres and leaves its floor dry. The stress of
+ * the wind of a hurricane on the water is multiplied by this factor so that the reference lake (a closed channel of
+ * its fetch and depth) draws back by the share of its depth a real bay did, HURRICANE_DRAWDOWN_SHARE, and piles up
+ * on the other side (about a third of its depth): F τ / (ρ g) = k h² / L, k from drawdownSlope. About 10. The bare
+ * ratio of the lengths (tens of km over 150 m, ×100 to ×400) would empty the lake: a real bay never comes to rest
+ * under a wind that lasts hours and turns.
+ */
+export const HURRICANE_FETCH_SIMILITUDE =
+    (drawdownSlope(HURRICANE_DRAWDOWN_SHARE) * 1000 * 9.81 * HURRICANE_REFERENCE_LAKE.depthM ** 2) /
+    (windStress(HURRICANE_REFERENCE_LAKE.windMs) * HURRICANE_REFERENCE_LAKE.fetchM);
+
+/**
  * The low of the hurricane over the water at `epoch` (WaterGrid.setPressure): under its eye the water stands higher
  * by the height of water its drop of pressure holds (the inverted barometer, about 1 cm a hPa), and its wind pushes
  * the water, both fading in and out with the storm. Undefined outside its passage.
@@ -530,7 +584,9 @@ export function hurricanePressure(hurricane: Hurricane | undefined, epoch: numbe
         dropPx: waterHeightOfPressure(hurricanePressureDrop(hurricane.category) * share) * PX_PER_METRE * effect,
         radiusPx: HURRICANE_RMAX_PX,
         b: HURRICANE_HOLLAND_B,
-        windGain: effect,
+        // Its wind pushes the water as over a bay of its size (the similitude of the fetch), and that many times more
+        // when asked.
+        windGain: effect * HURRICANE_FETCH_SIMILITUDE,
         // Its wind pushes the water, fading in and out with the storm (m/s, east and south).
         wind: (x, y) => {
             const wind = hurricaneWind(hurricane, storm, x, y);
