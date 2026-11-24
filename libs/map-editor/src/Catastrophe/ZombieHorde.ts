@@ -291,19 +291,30 @@ export function zombieTerrainHash(text: string): number {
 export interface ZombieLogEntry {
     applyStep: number;
     changes: { slot: number; tile: number }[];
+    /**
+     * The grenades that go off at this step (ZombieGrenade): shot from a point to a point (map pixels, whole), their
+     * fuse lit ZOMBIE_GRENADE_FUSE_STEPS steps before. Absent when there is none.
+     */
+    grenades?: { fromX: number; fromY: number; toX: number; toY: number }[];
 }
 
-/** The log of the avatars, as it is told: for each entry its step (from the one before), then its changes. */
+/** The log of the avatars, as it is told: for each entry its step, its changes, then its grenades. */
 export function encodeZombieLog(entries: readonly ZombieLogEntry[]): string {
     const bytes: number[] = [];
-    let step = 0;
     for (const entry of entries) {
-        pushVarint(bytes, entry.applyStep - step);
-        step = entry.applyStep;
+        pushVarint(bytes, entry.applyStep);
         pushVarint(bytes, entry.changes.length);
         for (const change of entry.changes) {
             pushVarint(bytes, change.slot);
             pushVarint(bytes, change.tile + 1);
+        }
+        const grenades = entry.grenades ?? [];
+        pushVarint(bytes, grenades.length);
+        for (const grenade of grenades) {
+            pushVarint(bytes, grenade.fromX);
+            pushVarint(bytes, grenade.fromY);
+            pushVarint(bytes, grenade.toX);
+            pushVarint(bytes, grenade.toY);
         }
     }
     return base64Of(bytes);
@@ -313,18 +324,39 @@ export function decodeZombieLog(text: string): ZombieLogEntry[] {
     const bytes = bytesOfBase64(text);
     const at = { read: 0 };
     const entries: ZombieLogEntry[] = [];
-    let step = 0;
     while (at.read < bytes.length) {
-        step += readVarint(bytes, at);
+        const step = readVarint(bytes, at);
         const count = readVarint(bytes, at);
         const changes: { slot: number; tile: number }[] = [];
         for (let change = 0; change < count && at.read < bytes.length; change++) {
             const slot = readVarint(bytes, at);
             changes.push({ slot, tile: readVarint(bytes, at) - 1 });
         }
-        entries.push({ applyStep: step, changes });
+        const shots = readVarint(bytes, at);
+        const grenades: { fromX: number; fromY: number; toX: number; toY: number }[] = [];
+        for (let shot = 0; shot < shots && at.read < bytes.length; shot++) {
+            const fromX = readVarint(bytes, at);
+            const fromY = readVarint(bytes, at);
+            const toX = readVarint(bytes, at);
+            grenades.push({ fromX, fromY, toX, toY: readVarint(bytes, at) });
+        }
+        entries.push({ applyStep: step, changes, ...(grenades.length > 0 ? { grenades } : {}) });
     }
     return entries;
+}
+
+/**
+ * The entries of a log by their step, those of a same step in the order they were told (an insertion, stable): the
+ * grenades are told with the step they go off at, after the avatars told before them for earlier steps.
+ */
+export function zombieLogInOrder(entries: readonly ZombieLogEntry[]): ZombieLogEntry[] {
+    const ordered: ZombieLogEntry[] = [];
+    for (const entry of entries) {
+        let at = ordered.length;
+        while (at > 0 && ordered[at - 1].applyStep > entry.applyStep) at--;
+        ordered.splice(at, 0, entry);
+    }
+    return ordered;
 }
 
 /** The cells of the relief in a tile. */

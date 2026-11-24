@@ -34,6 +34,8 @@ import type { RainSlots, SimulationRoom } from "./WaterSimulation";
 
 /** The crowd of a horde takes this many steps at most a call: a ground that missed time catches up over its steps. */
 const ZOMBIE_STEPS_A_CALL = 40;
+/** The fire a grenade sets where it goes off, in tiles around: its fireball, a few metres across. */
+const ZOMBIE_GRENADE_FIRE_TILES = 2;
 
 /** A whole state of the meadow to start from, as a room tells it (its bytes unzipped). */
 export interface SeededMeadow {
@@ -479,6 +481,9 @@ export class MeadowSimulation {
         this.crowd.setLog(horde.avatars, horde.safeStep);
         this.crowd.setClock(horde);
         this.crowd.advanceTo(at, ZOMBIE_STEPS_A_CALL);
+        // A grenade that went off sets fire to what can burn where it did, by the fire of the meadow (dry grass and
+        // trees catch, a wet soil does not).
+        for (const blast of this.crowd.takeExplosions()) this.ignite(blast.x, blast.y, ZOMBIE_GRENADE_FIRE_TILES);
     }
 
     /** The catastrophes of the room say which masses of cold air its players hold. */

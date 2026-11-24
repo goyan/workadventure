@@ -19,6 +19,7 @@ import {
     TSUNAMI_MAX_MINUTES,
     TSUNAMI_TELL_MS,
     decodeZombieLog,
+    ZOMBIE_GRENADES_A_PLAYER,
     decodeZombieTerrain,
     encodeZombieTerrain,
     zombieTerrainHash,
@@ -1075,6 +1076,32 @@ describe("CatastropheManager, a horde of zombies", () => {
         vi.advanceTimersByTime(5 * ZOMBIE_TELL_MS);
         expect(sent).toHaveLength(count);
         expect(manager.startZombies(ask)).toBe(false);
+    });
+
+    it("puts a grenade shot into the horde in its log, going off after its fuse, told at once, once a second", () => {
+        const { manager, sent } = zombieHarness();
+        expect(manager.zombieGrenade(7, { fromX: 100, fromY: 100, toX: 300, toY: 100 })).toBe(false);
+        manager.startZombies(ask);
+        vi.advanceTimersByTime(2_000);
+        const before = sent.length;
+        expect(manager.zombieGrenade(7, { fromX: 100, fromY: 100, toX: 300, toY: 100 })).toBe(true);
+        expect(sent).toHaveLength(before + 1);
+        const log = decodeZombieLog(sent[sent.length - 1].zombies?.avatars ?? "");
+        const shot = log.find((entry) => entry.grenades);
+        // Shot at step 20: it goes off 40 steps later, after the step the log was complete to (44).
+        expect(shot).toMatchObject({ applyStep: 60, grenades: [{ fromX: 100, fromY: 100, toX: 300, toY: 100 }] });
+        expect(manager.zombieGrenade(7, { fromX: 100, fromY: 100, toX: 300, toY: 100 })).toBe(false);
+        expect(manager.zombieGrenade(9, { fromX: 100, fromY: 100, toX: 9000, toY: 100 })).toBe(false);
+        vi.advanceTimersByTime(1_000);
+        expect(manager.zombieGrenade(7, { fromX: 100, fromY: 100, toX: 300, toY: 100 })).toBe(true);
+        // So many a player at each horde.
+        for (let shot = 2; shot < ZOMBIE_GRENADES_A_PLAYER; shot++) {
+            vi.advanceTimersByTime(1_000);
+            expect(manager.zombieGrenade(7, { fromX: 100, fromY: 100, toX: 300, toY: 100 })).toBe(true);
+        }
+        vi.advanceTimersByTime(1_000);
+        expect(manager.zombieGrenade(7, { fromX: 100, fromY: 100, toX: 300, toY: 100 })).toBe(false);
+        expect(manager.zombieGrenade(8, { fromX: 100, fromY: 100, toX: 300, toY: 100 })).toBe(true);
     });
 
     it("sends no horde before the size of the map is read", () => {

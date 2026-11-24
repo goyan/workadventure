@@ -42,6 +42,9 @@ import {
     zombieStepAt,
     zombieTerrainHash,
     ZOMBIE_INPUT_DELAY_MS,
+    ZOMBIE_GRENADE_FUSE_STEPS,
+    ZOMBIE_GRENADES_A_PLAYER,
+    zombieGrenadeAim,
     ZOMBIE_MOST_AVATARS,
     ZOMBIE_STEP_MS,
     ZOMBIE_TELL_MS,
@@ -58,7 +61,17 @@ import type {
     ZombieLogEntry,
 } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
-import type { HurricaneTrackMessage, TsunamiMessage, ZombieHordeMessage } from "@workadventure/messages";
+import type {
+    HurricaneTrackMessage,
+    TsunamiMessage,
+    ZombieGrenadeMessage,
+    ZombieHordeMessage,
+} from "@workadventure/messages";
+
+/** A player shoots a grenade once a second at most. */
+const ZOMBIE_GRENADE_PACE_MS = 1000;
+/** The room shoots this many grenades at most into a horde. */
+const ZOMBIE_GRENADES_A_HORDE = 120;
 import type { GameRoom } from "./GameRoom";
 
 /** The ice broken around a player who goes through it, in tiles: the hole they fall into. */
@@ -153,6 +166,9 @@ export class CatastropheManager {
     private hordeLog: ZombieLogEntry[] = [];
     private hordeSlots = new Map<number, number>();
     private hordeTiles: number[] = [];
+    /** When each player last shot a grenade, and how many; how many the room shot at this horde. */
+    private readonly grenadeShots = new Map<number, { at: number; shot: number }>();
+    private grenadesShot = 0;
 
     constructor(
         private readonly room: Pick<GameRoom, "sendSubMessageToRoom">,
@@ -797,6 +813,8 @@ export class CatastropheManager {
             safeStep: -1,
         };
         this.hordeLog = [];
+        this.grenadeShots.clear();
+        this.grenadesShot = 0;
         this.hordeSlots = new Map();
         this.hordeTiles = [];
         this.hordeTerrainToldAt = Number.NEGATIVE_INFINITY;
@@ -891,6 +909,53 @@ export class CatastropheManager {
             this.hordeLog.push({ applyStep, changes });
         }
         this.horde = { ...horde, avatars: encodeZombieLog(this.hordeLog), safeStep: applyStep - 1 };
+    }
+
+    /**
+     * A player who holds the grenade launcher shoots a grenade into the horde, from a point to a point (map pixels):
+     * it goes off when its fuse has burnt (ZOMBIE_GRENADE_FUSE_STEPS steps), or later if every browser could not have
+     * it by then; it goes in the log of the horde, and the room is told at once. Once a second at most for a player.
+     * False when refused: no horde, a point off the map, too soon.
+     */
+    public zombieGrenade(userId: number, shot: ZombieGrenadeMessage): boolean {
+        const horde = this.zombies();
+        const size = this.mapSize();
+        if (!horde || !size || this.stopped) return false;
+        const inside = (x: number, y: number): boolean =>
+            Number.isFinite(x) && Number.isFinite(y) && x >= 0 && y >= 0 && x < size.width && y < size.height;
+        if (!inside(shot.fromX, shot.fromY) || !inside(shot.toX, shot.toY)) return false;
+        const now = this.now();
+        const before = this.grenadeShots.get(userId) ?? { at: Number.NEGATIVE_INFINITY, shot: 0 };
+        if (now - before.at < ZOMBIE_GRENADE_PACE_MS) return false;
+        // Each shot stays in the log every browser is sent: so many a player, so many the room, at each horde.
+        if (before.shot >= ZOMBIE_GRENADES_A_PLAYER || this.grenadesShot >= ZOMBIE_GRENADES_A_HORDE) return false;
+        this.grenadeShots.set(userId, { at: now, shot: before.shot + 1 });
+        this.grenadesShot++;
+        const aimed = zombieGrenadeAim({
+            fromX: Math.round(shot.fromX),
+            fromY: Math.round(shot.fromY),
+            toX: Math.round(shot.toX),
+            toY: Math.round(shot.toY),
+        });
+        const explodeStep = Math.max(
+            Math.ceil(zombieStepAt(horde, now)) + ZOMBIE_GRENADE_FUSE_STEPS,
+            horde.safeStep + 1,
+        );
+        this.hordeLog.push({
+            applyStep: explodeStep,
+            changes: [],
+            grenades: [
+                {
+                    fromX: Math.round(aimed.fromX),
+                    fromY: Math.round(aimed.fromY),
+                    toX: Math.round(aimed.toX),
+                    toY: Math.round(aimed.toY),
+                },
+            ],
+        });
+        this.horde = { ...horde, avatars: encodeZombieLog(this.hordeLog) };
+        this.tellZombies();
+        return true;
     }
 
     /** A player stops the horde of the room: it is gone at once, and the room is told. False when there is none. */

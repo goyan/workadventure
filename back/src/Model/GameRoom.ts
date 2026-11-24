@@ -1427,6 +1427,8 @@ export class GameRoom implements BrothersFinder {
     /** A player sends a horde of zombies across the map, or stops the one crossing it (`release`). */
     public launchZombies(user: Pick<User, "id">, zombies: ZombieHordeMessage | undefined, release = false): void {
         if (release) this.catastrophes?.stopZombies();
+        // A grenade shot into the horde, or a new horde.
+        else if (zombies?.grenade) this.catastrophes?.zombieGrenade(user.id, zombies.grenade);
         else if (zombies) this.catastrophes?.startZombies(zombies);
     }
 

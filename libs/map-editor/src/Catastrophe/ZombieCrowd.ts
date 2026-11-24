@@ -9,8 +9,16 @@ import {
     ZOMBIE_STEP_MS,
     ZOMBIE_WATER,
     zombieLastStep,
+    zombieLogInOrder,
     zombieStepAt,
 } from "./ZombieHorde";
+import {
+    ZOMBIE_GRENADE_BLAST_M,
+    ZOMBIE_GRENADE_FUSE_STEPS,
+    ZOMBIE_GRENADE_LETHAL_M,
+    zombieGrenadePath,
+} from "./ZombieGrenade";
+import type { ZombieGrenadePath, ZombieGrenadeShot } from "./ZombieGrenade";
 import type { ZombieHorde, ZombieLogEntry } from "./ZombieHorde";
 
 /**
@@ -146,6 +154,22 @@ const FAR = 0xffff;
 export const ZOMBIE_WAITING = 0;
 export const ZOMBIE_WALKING = 1;
 export const ZOMBIE_GONE = 2;
+/** Thrown by a grenade, burning: it falls, burns, and is gone at its step `dieAt`. */
+export const ZOMBIE_DYING = 3;
+
+/**
+ * What the blast of a grenade does to a zombie: thrown up and away, the more the nearer (m/s, a choice of the order of
+ * what the blast of a few hundred grams of explosive gives a body at a few metres), then it burns this long and is gone.
+ * Beyond the radius of fatality, within that of casualties, it is only shoved.
+ */
+const BLAST_UP_M_S = 7;
+const BLAST_AWAY_M_S = 9;
+const SHOVE_AWAY_M_S = 5;
+export const ZOMBIE_BURN_STEPS = 40;
+/** A body thrown bounces off the ground keeping this share of its speed downwards, and slides to a stop. */
+const BODY_BOUNCE = 0.25;
+const BODY_SLIDE_BRAKE = 6;
+const G_PX_S2 = 9.81 * ZOMBIE_PX_PER_METRE;
 
 function mulberry32(seed: number): () => number {
     let state = seed >>> 0;
@@ -173,14 +197,19 @@ export class ZombieCrowd {
     public readonly vx: Float64Array;
     public readonly vy: Float64Array;
     public readonly state: Uint8Array;
+    /** How high a zombie thrown by a blast is (px), how fast it rises, the step it is gone at. */
+    public readonly z: Float64Array;
+    public readonly vz: Float64Array;
+    public readonly dieAt: Int32Array;
     /** The avatar each zombie runs to (its slot), -1 when it runs out. */
     public readonly target: Int8Array;
     /** The steps taken: the crowd is the horde at its step `steps`. */
     public steps = 0;
     /** At this step the horde is over: whoever is still on the map is gone. */
     public readonly lastStep: number;
-    /** How many walk now. */
+    /** How many walk now, and how many burn, thrown by a blast. */
     public walking = 0;
+    public dying = 0;
     /** The time to run out from each cell (fast marching, in cells), Infinity where none runs out. */
     public readonly potential: Float64Array;
     /** The tile each avatar stands on (its slot), -1 where none. */
@@ -221,6 +250,9 @@ export class ZombieCrowd {
     /** The distance field of each avatar (10 a cell), made when it moved to another tile. */
     private readonly fields: (Uint16Array | undefined)[] = new Array<Uint16Array | undefined>(ZOMBIE_MOST_AVATARS);
     private readonly fieldTile = new Int32Array(ZOMBIE_MOST_AVATARS).fill(-1);
+    /** The grenades told, by the step they go off at, with their paths once computed; the blasts not yet taken. */
+    private shots: { explodeStep: number; shot: ZombieGrenadeShot; path?: ZombieGrenadePath }[] = [];
+    private explosions: { x: number; y: number; step: number; killed: number }[] = [];
     /** The log of the avatars, the next entry to apply, and the last step it is complete to. */
     private log: ZombieLogEntry[] = [];
     private logAt = 0;
@@ -255,6 +287,9 @@ export class ZombieCrowd {
         this.nextVx = new Float64Array(count);
         this.nextVy = new Float64Array(count);
         this.state = new Uint8Array(count);
+        this.z = new Float64Array(count);
+        this.vz = new Float64Array(count);
+        this.dieAt = new Int32Array(count);
         this.target = new Int8Array(count).fill(-1);
         this.pace = new Float64Array(count);
         this.sway = new Float64Array(count);
@@ -292,12 +327,68 @@ export class ZombieCrowd {
      * last step it is complete to. A log that disagrees with what was applied already is not taken.
      */
     public setLog(text: string, safeStep: number): void {
-        const entries = decodeZombieLog(text);
+        const entries = zombieLogInOrder(decodeZombieLog(text));
         for (let at = 0; at < this.logAt; at++) {
             if (at >= entries.length || entries[at].applyStep !== this.log[at].applyStep) return;
         }
         this.log = entries;
         if (Number.isFinite(safeStep) && safeStep > this.safeStep) this.safeStep = safeStep;
+        // The grenades told: their paths, made when first asked for.
+        const shots: { explodeStep: number; shot: ZombieGrenadeShot; path?: ZombieGrenadePath }[] = [];
+        for (const entry of entries) {
+            for (const shot of entry.grenades ?? []) {
+                const known = this.shots.find(
+                    (other) =>
+                        other.explodeStep === entry.applyStep &&
+                        other.shot.fromX === shot.fromX &&
+                        other.shot.fromY === shot.fromY &&
+                        other.shot.toX === shot.toX &&
+                        other.shot.toY === shot.toY,
+                );
+                shots.push(known ?? { explodeStep: entry.applyStep, shot });
+            }
+        }
+        this.shots = shots;
+    }
+
+    /** The path of a grenade over the ground of the horde. */
+    private pathOf(grenade: { shot: ZombieGrenadeShot; path?: ZombieGrenadePath }): ZombieGrenadePath {
+        grenade.path ??= zombieGrenadePath(grenade.shot, {
+            width: this.width,
+            height: this.height,
+            terrain: this.terrain,
+        });
+        return grenade.path;
+    }
+
+    /**
+     * The grenades in the air or on the ground at `step` (a fractional step, to draw between two): where each is, how
+     * high, and the step it goes off at.
+     */
+    public grenadesAt(step: number): { x: number; y: number; z: number; explodeStep: number }[] {
+        const flying: { x: number; y: number; z: number; explodeStep: number }[] = [];
+        for (const grenade of this.shots) {
+            const since = step - (grenade.explodeStep - ZOMBIE_GRENADE_FUSE_STEPS);
+            if (since < 0 || since >= ZOMBIE_GRENADE_FUSE_STEPS) continue;
+            const path = this.pathOf(grenade);
+            const at = Math.floor(since);
+            const between = since - at;
+            const next = Math.min(ZOMBIE_GRENADE_FUSE_STEPS, at + 1);
+            flying.push({
+                x: path.x[at] + (path.x[next] - path.x[at]) * between,
+                y: path.y[at] + (path.y[next] - path.y[at]) * between,
+                z: path.z[at] + (path.z[next] - path.z[at]) * between,
+                explodeStep: grenade.explodeStep,
+            });
+        }
+        return flying;
+    }
+
+    /** The blasts since this was last asked: where, and how many zombies each killed. */
+    public takeExplosions(): { x: number; y: number; step: number; killed: number }[] {
+        const taken = this.explosions;
+        this.explosions = [];
+        return taken;
     }
 
     /**
@@ -354,7 +445,10 @@ export class ZombieCrowd {
 
     /** Whether the horde is over at this step: nobody walks any more, nobody will come. */
     public over(): boolean {
-        return this.steps >= this.lastStep || (this.nextIn >= this.count && this.walking === 0 && this.steps > 0);
+        return (
+            this.steps >= this.lastStep ||
+            (this.nextIn >= this.count && this.walking === 0 && this.dying === 0 && this.steps > 0)
+        );
     }
 
     /**
@@ -418,6 +512,7 @@ export class ZombieCrowd {
         mix(this.vy);
         mix(this.state);
         mix(this.target);
+        mix(this.z);
         hash = Math.imul(hash ^ this.steps, 0x01000193) >>> 0;
         return hash >>> 0;
     }
@@ -437,6 +532,7 @@ export class ZombieCrowd {
             }
             this.nextIn = count;
             this.walking = 0;
+            this.dying = 0;
             return;
         }
         this.fillTiles();
@@ -444,17 +540,126 @@ export class ZombieCrowd {
         this.choose();
         this.steer();
         this.move();
+        this.fly();
     }
 
     /** The entries of the log whose step came: the avatars move, leave, come. */
     private applyLog(): void {
         while (this.logAt < this.log.length && this.log[this.logAt].applyStep <= this.steps) {
-            for (const { slot, tile } of this.log[this.logAt].changes) {
+            const entry = this.log[this.logAt];
+            for (const { slot, tile } of entry.changes) {
                 if (slot < 0 || slot >= ZOMBIE_MOST_AVATARS) continue;
                 this.avatarTile[slot] = tile >= 0 && tile < this.tilesWide * this.tilesHigh ? tile : -1;
             }
+            for (const shot of entry.grenades ?? []) {
+                const grenade = this.shots.find(
+                    (other) =>
+                        other.explodeStep === entry.applyStep &&
+                        other.shot.fromX === shot.fromX &&
+                        other.shot.fromY === shot.fromY &&
+                        other.shot.toX === shot.toX &&
+                        other.shot.toY === shot.toY,
+                ) ?? { shot };
+                const path = this.pathOf(grenade);
+                this.explode(path.x[ZOMBIE_GRENADE_FUSE_STEPS], path.y[ZOMBIE_GRENADE_FUSE_STEPS]);
+            }
             this.logAt++;
         }
+    }
+
+    /**
+     * A grenade goes off at a point: the zombies within ZOMBIE_GRENADE_LETHAL_M are thrown up and away, burning, and
+     * are gone; those within ZOMBIE_GRENADE_BLAST_M are shoved away, the more the nearer.
+     */
+    private explode(px: number, py: number): void {
+        const lethal = ZOMBIE_GRENADE_LETHAL_M * PX;
+        const blast = ZOMBIE_GRENADE_BLAST_M * PX;
+        let killed = 0;
+        for (let zombie = 0; zombie < this.count; zombie++) {
+            if (this.state[zombie] !== ZOMBIE_WALKING) continue;
+            const dx = this.x[zombie] - px;
+            const dy = this.y[zombie] - py;
+            const d2 = dx * dx + dy * dy;
+            if (d2 >= blast * blast) continue;
+            const d = Math.sqrt(d2);
+            const nx = d > 1e-6 ? dx / d : 1;
+            const ny = d > 1e-6 ? dy / d : 0;
+            const falloff = (1 - d / blast) * (1 - d / blast);
+            if (d < lethal) {
+                this.state[zombie] = ZOMBIE_DYING;
+                this.walking--;
+                this.dying++;
+                this.target[zombie] = -1;
+                this.z[zombie] = 0;
+                this.vz[zombie] = (BLAST_UP_M_S * (1 - d / lethal) + 2) * PX;
+                this.vx[zombie] = nx * BLAST_AWAY_M_S * falloff * PX;
+                this.vy[zombie] = ny * BLAST_AWAY_M_S * falloff * PX;
+                this.dieAt[zombie] = this.steps + ZOMBIE_BURN_STEPS;
+                killed++;
+            } else {
+                this.vx[zombie] += nx * SHOVE_AWAY_M_S * falloff * PX;
+                this.vy[zombie] += ny * SHOVE_AWAY_M_S * falloff * PX;
+            }
+        }
+        this.explosions.push({ x: px, y: py, step: this.steps, killed });
+    }
+
+    /** The zombies thrown by a blast fly, bounce, slide to a stop against the walls, burn, and are gone. */
+    private fly(): void {
+        const { count, state, x, y, lastX, lastY, vx, vy } = this;
+        for (let zombie = 0; zombie < count; zombie++) {
+            if (state[zombie] !== ZOMBIE_DYING) continue;
+            lastX[zombie] = x[zombie];
+            lastY[zombie] = y[zombie];
+            if (this.steps >= this.dieAt[zombie]) {
+                state[zombie] = ZOMBIE_GONE;
+                this.dying--;
+                continue;
+            }
+            this.vz[zombie] -= G_PX_S2 * DT;
+            this.z[zombie] += this.vz[zombie] * DT;
+            if (this.z[zombie] <= 0) {
+                this.z[zombie] = 0;
+                this.vz[zombie] = this.vz[zombie] < -1 * PX ? -this.vz[zombie] * BODY_BOUNCE : 0;
+                // On the ground: it slides to a stop.
+                const along = Math.sqrt(vx[zombie] * vx[zombie] + vy[zombie] * vy[zombie]);
+                const slowed = Math.max(0, along - BODY_SLIDE_BRAKE * PX * DT);
+                if (along > 1e-9) {
+                    vx[zombie] = (vx[zombie] / along) * slowed;
+                    vy[zombie] = (vy[zombie] / along) * slowed;
+                }
+            }
+            const fromX = x[zombie];
+            const fromY = y[zombie];
+            let toX = fromX + Math.min(MOST_A_STEP_PX, Math.max(-MOST_A_STEP_PX, vx[zombie] * DT));
+            let toY = fromY + Math.min(MOST_A_STEP_PX, Math.max(-MOST_A_STEP_PX, vy[zombie] * DT));
+            toX = Math.min(this.widthPx - 0.5, Math.max(0.5, toX));
+            toY = Math.min(this.heightPx - 0.5, Math.max(0.5, toY));
+            const cellX = Math.floor(fromX / TERRAIN_CELL);
+            const cellY = Math.floor(fromY / TERRAIN_CELL);
+            const nextX = Math.floor(toX / TERRAIN_CELL);
+            if (nextX !== cellX && !this.canGoFlying(cellY * this.width + cellX, nextX - cellX, 0)) {
+                toX = fromX;
+                vx[zombie] = 0;
+            }
+            const column = Math.floor(toX / TERRAIN_CELL);
+            const nextY = Math.floor(toY / TERRAIN_CELL);
+            if (nextY !== cellY && !this.canGoFlying(cellY * this.width + column, 0, nextY - cellY)) {
+                toY = fromY;
+                vy[zombie] = 0;
+            }
+            x[zombie] = toX;
+            y[zombie] = toY;
+        }
+    }
+
+    /** Whether a body thrown goes from a cell to its neighbour: no wall nor collision between; water it falls into. */
+    private canGoFlying(cell: number, dx: number, dy: number): boolean {
+        const { terrain, width } = this;
+        if (dx === 1) return (terrain[cell] & ZOMBIE_EAST) === 0 && (terrain[cell + 1] & ZOMBIE_SOLID) === 0;
+        if (dx === -1) return (terrain[cell - 1] & (ZOMBIE_EAST | ZOMBIE_SOLID)) === 0;
+        if (dy === 1) return (terrain[cell] & ZOMBIE_SOUTH) === 0 && (terrain[cell + width] & ZOMBIE_SOLID) === 0;
+        return (terrain[cell - width] & (ZOMBIE_SOUTH | ZOMBIE_SOLID)) === 0;
     }
 
     /** The distance fields of the avatars that moved to another tile, FIELDS_A_STEP at most, in the order of slots. */

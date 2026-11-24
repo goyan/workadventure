@@ -1,4 +1,5 @@
 import {
+    encodeZombieLog,
     encodeZombieTerrain,
     HURRICANE_RMAX_PX,
     TERRAIN_CELL,
@@ -277,5 +278,47 @@ describe("MeadowManager and the trees", () => {
         horde = undefined;
         run(64);
         expect(tree("oak")).toBeUndefined();
+    });
+
+    it("sets fire to the meadow and the trees where a grenade shot into a horde goes off", () => {
+        let now = Date.UTC(2026, 6, 14, 10);
+        const { manager, steps } = createHarness({ clock: () => now });
+        const { x, y } = foot(10, 10);
+        // Lobbed from 2 m west of the oak, it goes off at step 60 (6 s).
+        const horde: ZombieHorde = {
+            id: 8,
+            seed: 5,
+            count: 100,
+            durationMs: 300_000,
+            heading: 90,
+            startedAt: now,
+            anchorStep: 0,
+            anchorAt: now,
+            msPerStep: 100,
+            avatars: encodeZombieLog([
+                { applyStep: 60, changes: [], grenades: [{ fromX: x - 58, fromY: y, toX: x, toY: y }] },
+            ]),
+            safeStep: 1_000_000,
+            ...zombieDirection(90),
+            anchorX: 40 * TERRAIN_CELL,
+            anchorY: 40 * TERRAIN_CELL,
+            widthCells: 80,
+            heightCells: 80,
+            terrain: encodeZombieTerrain(new Uint8Array(80 * 80)),
+        };
+        manager.zombiesUnder(() => horde);
+        manager.start();
+        const run = (seconds: number): void => {
+            for (let step = 0; step < seconds / 2; step++) {
+                now += 2000;
+                steps(1);
+            }
+        };
+        run(4);
+        expect(manager.lifeFire()).toBeUndefined();
+        run(4);
+        expect(manager.lifeFire()).toBeDefined();
+        run(10);
+        expect(manager.treeSnapshot()?.trees.find((told) => told.id === "oak")?.fire).toBeGreaterThan(0);
     });
 });

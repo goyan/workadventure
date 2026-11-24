@@ -959,6 +959,18 @@ message ZombieHordeMessage {
   // the whole log at each message, and the last step that log is complete to: no browser steps the horde past it.
   string avatars = 21;
   double safeStep = 22;
+  // Sent by a player who holds the grenade launcher while the horde goes on: they shoot a grenade from a point to a
+  // point (map pixels). The server puts it in the log of the horde (`avatars`), with the step it goes off at, and
+  // tells the room at once; every browser computes its path and its blast (ZombieGrenade).
+  optional ZombieGrenadeMessage grenade = 23;
+}
+
+// A grenade of the grenade launcher: from where it is shot, to where it is aimed (map pixels).
+message ZombieGrenadeMessage {
+  int32 fromX = 1;
+  int32 fromY = 2;
+  int32 toX = 3;
+  int32 toY = 4;
 }
 
 // How a hurricane crosses the map, as a player asks for it (the server keeps each value within bounds) and as the
