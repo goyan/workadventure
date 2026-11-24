@@ -92,7 +92,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/WeatherSounds", () => ({
     },
 }));
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
-const { cloudsShownStore, cloudsHeightStore, rainPuddlesStore, weatherEffectsEnabledStore } =
+const { cloudsShownStore, cloudsHeightStore, rainPerspectiveStore, rainPuddlesStore, weatherEffectsEnabledStore } =
     await import("../../../../../src/front/Stores/WeatherStore");
 const { lastStrike } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherFrame");
 const { FLAKE_LIGHT } = await import("../../../../../src/front/Phaser/Game/Weather/Snowfall");
@@ -110,7 +110,12 @@ const { NIGHT_CLOUD_COLOR } = await import("../../../../../src/front/Phaser/Game
 let manager: InstanceType<typeof WeatherManager> | undefined;
 // The puddles are drawn on a graphics of their own, which the scene of these tests does not tell from the weather's:
 // off here, tried in their own tests below.
-beforeEach(() => rainPuddlesStore.set(0));
+// These tests draw the rain seen straight down. The rain in perspective, on by default, has its own tests
+// (PerspectiveFall.test.ts) and keeps to the outdoors by where each drop lands (isOutdoor(drop.landX, drop.landY)).
+beforeEach(() => {
+    rainPuddlesStore.set(0);
+    rainPerspectiveStore.set(false);
+});
 afterEach(() => {
     sounds.update.mockClear();
     manager?.destroy();
