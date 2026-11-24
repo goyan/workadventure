@@ -8,33 +8,35 @@ export const RAIN_AMOUNT_BASE = 5;
 export const COPY_SALT = 997;
 
 /**
- * The most drops (or flakes) drawn in each cell, whatever the personal amount: drawing one is a line (or a few
- * squares) for the graphics card, so 32 times the rain at every image is not drawn as 32 copies.
+ * The most drops (or flakes) the processor draws in each cell when the graphics card cannot draw them
+ * (PrecipitationLayer): each is a line or a few squares to work out at every image, so the rain is thinner there.
  */
-export const MAX_COPIES = 2;
+export const MAX_DRAWN_COPIES = 2;
 
-export interface DensityPlan {
-    copies: number;
-    boost: number;
+/**
+ * How many drops (or flakes) each cell of the rain may hold for a personal amount (×1 to ×32): RAIN_AMOUNT_BASE times
+ * the amount, so ×1 holds five times the drops of the first version. `most` bounds it (MAX_DRAWN_COPIES on the
+ * processor). The same sizes, the same wind: more drops, never thicker ones.
+ */
+export function cellCopies(amount: number, most = Infinity): number {
+    const wanted = Math.round((Number.isFinite(amount) && amount > 0 ? amount : 1) * RAIN_AMOUNT_BASE);
+    return Math.max(1, Math.min(most, wanted));
 }
 
 /**
- * How a personal amount (×1 to ×32, each RAIN_AMOUNT_BASE times the rain of the first version) is drawn: `copies` drops in each cell, at
- * most MAX_COPIES, and the rest of the amount as `boost` (1 or more), how many times thicker each one is drawn to fill
- * the screen as the missing copies would (see boostedAlpha). `copies` times `boost` is the amount times RAIN_AMOUNT_BASE.
+ * Whether the copy `copy` of a cell holding `copies` shows, `share` (0 to 1) of a cell showing one drop at the amount of
+ * the first version, `pick` its own hash (0 to 1): the first floor(copies × share) copies always show and the next one
+ * when its hash is under what is left. With one copy, a drop shows when its hash is under the share, as before. A
+ * heavier rain only adds drops (the same first), and a cell never holds one more than its share: no copy is looked at
+ * for nothing (shownCopiesBound).
  */
-export function densityPlan(amount: number): DensityPlan {
-    const wanted = (Number.isFinite(amount) ? Math.max(1, amount) : 1) * RAIN_AMOUNT_BASE;
-    const copies = Math.min(MAX_COPIES, Math.max(1, Math.round(wanted)));
-    return { copies, boost: wanted / copies };
+export function copyShown(copy: number, copies: number, share: number, pick: number): boolean {
+    const wanted = copies * Math.max(0, Math.min(1, share));
+    const whole = Math.floor(wanted);
+    return copy < whole || (copy === whole && pick < wanted - whole);
 }
 
-/** The opacity of `boost` layers of a drop of this opacity over each other: what the copies left out would have drawn. */
-export function boostedAlpha(alpha: number, boost: number): number {
-    return boost <= 1 ? alpha : 1 - (1 - Math.min(1, alpha)) ** boost;
-}
-
-/** How many times wider or bigger each drop or flake is drawn when `boost` layers of it are left out (at most twice). */
-export function boostedSize(boost: number): number {
-    return boost <= 1 ? 1 : Math.min(2, Math.sqrt(boost));
+/** The copies of each cell worth looking at when a cell never shows more than `share` of one drop (copyShown). */
+export function shownCopiesBound(copies: number, share: number): number {
+    return Math.min(copies, Math.ceil(copies * Math.max(0, Math.min(1, share))));
 }
