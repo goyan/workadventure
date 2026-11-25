@@ -508,7 +508,8 @@ describe("CatastrophePanel", () => {
         flushSync();
         const going = target.querySelector('[data-testid="catastrophe-tsunami-going"]');
         expect(going?.textContent).toContain(
-            "8 m tsunami: the sea goes down, the sea at 3.8 m at the coast, 2 min 20 s left",
+            // 80 s of the crest left, then 20 s of backwash.
+            "8 m tsunami: the sea goes down, the sea at 3.8 m at the coast, 1 min 40 s left",
         );
         expect(target.querySelector('[data-testid="catastrophe-tsunami-start"]')).toBeNull();
         // At full speed nothing more; when the server bears less of it, the panel says so.
