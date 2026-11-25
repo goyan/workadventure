@@ -311,6 +311,30 @@ describe("NerfManager", () => {
         expect(sound.play.mock.calls).toEqual([]);
     });
 
+    it("sends its dart into a horde of zombies, and it flies on through them to its range", () => {
+        scene.shootZombieDart.mockReturnValue({ fromX: 115, fromY: 105, toX: 499, toY: 105, shotStep: 120 });
+        manager.toggleEquipment();
+        manager.fire();
+        // From the muzzle, the way it fires.
+        expect(scene.shootZombieDart.mock.calls).toHaveLength(1);
+        const [x, y, dx, dy] = scene.shootZombieDart.mock.calls[0];
+        expect([x, y, dx]).toEqual([115, 105, 1]);
+        expect(dy).toBeCloseTo(0);
+        // The colleagues are told the shot as before: every browser finds the zombies it goes through in the horde.
+        expect(connection.emitScriptableEvent.mock.calls[0][1]).toEqual({
+            x: 100,
+            y: 100,
+            direction: PositionMessage_Direction.RIGHT,
+            seated: false,
+            heading: 6,
+        });
+        // Not stopped by the zombies it kills: as far as a dart flies.
+        manager.update(2000);
+        expect(graphics[0].scene).toBeDefined();
+        manager.update(2300);
+        expect(graphics[0].scene).toBeUndefined();
+    });
+
     it("stops at a blocked tile even when a slow frame would move past it", () => {
         manager.toggleEquipment();
         manager.fire();

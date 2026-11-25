@@ -134,7 +134,7 @@ export function zombieGrenadePath(shot: ZombieGrenadeShot, ground: ZombieGrenade
             if (toX < 0) {
                 nextX = x;
                 vx = -vx * 0.5;
-            } else if (from >= 0 && toX !== from && z < WALL_HEIGHT_PX && blocks(ground, from, toX)) {
+            } else if (from >= 0 && toX !== from && z < WALL_HEIGHT_PX && zombieGroundBlocks(ground, from, toX)) {
                 nextX = x;
                 vx = -vx * 0.5;
             }
@@ -143,7 +143,7 @@ export function zombieGrenadePath(shot: ZombieGrenadeShot, ground: ZombieGrenade
             if (toY < 0) {
                 nextY = y;
                 vy = -vy * 0.5;
-            } else if (fromY >= 0 && toY !== fromY && z < WALL_HEIGHT_PX && blocks(ground, fromY, toY)) {
+            } else if (fromY >= 0 && toY !== fromY && z < WALL_HEIGHT_PX && zombieGroundBlocks(ground, fromY, toY)) {
                 nextY = y;
                 vy = -vy * 0.5;
             }
@@ -187,7 +187,7 @@ export function zombieGrenadePath(shot: ZombieGrenadeShot, ground: ZombieGrenade
 }
 
 /** Whether something flying low goes from a cell to the next one (side by side or on a diagonal): walls, collisions. */
-function blocks(ground: ZombieGrenadeGround, from: number, to: number): boolean {
+export function zombieGroundBlocks(ground: ZombieGrenadeGround, from: number, to: number): boolean {
     const { terrain, width } = ground;
     if ((terrain[to] & ZOMBIE_SOLID) !== 0) return true;
     const fromX = from % width;

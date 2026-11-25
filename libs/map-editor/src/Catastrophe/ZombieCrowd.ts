@@ -1,6 +1,7 @@
 import { TERRAIN_CELL, TILE_PX } from "../types";
 import {
     decodeZombieLog,
+    decodeZombieLogFrom,
     decodeZombieTerrain,
     ZOMBIE_EAST,
     ZOMBIE_PX_PER_METRE,
@@ -9,7 +10,9 @@ import {
     ZOMBIE_STEP_MS,
     ZOMBIE_WATER,
     zombieLastStep,
+    zombieLogBytes,
     zombieLogInOrder,
+    zombieLogInsert,
     zombieStepAt,
 } from "./ZombieHorde";
 import {
@@ -19,6 +22,20 @@ import {
     zombieGrenadePath,
 } from "./ZombieGrenade";
 import type { ZombieGrenadePath, ZombieGrenadeShot } from "./ZombieGrenade";
+import {
+    ZOMBIE_DART_FALL_STEPS,
+    ZOMBIE_DART_HALF_WIDTH_PX,
+    ZOMBIE_DART_BODY_PX,
+    ZOMBIE_DART_HISTORY_STEPS,
+    ZOMBIE_DART_RECOIL_PX,
+    ZOMBIE_DART_TICKS,
+    zombieDartBody,
+    zombieDartEnters,
+    zombieDartFits,
+    zombieDartReach,
+    zombieDartWay,
+} from "./ZombieDart";
+import type { ZombieDart, ZombieDartHit } from "./ZombieDart";
 import type { ZombieHorde, ZombieLogEntry } from "./ZombieHorde";
 
 /**
@@ -154,6 +171,38 @@ export const ZOMBIE_WALKING = 1;
 export const ZOMBIE_GONE = 2;
 /** Thrown by a grenade, burning: it falls, burns, and is gone at its step `dieAt`. */
 export const ZOMBIE_DYING = 3;
+/** Met by a dart of the Nerf: it recoils, falls, lies, and is gone at its step `dieAt` (it does not burn). */
+export const ZOMBIE_SHOT = 4;
+
+/** Where a zombie that did not walk at a step was (ZombieCrowd remembers where its zombies walked, in half pixels). */
+const PAST_NONE = 0xffff;
+const NEVER = 0x7fffffff;
+
+/**
+ * A dart told by the log, as far as its flight is known now (ZombieCrowd.dartsSeen): what a browser draws, the zombies
+ * it went through falling, before the log applies it. The log applies it as it is seen.
+ */
+export interface ZombieDartSeen {
+    dart: ZombieDart;
+    applyStep: number;
+    /** Its unit vector. */
+    ux: number;
+    uy: number;
+    /** The zombies it went through so far (it kills every one, and flies on). */
+    hits: ZombieDartHit[];
+    /** Its flight is known to its end. */
+    over: boolean;
+}
+
+interface DartRecord extends ZombieDartSeen {
+    /** The next tick of its flight to check, and how far it flies before a wall. */
+    tick: number;
+    reach: number;
+    length: number;
+    /** The zombies it may meet (dartCandidates) and the first still waiting to come in when it was shot, once read. */
+    candidates: Int32Array | undefined;
+    cameIn: number;
+}
 
 /**
  * What the blast of a grenade does to a zombie: thrown up and away, the more the nearer (m/s, a choice of the order of
@@ -172,6 +221,11 @@ const G_PX_S2 = 9.81 * ZOMBIE_PX_PER_METRE;
 /** A grenade of the log, by the step it goes off at and its points: the same in every message that tells it. */
 function shotKey(explodeStep: number, shot: ZombieGrenadeShot): string {
     return `${explodeStep}:${shot.fromX}:${shot.fromY}:${shot.toX}:${shot.toY}`;
+}
+
+/** A dart of the log, by the step it is applied at and all it is told with. */
+function dartKey(applyStep: number, dart: ZombieDart): string {
+    return `${applyStep}:${dart.fromX}:${dart.fromY}:${dart.toX}:${dart.toY}:${dart.shotStep}:${dart.stride}`;
 }
 
 function mulberry32(seed: number): () => number {
@@ -275,11 +329,34 @@ export class ZombieCrowd {
      */
     private shots = new Map<string, { explodeStep: number; shot: ZombieGrenadeShot; path?: ZombieGrenadePath }>();
     private explosions: { x: number; y: number; step: number; killed: number }[] = [];
+    /**
+     * Where each zombie walked at each of the last ZOMBIE_DART_HISTORY_STEPS steps (in half pixels, PAST_NONE where it
+     * did not walk), a step after the other in a ring: where the darts the log applies met them. Written at one place,
+     * at the end of each step (and when the crowd is made), the same everywhere.
+     */
+    private readonly pastX: Uint16Array;
+    private readonly pastY: Uint16Array;
+    /** The first zombie still waiting to come in at each of those steps (they come in in the order of their numbers). */
+    private readonly pastIn = new Int32Array(ZOMBIE_DART_HISTORY_STEPS);
+    /** The step a dart met each zombie at (NEVER when none): a dart told after it passes its fallen body by. */
+    private readonly claimedAt: Int32Array;
+    /** The step the dart that killed each zombie met it at (NEVER when none): the view draws its fall from it. */
+    public readonly hitStep: Int32Array;
+    /** The darts as far as their flight is known (dartsSeen), and the log they were read from. */
+    private seen: DartRecord[] = [];
+    private seenVersion = -1;
+    private seenSteps = -1;
     /** The log of the avatars, the next entry to apply, and the last step it is complete to. */
     private log: ZombieLogEntry[] = [];
     private logAt = 0;
     /** The text of the log last read: told again (the server reads it ten times a second), it is nothing new. */
     private logText: string | undefined;
+    /** The bytes that text holds, and how many times the log changed (what dartsSeen reads again). */
+    private logBytes = 0;
+    /** The entries last read as they were told (setLogEntries), and how many of them. */
+    private toldEntries: readonly ZombieLogEntry[] | undefined;
+    private toldRead = 0;
+    private logVersion = 0;
     private safeStep: number;
     private atX = 0;
     private atY = 0;
@@ -312,6 +389,10 @@ export class ZombieCrowd {
         this.z = new Float64Array(count);
         this.vz = new Float64Array(count);
         this.dieAt = new Int32Array(count);
+        this.pastX = new Uint16Array(count * ZOMBIE_DART_HISTORY_STEPS);
+        this.pastY = new Uint16Array(count * ZOMBIE_DART_HISTORY_STEPS);
+        this.claimedAt = new Int32Array(count).fill(NEVER);
+        this.hitStep = new Int32Array(count).fill(NEVER);
         this.target = new Int8Array(count).fill(-1);
         this.pace = new Float64Array(count);
         this.sway = new Float64Array(count);
@@ -341,7 +422,9 @@ export class ZombieCrowd {
             this.sway[zombie] = (this.random() * 2 - 1) * SWAY;
         }
         this.safeStep = -1;
-        this.setLog(horde.avatars, horde.safeStep);
+        if (horde.log) this.setLogEntries(horde.log, horde.safeStep);
+        else this.setLog(horde.avatars, horde.safeStep);
+        this.recordPast();
     }
 
     /**
@@ -353,26 +436,83 @@ export class ZombieCrowd {
             if (Number.isFinite(safeStep) && safeStep > this.safeStep) this.safeStep = safeStep;
             return;
         }
-        const entries = zombieLogInOrder(decodeZombieLog(text));
-        for (let at = 0; at < this.logAt; at++) {
-            if (at >= entries.length || entries[at].applyStep !== this.log[at].applyStep) return;
-        }
-        this.log = entries;
+        // The log read before and entries after it (as it grows): only those are read, each put in its place as if the
+        // whole log was read again. Another log (a whole one after a lost message): read whole.
+        const added = this.addedTo(text);
+        if (!this.takeLog(added ?? decodeZombieLog(text), added !== undefined, safeStep)) return;
         this.logText = text;
+        this.logBytes = zombieLogBytes(text);
+        this.toldEntries = undefined;
+    }
+
+    /**
+     * The log as its entries, in the order they were told (a browser glues them as they come): the same array grown
+     * since it was last read gives its new entries only, another array is read whole. The same as setLog of its text.
+     */
+    public setLogEntries(entries: readonly ZombieLogEntry[], safeStep: number): void {
+        const grown = entries === this.toldEntries && entries.length >= this.toldRead;
+        if (grown && entries.length === this.toldRead) {
+            if (Number.isFinite(safeStep) && safeStep > this.safeStep) this.safeStep = safeStep;
+            return;
+        }
+        if (!this.takeLog(grown ? entries.slice(this.toldRead) : entries, grown, safeStep)) return;
+        this.toldEntries = entries;
+        this.toldRead = entries.length;
+        this.logText = undefined;
+    }
+
+    /**
+     * Entries of the log, after those read before (`added`) or the whole log: false when they disagree with what was
+     * applied already (an entry before those applied), and nothing is taken.
+     */
+    private takeLog(entries: readonly ZombieLogEntry[], added: boolean, safeStep: number): boolean {
+        if (added) {
+            const applied = this.logAt > 0 ? this.log[this.logAt - 1].applyStep : Number.NEGATIVE_INFINITY;
+            for (const entry of entries) if (entry.applyStep < applied) return false;
+            for (const entry of entries) zombieLogInsert(this.log, entry);
+        } else {
+            const ordered = zombieLogInOrder(entries);
+            for (let at = 0; at < this.logAt; at++) {
+                if (at >= ordered.length || ordered[at].applyStep !== this.log[at].applyStep) return false;
+            }
+            this.log = ordered;
+        }
+        this.logVersion++;
         if (Number.isFinite(safeStep) && safeStep > this.safeStep) this.safeStep = safeStep;
         // The grenades not gone off yet (and those of the last step, still drawn): their paths, made when first asked
         // for, kept from the log read before. Those gone off long ago are not looked at again.
+        const log = this.log;
         const shots = new Map<string, { explodeStep: number; shot: ZombieGrenadeShot; path?: ZombieGrenadePath }>();
-        let from = entries.length;
-        while (from > 0 && entries[from - 1].applyStep >= this.steps - 1) from--;
-        for (let at = from; at < entries.length; at++) {
-            const entry = entries[at];
+        let from = log.length;
+        while (from > 0 && log[from - 1].applyStep >= this.steps - 1) from--;
+        for (let at = from; at < log.length; at++) {
+            const entry = log[at];
             for (const shot of entry.grenades ?? []) {
                 const key = shotKey(entry.applyStep, shot);
                 shots.set(key, this.shots.get(key) ?? { explodeStep: entry.applyStep, shot });
             }
         }
         this.shots = shots;
+        return true;
+    }
+
+    /**
+     * The entries `text` holds after the log read before, when it is that log with entries after it; undefined when it
+     * is another log. Its whole groups of three bytes compared as text, the bytes before them as bytes.
+     */
+    private addedTo(text: string): ZombieLogEntry[] | undefined {
+        const known = this.logText;
+        if (known === undefined || text.length < known.length) return undefined;
+        const whole = Math.floor(this.logBytes / 3) * 4;
+        if (!text.startsWith(whole === known.length ? known : known.slice(0, whole))) return undefined;
+        const read = decodeZombieLogFrom(text, this.logBytes);
+        if (whole < known.length) {
+            const before = decodeZombieLogFrom(known, this.logBytes).before;
+            if (before.length !== read.before.length || before.some((byte, at) => byte !== read.before[at])) {
+                return undefined;
+            }
+        }
+        return read.entries;
     }
 
     /** The path of a grenade over the ground of the horde. */
@@ -436,8 +576,13 @@ export class ZombieCrowd {
         const touch = ZOMBIE_RADIUS_PX + AVATAR_RADIUS_PX;
         let sx = 0;
         let sy = 0;
+        // A zombie a dart met is drawn falling: it shoves nobody, though it walks on until the log applies the dart.
+        const fallen = new Set<number>();
+        for (const seen of this.dartsSeen()) {
+            for (const hit of seen.hits) if (hit.step <= this.steps) fallen.add(hit.zombie);
+        }
         for (let zombie = 0; zombie < this.count; zombie++) {
-            if (this.state[zombie] !== ZOMBIE_WALKING) continue;
+            if (this.state[zombie] !== ZOMBIE_WALKING || fallen.has(zombie)) continue;
             const dx = px - this.x[zombie];
             const dy = py - this.y[zombie];
             const d2 = dx * dx + dy * dy;
@@ -557,6 +702,7 @@ export class ZombieCrowd {
             this.nextIn = count;
             this.walking = 0;
             this.dying = 0;
+            this.recordPast();
             return;
         }
         this.fillTiles();
@@ -565,6 +711,22 @@ export class ZombieCrowd {
         this.steer();
         this.move();
         this.fly();
+        this.recordPast();
+    }
+
+    /** Where each zombie walks at this step, into the ring of the steps before (pastX, pastY). */
+    private recordPast(): void {
+        const { count, state, x, y, pastX, pastY } = this;
+        const base = (this.steps % ZOMBIE_DART_HISTORY_STEPS) * count;
+        this.pastIn[this.steps % ZOMBIE_DART_HISTORY_STEPS] = this.nextIn;
+        for (let zombie = 0; zombie < count; zombie++) {
+            if (state[zombie] !== ZOMBIE_WALKING) {
+                pastX[base + zombie] = PAST_NONE;
+                continue;
+            }
+            pastX[base + zombie] = Math.min(PAST_NONE - 1, Math.max(0, Math.round(x[zombie] * 2)));
+            pastY[base + zombie] = Math.min(PAST_NONE - 1, Math.max(0, Math.round(y[zombie] * 2)));
+        }
     }
 
     /** The entries of the log whose step came: the avatars move, leave, come. */
@@ -582,8 +744,283 @@ export class ZombieCrowd {
                 const path = this.pathOf(grenade);
                 this.explode(path.x[ZOMBIE_GRENADE_FUSE_STEPS], path.y[ZOMBIE_GRENADE_FUSE_STEPS]);
             }
+            // The darts whose flight is over: every zombie each went through, as the zombies walked then, is killed.
+            for (const dart of entry.darts ?? []) {
+                if (!zombieDartFits(dart, entry.applyStep) || entry.applyStep !== this.steps) continue;
+                const way = this.wayOf(dart);
+                const hits: ZombieDartHit[] = [];
+                const candidates = this.dartCandidates(dart, way);
+                const passed = (zombie: number, step: number): boolean => this.claimedAt[zombie] <= step;
+                const cameIn = this.pastIn[dart.shotStep % ZOMBIE_DART_HISTORY_STEPS];
+                this.meet(dart, way, candidates, cameIn, 0, ZOMBIE_DART_TICKS, passed, hits);
+                for (const hit of hits) this.shoot(hit, way.ux, way.uy);
+            }
             this.logAt++;
         }
+    }
+
+    /** The way of a dart over the ground of the horde: its unit vector, its length, how far it flies before a wall. */
+    private wayOf(dart: ZombieDart): { ux: number; uy: number; length: number; reach: number } {
+        const way = zombieDartWay(dart);
+        const reach = zombieDartReach(dart, { width: this.width, height: this.height, terrain: this.terrain });
+        return { ...way, reach };
+    }
+
+    /**
+     * The zombies a dart may meet, from where they walked when it was shot: a zombie moves MOST_A_STEP_PX at most along
+     * each axis in a step, so one that walked then further from its way than it can run while it flies is never met.
+     * Those that come in while it flies are looked at on their own (meet). In the order of their numbers.
+     */
+    private dartCandidates(
+        dart: ZombieDart,
+        way: { ux: number; uy: number; length: number; reach: number },
+    ): Int32Array {
+        const { count, pastX, pastY } = this;
+        const end = Math.min(way.reach, way.length);
+        const run = MOST_A_STEP_PX * ZOMBIE_DART_TICKS * dart.stride + 1;
+        // In half pixels, as the ring keeps them: the box of its way, as far as a zombie it meets can have run from.
+        const endX = dart.fromX + way.ux * end;
+        const endY = dart.fromY + way.uy * end;
+        const left = (Math.min(dart.fromX, endX) - ZOMBIE_DART_HALF_WIDTH_PX - run) * 2;
+        const right = (Math.max(dart.fromX, endX) + ZOMBIE_DART_HALF_WIDTH_PX + run) * 2;
+        const top = (Math.min(dart.fromY, endY) - run) * 2;
+        const bottom = (Math.max(dart.fromY, endY) + ZOMBIE_DART_BODY_PX + run) * 2;
+        const base = (dart.shotStep % ZOMBIE_DART_HISTORY_STEPS) * count;
+        const found: number[] = [];
+        for (let zombie = 0; zombie < count; zombie++) {
+            const px = pastX[base + zombie];
+            if (px === PAST_NONE || px < left || px > right) continue;
+            const py = pastY[base + zombie];
+            if (py >= top && py <= bottom) found.push(zombie);
+        }
+        return Int32Array.from(found);
+    }
+
+    /**
+     * The ticks `from` to `to` (excluded) of the flight of a dart, against the bodies of the zombies as they ran during
+     * each tick, from where they were at its start to where they were at its end (pastX, pastY: a zombie drawn between
+     * two steps, which the dart drawn crosses, is met): each it enters is added to `hits` (in the order of their numbers within a
+     * tick), and it flies on through them. Only the `candidates` (dartCandidates) and those that came in since it was
+     * shot are looked at. A zombie in `hits` already, or `passed` (met by a dart told before, at that step or before:
+     * it falls), is passed by. True once its flight is over: its range or a wall reached.
+     */
+    private meet(
+        dart: ZombieDart,
+        way: { ux: number; uy: number; length: number; reach: number },
+        candidates: Int32Array,
+        cameIn: number,
+        from: number,
+        to: number,
+        passed: (zombie: number, step: number) => boolean,
+        hits: ZombieDartHit[],
+    ): boolean {
+        const { count, pastX, pastY, pastIn } = this;
+        const mine = new Set<number>();
+        for (const hit of hits) mine.add(hit.zombie);
+        for (let tick = from; tick < to; tick++) {
+            const near = (way.length * tick) / ZOMBIE_DART_TICKS;
+            if (near >= way.reach) return true;
+            const far = Math.min(way.reach, (way.length * (tick + 1)) / ZOMBIE_DART_TICKS);
+            const ax = dart.fromX + way.ux * near;
+            const ay = dart.fromY + way.uy * near;
+            const bx = dart.fromX + way.ux * far;
+            const by = dart.fromY + way.uy * far;
+            // In half pixels: what is out of these bounds at the start of the tick cannot be entered during it (a
+            // zombie runs MOST_A_STEP_PX at most along each axis in a step).
+            const run = MOST_A_STEP_PX * dart.stride + 1;
+            const left = (Math.min(ax, bx) - ZOMBIE_DART_HALF_WIDTH_PX - run) * 2;
+            const right = (Math.max(ax, bx) + ZOMBIE_DART_HALF_WIDTH_PX + run) * 2;
+            const top = (Math.min(ay, by) - run) * 2;
+            const bottom = (Math.max(ay, by) + ZOMBIE_DART_BODY_PX + run) * 2;
+            const step = dart.shotStep + tick * dart.stride;
+            const base = (step % ZOMBIE_DART_HISTORY_STEPS) * count;
+            const end = ((step + dart.stride) % ZOMBIE_DART_HISTORY_STEPS) * count;
+            const look = (zombie: number): void => {
+                // Where it walked at the start of the tick and at its end; one of them only when it came in or fell.
+                let x0 = pastX[base + zombie];
+                let y0 = pastY[base + zombie];
+                let x1 = pastX[end + zombie];
+                let y1 = pastY[end + zombie];
+                if (x0 === PAST_NONE) {
+                    if (x1 === PAST_NONE) return;
+                    x0 = x1;
+                    y0 = y1;
+                } else if (x1 === PAST_NONE) {
+                    x1 = x0;
+                    y1 = y0;
+                }
+                if (x0 < left || x0 > right || y0 < top || y0 > bottom || mine.has(zombie) || passed(zombie, step))
+                    return;
+                // The dart as the zombie sees it, both moving through the tick: from A less where the zombie was, to B
+                // less where it is at the end. It is met as it is drawn, between two steps.
+                const zx0 = x0 / 2;
+                const zy0 = y0 / 2;
+                const zx1 = x1 / 2;
+                const zy1 = y1 / 2;
+                // Facing the way it runs, as it is drawn; either way when it hardly moves.
+                const facing = zx1 - zx0 > 0.3 ? 1 : zx1 - zx0 < -0.3 ? -1 : 0;
+                const at = zombieDartEnters(
+                    ax - zx0,
+                    ay - zy0,
+                    bx - zx1,
+                    by - zy1,
+                    0,
+                    0,
+                    zombieDartBody(zombie, facing),
+                );
+                if (at < 0) return;
+                mine.add(zombie);
+                hits.push({
+                    zombie,
+                    step,
+                    x: zx0 + (zx1 - zx0) * at,
+                    y: zy0 + (zy1 - zy0) * at,
+                    distance: near + (far - near) * at,
+                });
+            };
+            for (const zombie of candidates) look(zombie);
+            // Those that came in since it was shot, by the end of the tick: numbered after all the others.
+            const inNow = pastIn[(step + dart.stride) % ZOMBIE_DART_HISTORY_STEPS];
+            for (let zombie = cameIn; zombie < inNow; zombie++) look(zombie);
+        }
+        return to >= ZOMBIE_DART_TICKS;
+    }
+
+    /**
+     * A dart met a zombie: it is killed (when it still walks), laid where the dart met it, recoiled a little along the
+     * dart (never through a wall), and lies there until ZOMBIE_DART_FALL_STEPS after the step it was met at.
+     */
+    private shoot(hit: ZombieDartHit, ux: number, uy: number): void {
+        const zombie = hit.zombie;
+        if (this.claimedAt[zombie] > hit.step) this.claimedAt[zombie] = hit.step;
+        if (this.state[zombie] !== ZOMBIE_WALKING) return;
+        this.state[zombie] = ZOMBIE_SHOT;
+        this.walking--;
+        this.dying++;
+        this.target[zombie] = -1;
+        this.z[zombie] = 0;
+        this.vz[zombie] = 0;
+        this.vx[zombie] = 0;
+        this.vy[zombie] = 0;
+        let toX = Math.min(this.widthPx - 0.5, Math.max(0.5, hit.x + ux * ZOMBIE_DART_RECOIL_PX));
+        let toY = Math.min(this.heightPx - 0.5, Math.max(0.5, hit.y + uy * ZOMBIE_DART_RECOIL_PX));
+        const cellX = Math.floor(hit.x / TERRAIN_CELL);
+        const cellY = Math.floor(hit.y / TERRAIN_CELL);
+        const nextX = Math.floor(toX / TERRAIN_CELL);
+        if (nextX !== cellX && !this.canGoFlying(cellY * this.width + cellX, nextX - cellX, 0)) toX = hit.x;
+        const column = Math.floor(toX / TERRAIN_CELL);
+        const nextY = Math.floor(toY / TERRAIN_CELL);
+        if (nextY !== cellY && !this.canGoFlying(cellY * this.width + column, 0, nextY - cellY)) toY = hit.y;
+        this.x[zombie] = toX;
+        this.y[zombie] = toY;
+        this.lastX[zombie] = toX;
+        this.lastY[zombie] = toY;
+        this.hitStep[zombie] = hit.step;
+        this.dieAt[zombie] = Math.max(this.steps + 1, hit.step + ZOMBIE_DART_FALL_STEPS);
+    }
+
+    /**
+     * The darts the log tells whose zombies may still be drawn falling: those it did not apply yet and those it applied
+     * in the last ZOMBIE_DART_FALL_STEPS steps (when they were seen before), in the order of the log, each with the
+     * zombies it went through as far as its flight is known at this step. The log applies each as it is seen here: a
+     * browser draws its zombies falling as soon as it knows of them. Read by the view only, never by a step.
+     */
+    public dartsSeen(): readonly ZombieDartSeen[] {
+        if (this.seenVersion !== this.logVersion) {
+            // Read again from the log: the records of the darts kept as long as no dart the log did not apply yet came
+            // before them (a dart is told after those before it: it comes at the end). Only the end of the log is read,
+            // those it applies from ZOMBIE_DART_FALL_STEPS steps ago on (it is in the order of the steps).
+            const old = new Map<string, DartRecord>();
+            for (const record of this.seen) old.set(dartKey(record.applyStep, record.dart), record);
+            const records: DartRecord[] = [];
+            let same = true;
+            let first = this.log.length;
+            while (first > 0 && this.log[first - 1].applyStep >= this.steps - ZOMBIE_DART_FALL_STEPS) first--;
+            for (let at = first; at < this.log.length; at++) {
+                const entry = this.log[at];
+                for (const dart of entry.darts ?? []) {
+                    if (!zombieDartFits(dart, entry.applyStep)) continue;
+                    const key = dartKey(entry.applyStep, dart);
+                    const kept = same ? old.get(key) : undefined;
+                    if (kept) {
+                        old.delete(key);
+                        records.push(kept);
+                        continue;
+                    }
+                    // Applied already: drawn by the state of its zombie, its flight not checked again.
+                    if (entry.applyStep < this.steps) continue;
+                    same = false;
+                    const way = this.wayOf(dart);
+                    records.push({
+                        dart,
+                        applyStep: entry.applyStep,
+                        ux: way.ux,
+                        uy: way.uy,
+                        hits: [],
+                        over: false,
+                        tick: 0,
+                        reach: way.reach,
+                        length: way.length,
+                        candidates: undefined,
+                        cameIn: 0,
+                    });
+                }
+            }
+            this.seen = records;
+            this.seenVersion = this.logVersion;
+            this.seenSteps = -1;
+        }
+        if (this.seenSteps !== this.steps) {
+            this.seenSteps = this.steps;
+            // Each dart as far as the steps taken, in the order of the log: a zombie met by a dart before is passed by.
+            const metBefore = new Map<number, number>();
+            const passed = (zombie: number, step: number): boolean =>
+                this.claimedAt[zombie] <= step || (metBefore.get(zombie) ?? NEVER) <= step;
+            const kept: DartRecord[] = [];
+            for (const record of this.seen) {
+                if (record.applyStep < this.steps - ZOMBIE_DART_FALL_STEPS) continue;
+                kept.push(record);
+                if (!record.over) {
+                    // The ticks whose end is stepped already.
+                    const last = Math.min(
+                        ZOMBIE_DART_TICKS,
+                        Math.floor((this.steps - record.dart.shotStep) / record.dart.stride),
+                    );
+                    if (
+                        this.steps - (record.dart.shotStep + record.tick * record.dart.stride) >=
+                        ZOMBIE_DART_HISTORY_STEPS
+                    ) {
+                        // Too long ago for this crowd to know: its zombie is drawn by its state once applied.
+                        record.over = true;
+                    } else if (last > record.tick) {
+                        if (!record.candidates) {
+                            record.candidates = this.dartCandidates(record.dart, record);
+                            record.cameIn = this.pastIn[record.dart.shotStep % ZOMBIE_DART_HISTORY_STEPS];
+                        }
+                        record.over = this.meet(
+                            record.dart,
+                            record,
+                            record.candidates,
+                            record.cameIn,
+                            record.tick,
+                            last,
+                            passed,
+                            record.hits,
+                        );
+                        if (record.over) record.candidates = undefined;
+                        record.tick = last;
+                    }
+                }
+                if (record.applyStep >= this.steps) {
+                    for (const hit of record.hits) {
+                        const before = metBefore.get(hit.zombie) ?? NEVER;
+                        if (hit.step < before) metBefore.set(hit.zombie, hit.step);
+                    }
+                }
+            }
+            this.seen = kept;
+        }
+        return this.seen;
     }
 
     /**
@@ -623,10 +1060,22 @@ export class ZombieCrowd {
         this.explosions.push({ x: px, y: py, step: this.steps, killed });
     }
 
-    /** The zombies thrown by a blast fly, bounce, slide to a stop against the walls, burn, and are gone. */
+    /**
+     * The zombies thrown by a blast fly, bounce, slide to a stop against the walls, burn, and are gone; those met by a
+     * dart lie where they fell, and are gone.
+     */
     private fly(): void {
         const { count, state, x, y, lastX, lastY, vx, vy } = this;
         for (let zombie = 0; zombie < count; zombie++) {
+            if (state[zombie] === ZOMBIE_SHOT) {
+                lastX[zombie] = x[zombie];
+                lastY[zombie] = y[zombie];
+                if (this.steps >= this.dieAt[zombie]) {
+                    state[zombie] = ZOMBIE_GONE;
+                    this.dying--;
+                }
+                continue;
+            }
             if (state[zombie] !== ZOMBIE_DYING) continue;
             lastX[zombie] = x[zombie];
             lastY[zombie] = y[zombie];

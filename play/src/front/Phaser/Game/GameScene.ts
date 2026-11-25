@@ -24,6 +24,7 @@ import {
     type TreeFireMessage,
     type FireConditionsMessage,
     type AquaticLifeMessage,
+    type ZombieDartMessage,
 } from "@workadventure/messages";
 import { z } from "zod";
 import type { ITiledMap, ITiledMapLayer, ITiledMapObject, ITiledMapTileset } from "@workadventure/tiled-map-type-guard";
@@ -523,7 +524,8 @@ import { HurricaneReceiver } from "./Catastrophe/HurricaneReceiver";
 import { TsunamiReceiver } from "./Catastrophe/TsunamiReceiver";
 import { HurricaneDebris } from "./Catastrophe/HurricaneDebris";
 import { HurricaneView, seaHurricaneOf } from "./Catastrophe/HurricaneView";
-import { ZombieReceiver, zombieWholeAsked } from "./Catastrophe/ZombieReceiver";
+import { ZombieReceiver, zombieDartAsked, zombieWholeAsked } from "./Catastrophe/ZombieReceiver";
+import { zombieDartOf } from "./Catastrophe/ZombieDartShot";
 import { ZombieView } from "./Catastrophe/ZombieView";
 import { zombieShoveOf, zombieShownOf } from "./Catastrophe/ZombieShown";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
@@ -3966,6 +3968,26 @@ export class GameScene extends DirtyScene {
     public pointerAimPoint(): MapPoint | undefined {
         const pointer = this.input.activePointer;
         return canAimWithPointer(this.input.isOver, pointer) ? pointerMapPoint(pointer, this.cameras.main) : undefined;
+    }
+
+    /**
+     * A dart of the Nerf this player just shot, from its barrel at (x, y) the way (dx, dy), sent into the horde of the
+     * room (zombieDartOf): the server puts it in its log, and every zombie it goes through falls. Undefined when none
+     * is sent (no horde, Basique, a floor, no zombie near).
+     */
+    public shootZombieDart(x: number, y: number, dx: number, dy: number): ZombieDartMessage | undefined {
+        const dart = zombieDartOf(
+            this.zombieReceiver?.current() ? this.zombieView : undefined,
+            get(basicModeStore),
+            this.CurrentPlayer.getFloorZ(),
+            x,
+            y,
+            dx,
+            dy,
+        );
+        if (!dart || !this.connection) return undefined;
+        this.connection.emitLaunchZombies(zombieDartAsked(dart), false);
+        return dart;
     }
 
     /**

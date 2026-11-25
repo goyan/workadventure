@@ -130,8 +130,11 @@ export class NerfManager {
                 ? { direction: aim.direction, heading: aim.heading, angle: aim.angle }
                 : { direction: player.lastDirection, heading: player.getNerfHeading() }),
         });
-        if (!shot || !this.spawn(shot, connection.getUserId())) return;
+        const projectile = shot && this.spawn(shot, connection.getUserId());
+        if (!shot || !projectile) return;
         if (aim) player.faceDirection(aim.direction);
+        // Into the horde of zombies too, when one crosses the map: it goes through them, every one it meets falls.
+        this.scene.shootZombieDart(projectile.startX, projectile.startY, projectile.dx, projectile.dy);
         connection.emitScriptableEvent(NERF_SHOT_EVENT, shot, undefined).catch((error: unknown) => {
             debug("Could not send a shot", { error });
         });
@@ -264,11 +267,11 @@ export class NerfManager {
         this.scene.markDirty();
     }
 
-    private spawn(shot: NerfShot, senderId: number): boolean {
+    private spawn(shot: NerfShot, senderId: number): Projectile | undefined {
         const now = this.scene.time.now;
         const lastShot = this.lastShots.get(senderId);
-        if (lastShot !== undefined && now - lastShot < NERF_COOLDOWN_MS) return false;
-        if (this.projectiles.size >= MAX_PROJECTILES) return false;
+        if (lastShot !== undefined && now - lastShot < NERF_COOLDOWN_MS) return undefined;
+        if (this.projectiles.size >= MAX_PROJECTILES) return undefined;
         this.lastShots.set(senderId, now);
         const pose = nerfGunPose(shot.direction, shot.heading, shot.angle);
         const x = shot.x + pose.x + pose.dx * NERF_MUZZLE_LENGTH;
@@ -285,7 +288,7 @@ export class NerfManager {
         if (shot.angle !== undefined) shooter?.aimNerf(shot.angle, shot.direction);
         sprite.setPosition(x, y).setRotation(Math.atan2(pose.dy, pose.dx)).setDepth(floorDepth(z, y));
         // The first update also checks the path to the muzzle: a barrel protruding through a wall cannot shoot past it.
-        this.projectiles.add({
+        const projectile: Projectile = {
             sprite,
             x: shot.x,
             y: shot.y,
@@ -299,10 +302,11 @@ export class NerfManager {
             z,
             originX: shot.x,
             originY: shot.y,
-        });
+        };
+        this.projectiles.add(projectile);
         this.scene.markDirty();
         this.playPop(shot);
-        return true;
+        return projectile;
     }
 
     /** The prison of the map, read again each frame: the map editor may move it. */

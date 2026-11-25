@@ -2,6 +2,7 @@ import { TERRAIN_CELL, TILE_PX } from "../types";
 import { TILE_AREA_M2 } from "../Terrain/Scale";
 import { cellOf } from "../Terrain/TerrainGrid";
 import type { WaterWallSides } from "../Terrain/WaterGrid";
+import type { ZombieDart } from "./ZombieDart";
 
 /**
  * A horde of zombies crosses the map the way a player chose: it comes in by the edge it comes from, runs across as a
@@ -87,6 +88,11 @@ export interface ZombieHorde extends ZombieHordeAsk {
     /** Where the avatars were, step by step (encodeZombieLog), and the last step that log is complete to. */
     avatars: string;
     safeStep: number;
+    /**
+     * The entries of `avatars` in the order they were told, when whoever tells the horde has them read already (a
+     * browser glues its log entry after entry): read instead of its text, the same array growing as the log does.
+     */
+    log?: readonly ZombieLogEntry[];
 }
 
 export function zombieCount(count: number | undefined): number {
@@ -301,33 +307,147 @@ export interface ZombieLogEntry {
      * fuse lit ZOMBIE_GRENADE_FUSE_STEPS steps before. Absent when there is none.
      */
     grenades?: { fromX: number; fromY: number; toX: number; toY: number }[];
+    /**
+     * The darts of the Nerf whose flight is over by this step (ZombieDart): the zombie each met first is killed now.
+     * Absent when there is none.
+     */
+    darts?: ZombieDart[];
 }
 
-/** The log of the avatars, as it is told: for each entry its step, its changes, then its grenades. */
+/** A whole number that may be negative, as a variable number of bytes: 0, -1, 1, -2, 2… as 0, 1, 2, 3, 4… */
+function zigzag(value: number): number {
+    const whole = Math.round(value);
+    return whole >= 0 ? whole * 2 : -whole * 2 - 1;
+}
+
+function unzigzag(value: number): number {
+    return value % 2 === 0 ? value / 2 : -(value + 1) / 2;
+}
+
+/**
+ * The log of the avatars, as it is told: for each entry its step, its changes, its grenades, then its darts (where
+ * each is shot from, the way to its end, how many steps before the entry it was shot, the steps of a tick).
+ */
 export function encodeZombieLog(entries: readonly ZombieLogEntry[]): string {
     const bytes: number[] = [];
-    for (const entry of entries) {
-        pushVarint(bytes, entry.applyStep);
-        pushVarint(bytes, entry.changes.length);
-        for (const change of entry.changes) {
-            pushVarint(bytes, change.slot);
-            pushVarint(bytes, change.tile + 1);
-        }
-        const grenades = entry.grenades ?? [];
-        pushVarint(bytes, grenades.length);
-        for (const grenade of grenades) {
-            pushVarint(bytes, grenade.fromX);
-            pushVarint(bytes, grenade.fromY);
-            pushVarint(bytes, grenade.toX);
-            pushVarint(bytes, grenade.toY);
-        }
-    }
+    for (const entry of entries) pushEntry(bytes, entry);
     return base64Of(bytes);
 }
 
+function pushEntry(bytes: number[], entry: ZombieLogEntry): void {
+    pushVarint(bytes, entry.applyStep);
+    pushVarint(bytes, entry.changes.length);
+    for (const change of entry.changes) {
+        pushVarint(bytes, change.slot);
+        pushVarint(bytes, change.tile + 1);
+    }
+    const grenades = entry.grenades ?? [];
+    pushVarint(bytes, grenades.length);
+    for (const grenade of grenades) {
+        pushVarint(bytes, grenade.fromX);
+        pushVarint(bytes, grenade.fromY);
+        pushVarint(bytes, grenade.toX);
+        pushVarint(bytes, grenade.toY);
+    }
+    const darts = entry.darts ?? [];
+    pushVarint(bytes, darts.length);
+    for (const dart of darts) {
+        pushVarint(bytes, dart.fromX);
+        pushVarint(bytes, dart.fromY);
+        pushVarint(bytes, zigzag(dart.toX - dart.fromX));
+        pushVarint(bytes, zigzag(dart.toY - dart.fromY));
+        pushVarint(bytes, entry.applyStep - dart.shotStep);
+        pushVarint(bytes, dart.stride);
+    }
+}
+
+/**
+ * The log of a horde written out as it grows, entry after entry: its text the same as encodeZombieLog of all its
+ * entries, made by encoding only those added (the server writes its log out ten times a second, a browser glues each
+ * message it is told). Its bytes are kept: the base64 of the whole groups of three is kept, the end is redone.
+ */
+export class ZombieLogWriter {
+    private readonly written: ZombieLogEntry[] = [];
+    private bytes = new Uint8Array(1024);
+    private length = 0;
+    /** The base64 of the first `headBytes` bytes (a multiple of 3), and the text of all of them. */
+    private head = "";
+    private headBytes = 0;
+    private whole = "";
+
+    /** A writer of the log `text` already written, its entries `entries` (decodeZombieLog of it). */
+    public static of(text: string, entries: readonly ZombieLogEntry[]): ZombieLogWriter {
+        const writer = new ZombieLogWriter();
+        const bytes = bytesOfBase64(text);
+        writer.grow(bytes.length);
+        writer.bytes.set(bytes);
+        writer.length = bytes.length;
+        writer.written.push(...entries);
+        writer.headBytes = bytes.length - (bytes.length % 3);
+        writer.head = text.slice(0, (writer.headBytes / 3) * 4);
+        writer.whole = writer.head + base64Of(Array.from(writer.bytes.subarray(writer.headBytes, writer.length)));
+        return writer;
+    }
+
+    public get entries(): readonly ZombieLogEntry[] {
+        return this.written;
+    }
+
+    public get text(): string {
+        return this.whole;
+    }
+
+    public append(entries: readonly ZombieLogEntry[]): void {
+        if (entries.length === 0) return;
+        const bytes: number[] = [];
+        for (const entry of entries) {
+            pushEntry(bytes, entry);
+            this.written.push(entry);
+        }
+        this.grow(this.length + bytes.length);
+        this.bytes.set(bytes, this.length);
+        this.length += bytes.length;
+        const headBytes = this.length - (this.length % 3);
+        if (headBytes > this.headBytes) {
+            this.head += base64Of(Array.from(this.bytes.subarray(this.headBytes, headBytes)));
+            this.headBytes = headBytes;
+        }
+        this.whole = this.head + base64Of(Array.from(this.bytes.subarray(this.headBytes, this.length)));
+    }
+
+    private grow(size: number): void {
+        if (size <= this.bytes.length) return;
+        const bigger = new Uint8Array(Math.max(size, this.bytes.length * 2));
+        bigger.set(this.bytes.subarray(0, this.length));
+        this.bytes = bigger;
+    }
+}
+
 export function decodeZombieLog(text: string): ZombieLogEntry[] {
-    const bytes = bytesOfBase64(text);
-    const at = { read: 0 };
+    return readEntries(bytesOfBase64(text), 0);
+}
+
+/** How many bytes a text of the log holds. */
+export function zombieLogBytes(text: string): number {
+    let padding = 0;
+    if (text.endsWith("==")) padding = 2;
+    else if (text.endsWith("=")) padding = 1;
+    return Math.floor(text.length / 4) * 3 - padding;
+}
+
+/**
+ * The entries of a text of the log from its byte `from` on (where an entry begins), and the bytes before it that its
+ * group of three holds: what a log read before ends with, to check it is the same.
+ */
+export function decodeZombieLogFrom(text: string, from: number): { entries: ZombieLogEntry[]; before: number[] } {
+    const start = Math.floor(from / 3);
+    const bytes = bytesOfBase64(text.slice(start * 4));
+    const skip = from - start * 3;
+    return { entries: readEntries(bytes, skip), before: bytes.slice(0, skip) };
+}
+
+function readEntries(bytes: readonly number[], from: number): ZombieLogEntry[] {
+    const at = { read: from };
     const entries: ZombieLogEntry[] = [];
     while (at.read < bytes.length) {
         const step = readVarint(bytes, at);
@@ -345,7 +465,22 @@ export function decodeZombieLog(text: string): ZombieLogEntry[] {
             const toX = readVarint(bytes, at);
             grenades.push({ fromX, fromY, toX, toY: readVarint(bytes, at) });
         }
-        entries.push({ applyStep: step, changes, ...(grenades.length > 0 ? { grenades } : {}) });
+        const thrown = readVarint(bytes, at);
+        const darts: ZombieDart[] = [];
+        for (let dart = 0; dart < thrown && at.read < bytes.length; dart++) {
+            const fromX = readVarint(bytes, at);
+            const fromY = readVarint(bytes, at);
+            const toX = fromX + unzigzag(readVarint(bytes, at));
+            const toY = fromY + unzigzag(readVarint(bytes, at));
+            const shotStep = step - readVarint(bytes, at);
+            darts.push({ fromX, fromY, toX, toY, shotStep, stride: readVarint(bytes, at) });
+        }
+        entries.push({
+            applyStep: step,
+            changes,
+            ...(grenades.length > 0 ? { grenades } : {}),
+            ...(darts.length > 0 ? { darts } : {}),
+        });
     }
     return entries;
 }
@@ -356,12 +491,15 @@ export function decodeZombieLog(text: string): ZombieLogEntry[] {
  */
 export function zombieLogInOrder(entries: readonly ZombieLogEntry[]): ZombieLogEntry[] {
     const ordered: ZombieLogEntry[] = [];
-    for (const entry of entries) {
-        let at = ordered.length;
-        while (at > 0 && ordered[at - 1].applyStep > entry.applyStep) at--;
-        ordered.splice(at, 0, entry);
-    }
+    for (const entry of entries) zombieLogInsert(ordered, entry);
     return ordered;
+}
+
+/** An entry told after the others into a log by their step (zombieLogInOrder): where it goes. */
+export function zombieLogInsert(ordered: ZombieLogEntry[], entry: ZombieLogEntry): void {
+    let at = ordered.length;
+    while (at > 0 && ordered[at - 1].applyStep > entry.applyStep) at--;
+    ordered.splice(at, 0, entry);
 }
 
 /** The cells of the relief in a tile. */

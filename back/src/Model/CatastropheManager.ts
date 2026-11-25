@@ -33,6 +33,7 @@ import {
     tsunamiMinutes,
     decodeZombieTerrain,
     encodeZombieLog,
+    ZombieLogWriter,
     encodeZombieTerrain,
     zombieAsk,
     zombieDirection,
@@ -49,6 +50,10 @@ import {
     ZOMBIE_TELL_MS,
     ZOMBIE_TERRAIN_TELL_MS,
     ZOMBIE_ASK_WHOLE_MS,
+    zombieDartAimed,
+    zombieDartFits,
+    zombieDartFlightEnd,
+    zombieDartStride,
 } from "@workadventure/map-editor";
 import type {
     Ball,
@@ -65,6 +70,7 @@ import type {
     HurricaneTrackMessage,
     TsunamiMessage,
     CatastropheMessage,
+    ZombieDartMessage,
     ZombieGrenadeMessage,
     ZombieHordeMessage,
 } from "@workadventure/messages";
@@ -92,6 +98,25 @@ const ZOMBIE_GRENADES_IN_FLIGHT = 4 * ZOMBIE_MOST_AVATARS;
  * second. A browser that missed more than this waits for the whole log.
  */
 const ZOMBIE_LOG_TAIL_MS = 10_000;
+/**
+ * A player shoots a dart of the Nerf into the horde every 250 ms at most: their Nerf fires every 300 ms
+ * (NERF_COOLDOWN_MS of play), and a shot that comes a little early, by the network, is not refused. Every dart one
+ * sees may kill: at one a second, two darts of three would go through the zombies they reach.
+ */
+const ZOMBIE_DART_PACE_MS = 250;
+/**
+ * The darts a horde takes in a second, at most, whoever shoots: ten players who fire as fast as their Nerf does (33 a
+ * second) and some more. A dart past it is refused. So a horde takes 43 200 darts at most over its 15 minutes.
+ */
+const ZOMBIE_DARTS_A_SECOND = 48;
+/**
+ * A dart is shot at the step the browser of its player was at: taken when that step is at most this long before the
+ * step of the server (the network, a browser a little behind), or this long after it (a clock a little ahead).
+ */
+const ZOMBIE_DART_LATE_MS = 500;
+const ZOMBIE_DART_EARLY_MS = 200;
+/** A dart leaves the barrel of its player: within this of where the server last knows their avatar (px). */
+const ZOMBIE_DART_REACH_PX = 96;
 import type { GameRoom } from "./GameRoom";
 
 /** The ice broken around a player who goes through it, in tiles: the hole they fall into. */
@@ -190,6 +215,8 @@ export class CatastropheManager {
      */
     private hordeLog: ZombieLogEntry[] = [];
     private hordeLogAt: number[] = [];
+    /** The log written out as it grows: written again whole never (ZombieLogWriter). */
+    private hordeWriter = new ZombieLogWriter();
     /**
      * Whether `horde.avatars` misses entries written since: the whole log is written out when read (zombies(), ten
      * times a second by the ground, and with the ground every few seconds), not at each shot.
@@ -203,6 +230,13 @@ export class CatastropheManager {
      */
     private readonly grenadeShots = new Map<string, number>();
     private grenadesInFlight: number[] = [];
+    /**
+     * When each player last shot a dart, by their uuid; when the darts of the last second were taken; the step the
+     * last dart is applied at (those after it never before).
+     */
+    private readonly dartShots = new Map<string, number>();
+    private dartsTakenAt: number[] = [];
+    private lastDartStep = 0;
     /** When each player last asked for the whole horde, by their uuid. */
     private readonly wholeAsked = new Map<string, number>();
 
@@ -849,10 +883,14 @@ export class CatastropheManager {
             safeStep: -1,
         };
         this.hordeLog = [];
+        this.hordeWriter = new ZombieLogWriter();
         this.hordeLogStale = false;
         this.hordeLogAt = [];
         this.grenadeShots.clear();
         this.grenadesInFlight = [];
+        this.dartShots.clear();
+        this.dartsTakenAt = [];
+        this.lastDartStep = 0;
         this.wholeAsked.clear();
         this.hordeSlots = new Map();
         this.hordeTiles = [];
@@ -1002,6 +1040,57 @@ export class CatastropheManager {
         return true;
     }
 
+    /**
+     * A player shoots a dart of their Nerf into the horde, from its barrel to where its range ends (map pixels), at the
+     * step their browser was at (`shotStep`): it goes in the log of the horde, applied once its flight is over and
+     * every browser could have it, and the room is told it at once. Every browser and the ground find the zombie it met
+     * first, as the crowd was when it flew, and kill it (ZombieDart). Every 250 ms at most for a player (`shooter`: by
+     * their uuid), as many as they like. False when refused: no horde, a player in Basique (it does not exist for
+     * them), a dart not aimed as zombieDartAim aims it, a barrel off the map or away from their avatar, too soon, a
+     * step too far from the server's, past
+     * ZOMBIE_DARTS_A_SECOND darts in the last second, or a wait longer than the crowd remembers.
+     */
+    public zombieDart(
+        shooter: { uuid: string; basic: boolean; x: number; y: number },
+        shot: ZombieDartMessage,
+    ): boolean {
+        const horde = this.goingHorde();
+        const size = this.mapSize();
+        if (!horde || !size || this.stopped || shooter.basic) return false;
+        const { fromX, fromY, toX, toY, shotStep } = shot;
+        if (![fromX, fromY, toX, toY, shotStep].every(Number.isFinite) || !Number.isInteger(shotStep)) return false;
+        if (fromX < 0 || fromY < 0 || fromX >= size.width || fromY >= size.height) return false;
+        const offX = fromX - shooter.x;
+        const offY = fromY - shooter.y;
+        if (offX * offX + offY * offY > ZOMBIE_DART_REACH_PX * ZOMBIE_DART_REACH_PX) return false;
+        const now = this.now();
+        if (now - (this.dartShots.get(shooter.uuid) ?? Number.NEGATIVE_INFINITY) < ZOMBIE_DART_PACE_MS) return false;
+        const step = Math.ceil(zombieStepAt(horde, now));
+        const late = Math.ceil(ZOMBIE_DART_LATE_MS / horde.msPerStep);
+        const early = Math.ceil(ZOMBIE_DART_EARLY_MS / horde.msPerStep);
+        if (shotStep < step - late || shotStep > step + early) return false;
+        let gone = 0;
+        while (gone < this.dartsTakenAt.length && this.dartsTakenAt[gone] <= now - 1000) gone++;
+        if (gone > 0) this.dartsTakenAt = this.dartsTakenAt.slice(gone);
+        if (this.dartsTakenAt.length >= ZOMBIE_DARTS_A_SECOND) return false;
+        // Taken as it was aimed (zombieDartAim), not aimed again: the browsers find in the log the dart they know.
+        if (!zombieDartAimed({ fromX, fromY, toX, toY })) return false;
+        const dart = { fromX, fromY, toX, toY, shotStep, stride: zombieDartStride(horde.msPerStep) };
+        // Once its flight is over, never before a step already promised, nor before a dart told before it: the darts
+        // are applied in the order they were told (a dart passes by the zombie a dart before met).
+        const applyStep = Math.max(zombieDartFlightEnd(dart), horde.safeStep + 1, this.lastDartStep);
+        if (!zombieDartFits(dart, applyStep)) return false;
+        this.dartShots.set(shooter.uuid, now);
+        this.dartsTakenAt.push(now);
+        this.lastDartStep = applyStep;
+        this.hordeLog.push({ applyStep, changes: [], darts: [dart] });
+        this.hordeLogAt.push(now);
+        this.hordeLogStale = true;
+        // The room is told this shot alone, as a grenade.
+        this.tellZombies(horde, undefined, this.hordeLog.length - 1);
+        return true;
+    }
+
     /** A player stops the horde of the room: it is gone at once, and the room is told. False when there is none. */
     public stopZombies(): boolean {
         const horde = this.goingHorde();
@@ -1026,7 +1115,8 @@ export class CatastropheManager {
     /** The horde with its whole log written out, once a while after entries were written. */
     private wholeHorde(): ZombieHorde | undefined {
         if (this.horde && this.hordeLogStale) {
-            this.horde = { ...this.horde, avatars: encodeZombieLog(this.hordeLog) };
+            this.hordeWriter.append(this.hordeLog.slice(this.hordeWriter.entries.length));
+            this.horde = { ...this.horde, avatars: this.hordeWriter.text };
             this.hordeLogStale = false;
         }
         return this.horde;
