@@ -4,6 +4,7 @@ import {
     ZOMBIE_DART_FALL_STEPS,
     ZOMBIE_DART_RECOIL_PX,
     ZOMBIE_DART_RECOIL_STEPS,
+    ZOMBIE_DART_SCALES,
     ZOMBIE_DYING,
     ZOMBIE_SHOT,
     ZOMBIE_WALKING,
@@ -36,9 +37,10 @@ const SUB_BANDS = 4;
 const VIEW_MARGIN_PX = 64;
 /**
  * The sheets are laid in the atlas at these scales, smoothed: about as tall as an avatar (32 px), some a little
- * smaller. (A Blitter is not scaled when it is drawn: its images are.)
+ * smaller. (A Blitter is not scaled when it is drawn: its images are.) The darts of the Nerf meet the zombies as they
+ * are drawn at them (ZombieDart).
  */
-const SCALES: readonly number[] = [0.44, 0.5];
+const SCALES: readonly number[] = ZOMBIE_DART_SCALES;
 /** The empty pixels between two frames of the atlas. */
 const FRAME_GAP = 2;
 /** The frames of the atlas at one scale; those of the next scale follow. */

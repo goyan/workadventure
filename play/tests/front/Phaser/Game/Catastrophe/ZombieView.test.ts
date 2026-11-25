@@ -3,6 +3,7 @@ import {
     TERRAIN_CELL,
     TILE_PX,
     ZOMBIE_DART_FALL_STEPS,
+    ZOMBIE_DART_FIGURES,
     ZOMBIE_DART_TICKS,
     ZOMBIE_SHOT,
     ZOMBIE_WALKING,
@@ -146,6 +147,16 @@ function hordeOver(terrain: Uint8Array): ZombieHorde {
 }
 
 describe("ZombieView", () => {
+    it("draws as many sheets as the darts of the Nerf know figures of: they meet the zombies as they are drawn", () => {
+        expect(ZOMBIE_DART_FIGURES).toHaveLength(ZOMBIE_SHEETS.length);
+        // The sheets the figures were measured on, in that order.
+        expect(ZOMBIE_SHEETS.map((sheet) => sheet.key)).toEqual([
+            "zombie-homme-veste",
+            "zombie-femme-torse",
+            "zombie-femme-jupe",
+        ]);
+    });
+
     it("draws a zombie crossing a bridge all the way over it: on its deck, as high as the deck, over its slabs", () => {
         const { river, bridges, terrain } = riverWithBridge();
         const told = hordeOver(terrain);

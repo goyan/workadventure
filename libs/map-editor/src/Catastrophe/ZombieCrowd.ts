@@ -29,6 +29,7 @@ import {
     ZOMBIE_DART_HISTORY_STEPS,
     ZOMBIE_DART_RECOIL_PX,
     ZOMBIE_DART_TICKS,
+    zombieDartBody,
     zombieDartEnters,
     zombieDartFits,
     zombieDartReach,
@@ -776,7 +777,7 @@ export class ZombieCrowd {
     ): Int32Array {
         const { count, pastX, pastY } = this;
         const end = Math.min(way.reach, way.length);
-        const run = MOST_A_STEP_PX * (ZOMBIE_DART_TICKS - 1) * dart.stride + 1;
+        const run = MOST_A_STEP_PX * ZOMBIE_DART_TICKS * dart.stride + 1;
         // In half pixels, as the ring keeps them: the box of its way, as far as a zombie it meets can have run from.
         const endX = dart.fromX + way.ux * end;
         const endY = dart.fromY + way.uy * end;
@@ -796,8 +797,9 @@ export class ZombieCrowd {
     }
 
     /**
-     * The ticks `from` to `to` (excluded) of the flight of a dart, against the bodies of the zombies as they walked at
-     * the step of each tick (pastX, pastY): each it enters is added to `hits` (in the order of their numbers within a
+     * The ticks `from` to `to` (excluded) of the flight of a dart, against the bodies of the zombies as they ran during
+     * each tick, from where they were at its start to where they were at its end (pastX, pastY: a zombie drawn between
+     * two steps, which the dart drawn crosses, is met): each it enters is added to `hits` (in the order of their numbers within a
      * tick), and it flies on through them. Only the `candidates` (dartCandidates) and those that came in since it was
      * shot are looked at. A zombie in `hits` already, or `passed` (met by a dart told before, at that step or before:
      * it falls), is passed by. True once its flight is over: its range or a wall reached.
@@ -823,26 +825,62 @@ export class ZombieCrowd {
             const ay = dart.fromY + way.uy * near;
             const bx = dart.fromX + way.ux * far;
             const by = dart.fromY + way.uy * far;
-            // In half pixels: what is out of these bounds cannot be entered.
-            const left = (Math.min(ax, bx) - ZOMBIE_DART_HALF_WIDTH_PX) * 2;
-            const right = (Math.max(ax, bx) + ZOMBIE_DART_HALF_WIDTH_PX) * 2;
-            const top = Math.min(ay, by) * 2;
-            const bottom = (Math.max(ay, by) + ZOMBIE_DART_BODY_PX) * 2;
+            // In half pixels: what is out of these bounds at the start of the tick cannot be entered during it (a
+            // zombie runs MOST_A_STEP_PX at most along each axis in a step).
+            const run = MOST_A_STEP_PX * dart.stride + 1;
+            const left = (Math.min(ax, bx) - ZOMBIE_DART_HALF_WIDTH_PX - run) * 2;
+            const right = (Math.max(ax, bx) + ZOMBIE_DART_HALF_WIDTH_PX + run) * 2;
+            const top = (Math.min(ay, by) - run) * 2;
+            const bottom = (Math.max(ay, by) + ZOMBIE_DART_BODY_PX + run) * 2;
             const step = dart.shotStep + tick * dart.stride;
             const base = (step % ZOMBIE_DART_HISTORY_STEPS) * count;
+            const end = ((step + dart.stride) % ZOMBIE_DART_HISTORY_STEPS) * count;
             const look = (zombie: number): void => {
-                const px = pastX[base + zombie];
-                if (px === PAST_NONE || px < left || px > right) return;
-                const py = pastY[base + zombie];
-                if (py < top || py > bottom || mine.has(zombie) || passed(zombie, step)) return;
-                const at = zombieDartEnters(ax, ay, bx, by, px / 2, py / 2);
+                // Where it walked at the start of the tick and at its end; one of them only when it came in or fell.
+                let x0 = pastX[base + zombie];
+                let y0 = pastY[base + zombie];
+                let x1 = pastX[end + zombie];
+                let y1 = pastY[end + zombie];
+                if (x0 === PAST_NONE) {
+                    if (x1 === PAST_NONE) return;
+                    x0 = x1;
+                    y0 = y1;
+                } else if (x1 === PAST_NONE) {
+                    x1 = x0;
+                    y1 = y0;
+                }
+                if (x0 < left || x0 > right || y0 < top || y0 > bottom || mine.has(zombie) || passed(zombie, step))
+                    return;
+                // The dart as the zombie sees it, both moving through the tick: from A less where the zombie was, to B
+                // less where it is at the end. It is met as it is drawn, between two steps.
+                const zx0 = x0 / 2;
+                const zy0 = y0 / 2;
+                const zx1 = x1 / 2;
+                const zy1 = y1 / 2;
+                // Facing the way it runs, as it is drawn; either way when it hardly moves.
+                const facing = zx1 - zx0 > 0.3 ? 1 : zx1 - zx0 < -0.3 ? -1 : 0;
+                const at = zombieDartEnters(
+                    ax - zx0,
+                    ay - zy0,
+                    bx - zx1,
+                    by - zy1,
+                    0,
+                    0,
+                    zombieDartBody(zombie, facing),
+                );
                 if (at < 0) return;
                 mine.add(zombie);
-                hits.push({ zombie, step, x: px / 2, y: py / 2, distance: near + (far - near) * at });
+                hits.push({
+                    zombie,
+                    step,
+                    x: zx0 + (zx1 - zx0) * at,
+                    y: zy0 + (zy1 - zy0) * at,
+                    distance: near + (far - near) * at,
+                });
             };
             for (const zombie of candidates) look(zombie);
-            // Those that came in since it was shot: numbered after all the others.
-            const inNow = pastIn[step % ZOMBIE_DART_HISTORY_STEPS];
+            // Those that came in since it was shot, by the end of the tick: numbered after all the others.
+            const inNow = pastIn[(step + dart.stride) % ZOMBIE_DART_HISTORY_STEPS];
             for (let zombie = cameIn; zombie < inNow; zombie++) look(zombie);
         }
         return to >= ZOMBIE_DART_TICKS;
@@ -943,9 +981,10 @@ export class ZombieCrowd {
                 if (record.applyStep < this.steps - ZOMBIE_DART_FALL_STEPS) continue;
                 kept.push(record);
                 if (!record.over) {
+                    // The ticks whose end is stepped already.
                     const last = Math.min(
                         ZOMBIE_DART_TICKS,
-                        Math.floor((this.steps - record.dart.shotStep) / record.dart.stride) + 1,
+                        Math.floor((this.steps - record.dart.shotStep) / record.dart.stride),
                     );
                     if (
                         this.steps - (record.dart.shotStep + record.tick * record.dart.stride) >=

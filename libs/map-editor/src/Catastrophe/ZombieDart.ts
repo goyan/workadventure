@@ -14,7 +14,7 @@ import type { ZombieGrenadeGround } from "./ZombieGrenade";
  *   a tick of its flight takes `stride` steps (the speed of the map when it was shot, whole), so that it flies as fast
  *   to the eye as everywhere.
  * - At each tick, the part of its way it covers then is checked against the bodies of the zombies walking at that
- *   step, as they are drawn (a box on their feet, ZOMBIE_DART_BODY_PX high): each it enters is hit.
+ *   step, as they are drawn (zombieDartBody): each it enters is hit.
  * - The log of the horde applies it once its flight is over (and after the step every browser could have it by): the
  *   zombies hit are killed then, each laid where the dart met it, a little further along the dart. Until then a
  *   browser draws them falling already (ZombieCrowd.dartsSeen), each from the step it was hit at.
@@ -45,11 +45,51 @@ export const ZOMBIE_DART_FALL_STEPS = 30;
 export const ZOMBIE_DART_RECOIL_PX = 0.3 * PX;
 export const ZOMBIE_DART_RECOIL_STEPS = 3;
 /**
- * The body of a zombie as a dart meets it, as it is drawn (ZombieView: about as tall as an avatar): this wide on each
- * side of its feet, this high above them. A dart flies at the height of a hand: it meets the body it crosses on screen.
+ * The body of a zombie as a dart meets it: as it is drawn (ZombieView), which the dart drawn crosses. Each zombie is
+ * drawn by one of three sheets (its number modulo 3), at one of two scales (its number divided by 4, modulo 2), facing
+ * the way it runs. Of each sheet, its figure in its running images, in pixels of its frame, facing right: where its
+ * middle is from the middle of the frame, half its width, its height (measured on the sheets: the man in a jacket, the
+ * woman bare to the waist, whose arms reach far ahead, the woman in a skirt).
  */
-export const ZOMBIE_DART_HALF_WIDTH_PX = 0.25 * PX;
-export const ZOMBIE_DART_BODY_PX = 28;
+export const ZOMBIE_DART_FIGURES: readonly { centre: number; half: number; height: number }[] = [
+    { centre: 0.8, half: 15.6, height: 67 },
+    { centre: 14.1, half: 27.8, height: 64 },
+    { centre: 7.3, half: 22.6, height: 69 },
+];
+export const ZOMBIE_DART_SCALES: readonly number[] = [0.44, 0.5];
+/** The furthest a body reaches from the feet of its zombie, aside and up (map pixels). */
+export const ZOMBIE_DART_HALF_WIDTH_PX = 21;
+export const ZOMBIE_DART_BODY_PX = 35;
+
+/** A body as a dart meets it: from the feet of its zombie, how far left and right it reaches (map pixels), how high. */
+export interface ZombieDartBody {
+    left: number;
+    right: number;
+    height: number;
+}
+
+/**
+ * The body of the zombie numbered `zombie`, facing right (`facing` 1), left (-1) or either (0: as wide as both): as
+ * it is drawn.
+ */
+export function zombieDartBody(zombie: number, facing: number): ZombieDartBody {
+    const figure = ZOMBIE_DART_FIGURES[zombie % ZOMBIE_DART_FIGURES.length];
+    const scale = ZOMBIE_DART_SCALES[Math.floor(zombie / 4) % ZOMBIE_DART_SCALES.length];
+    if (facing === 0) {
+        const reach = (Math.abs(figure.centre) + figure.half) * scale;
+        return { left: -reach, right: reach, height: figure.height * scale };
+    }
+    const centre = figure.centre * facing;
+    return {
+        left: (centre - figure.half) * scale,
+        right: (centre + figure.half) * scale,
+        height: figure.height * scale,
+    };
+}
+
+/** The body of a zombie when none is told: a small one, upright on its feet. */
+const SMALL_BODY: ZombieDartBody = { left: -0.25 * PX, right: 0.25 * PX, height: 28 };
+
 /** Where a dart goes is checked against the ground every this many pixels: under a cell, no wall is jumped over. */
 const SAMPLE_PX = 4;
 
@@ -178,17 +218,25 @@ export function zombieDartReach(
 }
 
 /**
- * Where along a segment from (ax, ay) to (bx, by) it enters the body of a zombie whose feet are at (zx, zy): a share
- * of the segment from 0 to 1, or -1 when it misses it.
+ * Where along a segment from (ax, ay) to (bx, by) it enters the body of a zombie whose feet are at (zx, zy) (`body`,
+ * zombieDartBody): a share of the segment from 0 to 1, or -1 when it misses it.
  */
-export function zombieDartEnters(ax: number, ay: number, bx: number, by: number, zx: number, zy: number): number {
+export function zombieDartEnters(
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+    zx: number,
+    zy: number,
+    body: ZombieDartBody = SMALL_BODY,
+): number {
     let enter = 0;
     let leave = 1;
     const dx = bx - ax;
     const dy = by - ay;
-    const left = zx - ZOMBIE_DART_HALF_WIDTH_PX;
-    const right = zx + ZOMBIE_DART_HALF_WIDTH_PX;
-    const top = zy - ZOMBIE_DART_BODY_PX;
+    const left = zx + body.left;
+    const right = zx + body.right;
+    const top = zy - body.height;
     if (dx === 0) {
         if (ax < left || ax > right) return -1;
     } else {
