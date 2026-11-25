@@ -19,6 +19,10 @@ import {
     KaraokeLeaderboardRequestSchema,
     mapCellsOf,
     TERRAIN_CELL,
+    bridgeTilesOf,
+    dryOnBridges,
+    waterWallsOf,
+    zombieTerrainOf,
 } from "@workadventure/map-editor";
 import * as Sentry from "@sentry/node";
 import { Metadata } from "@grpc/grpc-js";
@@ -49,6 +53,7 @@ import type {
     CatastropheKind,
     HurricaneTrackMessage,
     TsunamiMessage,
+    ZombieHordeMessage,
     FishingMessage,
     IceShackAction,
     IceShacksMessage,
@@ -118,6 +123,7 @@ import { VariablesManager } from "../Services/VariablesManager";
 import type { AreaPropertyVariable } from "../Services/AreaPropertyVariablesManager";
 import { AreaPropertyVariablesManager } from "../Services/AreaPropertyVariablesManager";
 import { getVariablesRepository } from "../Services/Repository/VariablesRepository";
+import { zombieAvatarsOf } from "./PlayerPerception";
 import { sameFloor } from "./FloorLevel";
 import { PrivateMessages, PrivateMessageRefusedError } from "./PrivateMessages";
 import { AreaZoneTracker } from "./AreaZoneTracker";
@@ -386,6 +392,8 @@ export class GameRoom implements BrothersFinder {
             colds: () => groundParts.catastrophes?.colds() ?? [],
             hurricane: () => groundParts.catastrophes?.hurricane(),
             tsunami: () => groundParts.catastrophes?.tsunami(),
+            // A horde of zombies tramples the meadow and pulls its trees down.
+            zombies: () => groundParts.catastrophes?.zombies(),
             // The antelopes of the life of the land graze the meadow.
             grazers: () => groundParts.aquaticLife?.grazers() ?? [],
             // In the cold of the room the rain of the map falls as snow; the weather is not known until it is read.
@@ -413,6 +421,11 @@ export class GameRoom implements BrothersFinder {
         catastrophes.southernWith(gameRoom.inSouthernHemisphere.bind(gameRoom));
         // The widget of the speed of the map speeds the hurricane up too.
         catastrophes.hurricaneTimesWith(gameRoom.hurricaneTimes.bind(gameRoom));
+        // A horde of zombies goes round the water of the ground as it is when it begins.
+        catastrophes.zombieTerrainWith(gameRoom.zombieTerrain.bind(gameRoom));
+        // It runs to the avatars, and goes as fast as the map, as the hurricane does.
+        catastrophes.zombieAvatarsWith(gameRoom.zombieAvatars.bind(gameRoom));
+        catastrophes.zombieTimesWith(gameRoom.hurricaneTimes.bind(gameRoom));
         gameRoom.catastrophes = catastrophes;
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => catastrophes.stop());
@@ -1410,6 +1423,37 @@ export class GameRoom implements BrothersFinder {
             hurricane,
             tsunami,
         );
+    }
+
+    /** A player sends a horde of zombies across the map, or stops the one crossing it (`release`). */
+    public launchZombies(user: Pick<User, "id">, zombies: ZombieHordeMessage | undefined, release = false): void {
+        if (release) this.catastrophes?.stopZombies();
+        else if (zombies) this.catastrophes?.startZombies(zombies);
+    }
+
+    /**
+     * The ground of each cell of the map as a horde of zombies reads it when it begins: the water of the ground (dry on
+     * the decks of the bridges), the walls of the map with their doors open, and the collisions of the map as the
+     * player who sent the horde reads them (`solid`, a tile each). Undefined until the size of the map is read.
+     */
+    public zombieTerrain(
+        solid: (tileX: number, tileY: number) => boolean,
+    ): { widthCells: number; heightCells: number; cells: Uint8Array } | undefined {
+        const cells = this.mapCells;
+        if (!cells) return undefined;
+        const wam = this.getWam();
+        const grid = this.ground?.getGrid();
+        const depthAt = grid ? dryOnBridges((cellX, cellY) => grid.depthAt(cellX, cellY), bridgeTilesOf(wam)) : () => 0;
+        return {
+            widthCells: cells.width,
+            heightCells: cells.height,
+            cells: zombieTerrainOf(cells.width, cells.height, depthAt, undefined, waterWallsOf(wam), solid),
+        };
+    }
+
+    /** Where the avatars of the room stand for a horde of zombies: not those in Basique (zombieAvatarsOf). */
+    public zombieAvatars(): { key: number; x: number; y: number }[] {
+        return zombieAvatarsOf(this.users.values());
     }
 
     /** A player casts their fishing line at a point of the map. */

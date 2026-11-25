@@ -95,7 +95,23 @@ export interface TreeFireStepInput {
      * charred trees are not held.
      */
     stormy?: boolean;
+    /**
+     * How many zombies of a horde went over each tile (32 px) at this step (ZombieCrowd.takeTrample), 0 where none:
+     * a tree they went over TREE_TRAMPLE_PASSES times is pulled down, lying the way they walk. Absent while no horde
+     * crosses the room.
+     */
+    trodden?: (tileX: number, tileY: number) => number;
+    /** Where the horde comes from (degrees, 0 north, 90 east): its trees fall away from it. */
+    troddenFrom?: number;
 }
+
+/**
+ * How many zombies going over the foot of a tree pull it down: a choice, the horde climbing on it and dragging it down
+ * by its numbers. A horde goes over each tile of its band about 1.1 sqrt(1.6 n / 3) times (its front sqrt(3 n / 1.6) m
+ * wide, ZombieCrowd): 36 times for 2000 zombies, 14 for 300, 8 for 100. Most of the trees in the way of a horde of a few hundred fall,
+ * all of them where it crowds through a gap; a hundred zombies leave some standing.
+ */
+export const TREE_TRAMPLE_PASSES = 10;
 
 /**
  * The gusts that lay a tree down (3 s gusts, km/h): 130, a value for every tree, its species unknown (the trees of the
@@ -158,6 +174,8 @@ interface Tree extends BurnableTree {
     fallenFrom?: number;
     /** Seconds it stood in gusts strong enough to lay it down, one after the other. */
     strain: number;
+    /** How many zombies went over its foot since the horde began. */
+    trodden: number;
     embers: number;
     /** What it gained of heat at this step: it only cools when it gained nothing. */
     gained: number;
@@ -180,6 +198,8 @@ export class TreeFire {
     private byTile = new Map<string, Tree[]>();
     /** The embers that left at the last step: they land at this one. */
     private flying: Ember[] = [];
+    /** Whether a tree counts zombies that went over it: they are forgotten once no horde walks. */
+    private counting = false;
 
     constructor(
         trees: readonly BurnableTree[],
@@ -203,6 +223,7 @@ export class TreeFire {
                 damage: 0,
                 wait: 0,
                 strain: 0,
+                trodden: 0,
                 embers: 0,
                 gained: 0,
                 told: HEALTHY,
@@ -307,7 +328,12 @@ export class TreeFire {
     public step(input: TreeFireStepInput): { changed: ToldTree[]; embers: Ember[] } {
         const seconds = Number.isFinite(input.seconds) && input.seconds > 0 ? input.seconds : 0;
         const windAt = input.strongWind === false ? undefined : input.windAt;
-        if (seconds === 0 || (input.groundBurning === false && !this.active() && !windAt)) {
+        // No horde walks any more: what the last one did to the trees standing is forgotten.
+        if (!input.trodden && this.counting) {
+            for (const tree of this.trees.values()) tree.trodden = 0;
+            this.counting = false;
+        }
+        if (seconds === 0 || (input.groundBurning === false && !this.active() && !windAt && !input.trodden)) {
             return { changed: [], embers: [] };
         }
         const rain = Number.isFinite(input.rainMmPerHour) && input.rainMmPerHour > 0 ? input.rainMmPerHour : 0;
@@ -348,6 +374,29 @@ export class TreeFire {
                 tree.damage = 1;
                 tree.wait = BLACK_SHARE * afterFire;
                 tree.fallenFrom = ((Math.round(Number.isFinite(wind.from) ? wind.from : 0) % 360) + 360) % 360;
+            }
+        }
+
+        // A horde of zombies pulls down the trees it goes over, away from where it comes from: as the wind, each lies
+        // as long as a charred tree stays black, and nothing grows back before the horde is over (stormy).
+        if (input.trodden) {
+            const from =
+                ((Math.round(Number.isFinite(input.troddenFrom) ? (input.troddenFrom ?? 0) : 0) % 360) + 360) % 360;
+            for (const tree of this.trees.values()) {
+                if (tree.fire > 0 || tree.damage > 0) {
+                    tree.trodden = 0;
+                    continue;
+                }
+                const passes = input.trodden(tree.tileX, tree.tileY);
+                if (!(passes > 0)) continue;
+                tree.trodden += passes;
+                this.counting = true;
+                if (tree.trodden < TREE_TRAMPLE_PASSES) continue;
+                tree.trodden = 0;
+                tree.heat = 0;
+                tree.damage = 1;
+                tree.wait = BLACK_SHARE * afterFire;
+                tree.fallenFrom = from;
             }
         }
 

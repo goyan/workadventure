@@ -1,8 +1,9 @@
 import { ballRadiusPx, coldCelsius, coldTiles } from "@workadventure/map-editor";
-import { hurricaneTrack, tsunamiLastsMs, tsunamiMetres } from "@workadventure/map-editor";
-import type { Ball, ColdMass, Downpour, Drain, Hurricane, Tsunami } from "@workadventure/map-editor";
+import { hurricaneTrack, tsunamiLastsMs, tsunamiMetres, zombieLastStep } from "@workadventure/map-editor";
+import type { Ball, ColdMass, Downpour, Drain, Hurricane, Tsunami, ZombieHorde } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { CatastropheMessage } from "@workadventure/messages";
+import { zombieHordeOf } from "../Catastrophe/ZombieReceiver";
 import type { LocalTerrainCommand } from "./LocalTerrainSimulation";
 
 /** What the relay tells the local ground of the catastrophes of the room. */
@@ -33,6 +34,12 @@ export class LocalCatastropheRelay {
      * when it began as the server told it (its time), to know it again.
      */
     private tsunami: { tsunami: Tsunami; until: number; toldStart: number } | undefined;
+    /**
+     * The horde of zombies crossing the map, until it ends or is stopped, set on the clock of the local ground as the
+     * tsunami is, when it began as the server told it, and its water as last told (by hash).
+     */
+    private zombies: { horde: ZombieHorde; until: number; toldStart: number } | undefined;
+    private zombieTerrain: { hash: number; text: string } | undefined;
 
     /**
      * `epoch`: the clock the local ground reads the time by (ms since the epoch, that of its worker): a tsunami is
@@ -140,6 +147,30 @@ export class LocalCatastropheRelay {
                 } else known.until = until;
                 return [];
             }
+            case CatastropheKind.CATASTROPHE_ZOMBIES: {
+                const told = message.zombies;
+                if (message.impactInMs <= 0 || !told || !(told.durationMs > 0)) {
+                    if (this.zombies) this.changed = true;
+                    this.zombies = undefined;
+                    this.zombieTerrain = undefined;
+                    return [];
+                }
+                if (told.terrain) this.zombieTerrain = { hash: told.terrainHash, text: told.terrain };
+                // Its water is told every few seconds: the local ground waits for it.
+                if (!this.zombieTerrain || this.zombieTerrain.hash !== told.terrainHash) return [];
+                // Its clock on the clock of the local ground: its end where the server says it is from now. Told again
+                // each second with where the avatars stood since: the local ground has it each time.
+                const horde = zombieHordeOf(id, told, this.zombieTerrain.text);
+                const serverEnd = horde.anchorAt + (zombieLastStep(horde) - horde.anchorStep) * horde.msPerStep;
+                const shift = this.epoch() + message.impactInMs - serverEnd;
+                this.zombies = {
+                    horde: { ...horde, startedAt: horde.startedAt + shift, anchorAt: horde.anchorAt + shift },
+                    until,
+                    toldStart: told.startedAt,
+                };
+                this.changed = true;
+                return [];
+            }
             default:
                 return [];
         }
@@ -167,6 +198,10 @@ export class LocalCatastropheRelay {
             this.tsunami = undefined;
             this.changed = true;
         }
+        if (this.zombies && this.zombies.until <= now) {
+            this.zombies = undefined;
+            this.changed = true;
+        }
         if (this.changed) {
             this.changed = false;
             commands.push(this.state());
@@ -185,6 +220,7 @@ export class LocalCatastropheRelay {
             ...(this.colds.size > 0 ? { colds: [...this.colds.values()].map(({ cold }) => cold) } : {}),
             ...(this.hurricane ? { hurricane: this.hurricane.hurricane } : {}),
             ...(this.tsunami ? { tsunami: this.tsunami.tsunami } : {}),
+            ...(this.zombies ? { zombies: this.zombies.horde } : {}),
         };
     }
 }

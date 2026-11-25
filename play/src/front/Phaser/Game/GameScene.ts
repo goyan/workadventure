@@ -38,6 +38,9 @@ import {
     heightAt,
     HURRICANE_GUST_FACTOR,
     hurricaneHere,
+    doorLeavesOf,
+    LIFE_DEPTHS_PX,
+    zombieCollisionsOf,
     type LifeFire,
     lifeFireOf,
     listeningZoneJamKey,
@@ -193,6 +196,7 @@ import {
     hurricaneHighestRiseStore,
     hurricaneShownStore,
     tsunamiShownStore,
+    zombieShownStore,
     pointerFloodRiseStore,
 } from "@wa/front/Stores/CatastropheStore";
 import { refreshPromptStore } from "@wa/front/Stores/RefreshPromptStore";
@@ -327,7 +331,7 @@ import {
 import { jungleEnabledStore } from "../../Stores/JungleStore";
 import { isEffectShown, pixelReliefStore } from "../../Stores/EffectsStore";
 import { fireConditionsStore } from "../../Stores/FireConditionsStore";
-import { basicActiveStore, isBasicActive } from "../../Stores/BasicModeStore";
+import { basicActiveStore, basicModeStore, isBasicActive } from "../../Stores/BasicModeStore";
 import {
     isWeatherPipetteOn,
     waterFlowMeasuredStore,
@@ -371,7 +375,7 @@ import type { RaisedCharacter } from "./Floors/UpperDoors";
 import { wallBarriers } from "./MapEditor/MapLayer/MapLayerBarriers";
 import { readMapLayerEntityStates } from "./MapEditor/MapLayer/MapLayerSync";
 import { autumnProgress } from "./Nature/TreeLeafFall";
-import { isGroundUnderWater } from "./Water/WaterZones";
+import { SWIM_DEPTH_PX, isGroundUnderWater } from "./Water/WaterZones";
 import {
     followsServerGround,
     meadowHoldsSnow,
@@ -516,6 +520,9 @@ import { HurricaneReceiver } from "./Catastrophe/HurricaneReceiver";
 import { TsunamiReceiver } from "./Catastrophe/TsunamiReceiver";
 import { HurricaneDebris } from "./Catastrophe/HurricaneDebris";
 import { HurricaneView, seaHurricaneOf } from "./Catastrophe/HurricaneView";
+import { ZombieReceiver } from "./Catastrophe/ZombieReceiver";
+import { ZombieView } from "./Catastrophe/ZombieView";
+import { zombieShoveOf, zombieShownOf } from "./Catastrophe/ZombieShown";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
@@ -777,6 +784,11 @@ export class GameScene extends DirtyScene {
     private hurricaneDebris: HurricaneDebris | undefined;
     /** The flood of the hurricane as this browser sees it: the rise of the water, the marks it leaves. */
     private hurricaneFlood: HurricaneFloodView | undefined;
+    /** The horde of zombies of the room: what the server tells of it, and its crowd drawn. */
+    private zombieReceiver: ZombieReceiver | undefined;
+    private zombieView: ZombieView | undefined;
+    /** When the panel was last told the horde (ms, the clock of the game). */
+    private zombieToldAt = 0;
     private shownFloodRise: number | undefined;
     private fireTorchView: FireTorchView | undefined;
     private catastropheSubscription: Subscription | undefined;
@@ -2026,6 +2038,11 @@ export class GameScene extends DirtyScene {
         setRoomHurricane(undefined);
         roomHurricaneAir.clear();
         hurricaneShownStore.set(undefined);
+        this.zombieReceiver?.destroy();
+        this.zombieReceiver = undefined;
+        this.zombieView?.destroy();
+        this.zombieView = undefined;
+        zombieShownStore.set(undefined);
         this.fireTorchView?.destroy();
         this.fireTorchView = undefined;
         rodEquippedStore.set(false);
@@ -2625,6 +2642,7 @@ export class GameScene extends DirtyScene {
             );
             // The trees the wind is laying down fall on, before their shadows are drawn.
             this.fallenTreeView?.update(time);
+            this.updateZombies(time, serverDate?.getTime());
             this.hurricaneView?.update(
                 serverDate,
                 this.nightManager?.sunPosition()?.elevation,
@@ -3901,6 +3919,59 @@ export class GameScene extends DirtyScene {
      */
     public mapDaylightAt(at: number): number {
         return mapDaylightAt(this.getGameMap().getWamFile()?.getWam().settings, new Date(at));
+    }
+
+    /**
+     * How the horde of zombies shoves the avatar of this player whose body is at (x, y), px/s, added to what its keys
+     * ask for (Player): the walls and the collisions of the map hold it as always; never into deep water.
+     * On a raised floor (`floorZ` px up) its body is drawn that much further north than the ground under it, where
+     * the horde runs: read there. Only on the deck of a bridge, where the horde runs too; not on an upper storey.
+     */
+    public zombiePushAt(x: number, y: number, floorZ = 0): { x: number; y: number } | undefined {
+        const raised = floorZ >= 2;
+        const groundY = y + floorZ;
+        if (raised && Math.abs(this.getBridgeElevationAt(x, groundY) - floorZ) >= 2) return undefined;
+        return zombieShoveOf(
+            this.zombieView,
+            get(basicModeStore),
+            x,
+            groundY,
+            // On a deck, the water under it is no water.
+            (atX, atY) => (raised ? 0 : this.terrainWater.depthAt(atX, atY, this.time.now)),
+            LIFE_DEPTHS_PX.deep,
+        );
+    }
+
+    /**
+     * The collisions of the map as this browser walks its avatar by, a byte a tile, the doors open: what the player
+     * who sends a horde of zombies sends with it, so that it goes round the furniture and the walls of the map too.
+     */
+    public zombieCollisions(): { collisions: string; collisionsWidth: number; collisionsHeight: number } {
+        return zombieCollisionsOf(
+            this.gameMapFrontWrapper.getCollisionGrid({ emitMapChangedEvent: false }),
+            doorLeavesOf(this.getGameMap().getWamFile()?.getWam()),
+        );
+    }
+
+    /**
+     * At each image, the horde of zombies of the room: stepped to the time of the server and drawn, and told to the
+     * panel once a second. Nothing while there is none.
+     */
+    private updateZombies(time: number, epoch: number | undefined): void {
+        const view = this.zombieView;
+        if (!view?.active()) return;
+        view.update(
+            epoch,
+            time,
+            // Not drawn in Basique, the map editor included: the horde leaves the avatar out then (PerceptionProtocol).
+            !get(basicModeStore),
+            window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+        );
+        if (time - this.zombieToldAt < 1000) return;
+        this.zombieToldAt = time;
+        const walking = view.walking();
+        const horde = this.zombieReceiver?.current();
+        zombieShownStore.set(zombieShownOf(horde, walking, epoch));
     }
 
     /** The wind of the hurricane of the room at a map point now; undefined while none crosses the map. */
@@ -5414,6 +5485,27 @@ export class GameScene extends DirtyScene {
             ),
         );
         this.tsunamiReceiver = tsunamiReceiver;
+        // The horde of zombies of the room: its crowd stepped here as on the server, from what it tells.
+        this.zombieReceiver?.destroy();
+        this.zombieView?.destroy();
+        const zombieView = new ZombieView(
+            this,
+            (x, y) => this.groundDropAt(x, y),
+            // Asked for every zombie seen at each image: nothing to read on a map without bridges.
+            (x, y) => (this.bridges?.tiles.size ? this.getBridgeElevationAt(x, y) : 0),
+            // The water now, read only where it is deep: a frozen lake is walked on.
+            (x, y) => {
+                const depth = this.terrainWater.depthAt(x, y, this.time.now);
+                return depth >= SWIM_DEPTH_PX && this.isFrozenWaterAt(x, y) ? 0 : depth;
+            },
+        );
+        this.zombieView = zombieView;
+        const zombieReceiver = new ZombieReceiver((horde) => {
+            zombieView.setHorde(horde, this.time.now);
+            if (!horde) zombieShownStore.set(undefined);
+            this.markDirty();
+        });
+        this.zombieReceiver = zombieReceiver;
         this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {
             // The water of this player, when it is their own, lives the catastrophes of the room too.
             this.localTerrain.fromCatastrophe(message);
@@ -5423,6 +5515,7 @@ export class GameScene extends DirtyScene {
             else if (message.kind === CatastropheKind.CATASTROPHE_COLD) coldView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_HURRICANE) hurricaneReceiver.report(message);
             else if (message.kind === CatastropheKind.CATASTROPHE_TSUNAMI) tsunamiReceiver.report(message);
+            else if (message.kind === CatastropheKind.CATASTROPHE_ZOMBIES) zombieReceiver.report(message);
             else if (message.kind === CatastropheKind.CATASTROPHE_FIRE) fireTorchView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_ICE_BREAK) {
                 // The ice another player broke (or ours, told back): the same hole for everyone.

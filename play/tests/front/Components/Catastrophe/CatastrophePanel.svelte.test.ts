@@ -73,6 +73,19 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                     bandsAfter: label("rain bands, going away"),
                     wallAfter: label("second eyewall"),
                 },
+                zombies: label("Zombies"),
+                zombiesHelp: label("A horde of zombies crosses the map"),
+                zombiesCountLabel: label("Size of the horde"),
+                zombiesCount: ({ count }: { count: number }) => `${count} zombies`,
+                zombiesMinutesLabel: label("Time the horde takes to cross the map"),
+                zombiesMinutes: ({ minutes }: { minutes: number }) => `${minutes} min to cross the map`,
+                zombiesHeadingLabel: label("Where the horde goes"),
+                zombiesHeading: ({ point, degrees }: { point: string; degrees: number }) =>
+                    `It goes towards ${point} (${degrees}°)`,
+                zombiesStart: label("Launch the horde"),
+                zombiesStop: label("Stop the horde"),
+                zombiesGoing: ({ walking, minutes, seconds }: Record<string, number>) =>
+                    `Horde under way: ${walking} zombies walking, ${minutes} min ${seconds} s to go`,
                 tsunami: label("Tsunami"),
                 tsunamiMetresLabel: label("Height of the tsunami at the coast"),
                 tsunamiMetres: ({ metres }: { metres: number }) => `${metres} m at the coast`,
@@ -109,6 +122,8 @@ const { startHurricane, stopHurricane } = vi.hoisted(() => ({ startHurricane: vi
 vi.mock("../../../../src/front/Components/Catastrophe/hurricaneActions", () => ({ startHurricane, stopHurricane }));
 const { startTsunami, stopTsunami } = vi.hoisted(() => ({ startTsunami: vi.fn(), stopTsunami: vi.fn() }));
 vi.mock("../../../../src/front/Components/Catastrophe/tsunamiActions", () => ({ startTsunami, stopTsunami }));
+const { startZombies, stopZombies } = vi.hoisted(() => ({ startZombies: vi.fn(), stopZombies: vi.fn() }));
+vi.mock("../../../../src/front/Components/Catastrophe/zombieActions", () => ({ startZombies, stopZombies }));
 
 vi.mock("../../../../src/front/Components/Catastrophe/WeatherTab.svelte", async () => ({
     default: ((await import("./WeatherTabStub.svelte")) as { default: unknown }).default,
@@ -125,6 +140,10 @@ import {
     hurricaneHighestRiseStore,
     hurricaneShownStore,
     hurricaneWaterEffectStore,
+    zombieCountStore,
+    zombieHeadingStore,
+    zombieMinutesStore,
+    zombieShownStore,
     tsunamiShownStore,
     downpourWholeMapStore,
     drainRadiusTilesStore,
@@ -202,6 +221,10 @@ afterEach(async () => {
     if (mounted) await unmount(mounted);
     target.remove();
     catastrophePanelStore.set(false);
+    zombieCountStore.set(2000);
+    zombieMinutesStore.set(6);
+    zombieHeadingStore.set(270);
+    zombieShownStore.set(undefined);
 });
 
 describe("CatastrophePanel", () => {
@@ -410,6 +433,61 @@ describe("CatastrophePanel", () => {
         hurricaneShownStore.set(undefined);
         flushSync();
         expect(target.querySelector('[data-testid="catastrophe-hurricane-stop"]')).toBeNull();
+    });
+
+    it("sets a horde of zombies out (size, crossing, heading), launches it, says it and stops it", () => {
+        renderOpen();
+        const tile = target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-zombies"]');
+        expect(tile?.textContent).toContain("Zombies");
+        tile?.click();
+        flushSync();
+        expect(get(armedCatastropheStore)).toBeUndefined();
+        expect(target.textContent).toContain("2000 zombies");
+        expect(target.textContent).toContain("6 min to cross the map");
+        expect(target.textContent).toContain("It goes towards W (270°)");
+        expect(help()?.textContent).toContain("horde of zombies");
+        zombieCountStore.set(500);
+        zombieMinutesStore.set(3);
+        zombieHeadingStore.set(90);
+        flushSync();
+        expect(target.textContent).toContain("500 zombies");
+        expect(target.textContent).toContain("3 min to cross the map");
+        expect(target.textContent).toContain("It goes towards E (90°)");
+        target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-zombies-start"]')?.click();
+        expect(startZombies).toHaveBeenCalledTimes(1);
+        zombieShownStore.set({
+            count: 500,
+            durationMs: 180_000,
+            startedAt: 0,
+            heading: 90,
+            walking: 480,
+            secondsLeft: 95,
+        });
+        flushSync();
+        expect(target.querySelector('[data-testid="catastrophe-zombies-going"]')?.textContent).toContain(
+            "Horde under way: 480 zombies walking, 1 min 35 s to go",
+        );
+        // While it goes on, no second one.
+        expect(target.querySelector('[data-testid="catastrophe-zombies-start"]')).toBeNull();
+        target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-zombies-stop"]')?.click();
+        expect(stopZombies).toHaveBeenCalledTimes(1);
+        zombieShownStore.set(undefined);
+        flushSync();
+        expect(target.querySelector('[data-testid="catastrophe-zombies-stop"]')).toBeNull();
+    });
+
+    it("shows the settings of the hurricane or of the zombies, never both", () => {
+        renderOpen();
+        target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-zombies"]')?.click();
+        flushSync();
+        target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-hurricane"]')?.click();
+        flushSync();
+        expect(target.querySelector('[data-testid="catastrophe-zombies-start"]')).toBeNull();
+        expect(target.querySelector('[data-testid="catastrophe-hurricane-start"]')).not.toBeNull();
+        target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-zombies"]')?.click();
+        flushSync();
+        expect(target.querySelector('[data-testid="catastrophe-hurricane-start"]')).toBeNull();
+        expect(target.querySelector('[data-testid="catastrophe-zombies-start"]')).not.toBeNull();
     });
 
     it("sets a tsunami out (height at the coast, duration), launches it, says where it is and stops it", () => {

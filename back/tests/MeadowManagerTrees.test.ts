@@ -1,5 +1,12 @@
-import { HURRICANE_RMAX_PX, TILE_PX, WeatherType } from "@workadventure/map-editor";
-import type { Hurricane, WAMFileFormat } from "@workadventure/map-editor";
+import {
+    encodeZombieTerrain,
+    HURRICANE_RMAX_PX,
+    TERRAIN_CELL,
+    TILE_PX,
+    WeatherType,
+    zombieDirection,
+} from "@workadventure/map-editor";
+import type { Hurricane, WAMFileFormat, ZombieHorde } from "@workadventure/map-editor";
 import type { SubToPusherRoomMessage, TreeFireMessage } from "@workadventure/messages";
 import { describe, expect, it, vi } from "vitest";
 import { MeadowManager } from "../src/Model/MeadowManager";
@@ -225,5 +232,50 @@ describe("MeadowManager and the trees", () => {
         expect(oakState()?.damage).toBeLessThan(16);
         run(30);
         expect(oakState()).toBeUndefined();
+    });
+
+    it("lays down the trees a horde of zombies walks over, away from it, and keeps them down while it goes on", () => {
+        let now = Date.UTC(2026, 6, 14, 10);
+        const { manager, steps } = createHarness({ clock: () => now, growMinutes: 1 });
+        // Eastwards across the map of 80 x 80 cells, 600 zombies on a front as wide as the map, coming in for two minutes
+        // (the first 40 % of five).
+        let horde: ZombieHorde | undefined = {
+            id: 7,
+            seed: 99,
+            count: 600,
+            durationMs: 300_000,
+            heading: 90,
+            startedAt: now,
+            anchorStep: 0,
+            anchorAt: now,
+            msPerStep: 100,
+            avatars: "",
+            safeStep: 1_000_000,
+            ...zombieDirection(90),
+            anchorX: 40 * TERRAIN_CELL,
+            anchorY: 40 * TERRAIN_CELL,
+            widthCells: 80,
+            heightCells: 80,
+            terrain: encodeZombieTerrain(new Uint8Array(80 * 80)),
+        };
+        manager.zombiesUnder(() => horde);
+        manager.start();
+        const run = (seconds: number): void => {
+            for (let step = 0; step < seconds / 2; step++) {
+                now += 2000;
+                steps(1);
+            }
+        };
+        const tree = (id: string) => manager.treeSnapshot()?.trees.find((told) => told.id === id);
+        run(60);
+        // Down, lying east: the horde came from the west (270°, told plus one).
+        expect(tree("oak")).toMatchObject({ fire: 0, damage: 16, fallen: 271 });
+        // Still down while the horde goes on, past the time a tree lies on this map (30 s).
+        run(50);
+        expect(tree("oak")).toMatchObject({ damage: 16 });
+        // Over: it lies 30 s more, then grows back in 30 s.
+        horde = undefined;
+        run(64);
+        expect(tree("oak")).toBeUndefined();
     });
 });

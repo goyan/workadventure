@@ -28,6 +28,7 @@ import type {
     WaterKernelKind,
     WaterSettings,
     WeatherLocation,
+    ZombieHorde,
 } from "@workadventure/map-editor";
 import type { MeadowMessage, SubToPusherRoomMessage, TerrainWaterMessage } from "@workadventure/messages";
 import { FAST_WATER_SPEED } from "./FastWaterSpeed";
@@ -86,6 +87,8 @@ export interface LocalCatastrophes {
     hurricane?: Hurricane;
     /** The tsunami coming in by the east edge of the map; absent while there is none. */
     tsunami?: Tsunami;
+    /** The horde of zombies crossing the map; absent while there is none. It tramples this meadow too. */
+    zombies?: ZombieHorde;
 }
 
 /** What the local ground tells its player: a state of its water or of its meadow, its bytes as they are (unzipped). */
@@ -195,6 +198,7 @@ export class LocalTerrainSimulation {
                 colds: () => this.catastrophes.colds ?? [],
                 hurricane: () => this.catastrophes.hurricane,
                 tsunami: () => this.catastrophes.tsunami,
+                zombies: () => this.catastrophes.zombies,
             },
         });
         if (start.water) this.water.seed(start.water.depths, start.water.bounds);

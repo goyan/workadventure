@@ -18,6 +18,13 @@ import {
     TSUNAMI_MAX_METRES,
     TSUNAMI_MAX_MINUTES,
     TSUNAMI_TELL_MS,
+    decodeZombieLog,
+    decodeZombieTerrain,
+    encodeZombieTerrain,
+    zombieTerrainHash,
+    ZOMBIE_WATER,
+    ZOMBIE_TELL_MS,
+    ZOMBIE_TERRAIN_TELL_MS,
 } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { CatastropheMessage, SubToPusherRoomMessage } from "@workadventure/messages";
@@ -893,5 +900,188 @@ describe("CatastropheManager, tsunamis", () => {
     it("waits for the size of the map: no coast before", () => {
         const { manager } = harness(() => undefined);
         expect(manager.request(1, TSUNAMI, 0, 0, 0, true, false, undefined, undefined, asked(4, 1))).toBe(false);
+    });
+});
+
+describe("CatastropheManager, a horde of zombies", () => {
+    const ask = {
+        count: 1500,
+        minutes: 3,
+        heading: 90,
+        seed: 0,
+        startedAt: 0,
+        durationMs: 0,
+        dirX: 0,
+        dirY: 0,
+        anchorX: 0,
+        anchorY: 0,
+        widthCells: 0,
+        heightCells: 0,
+        terrain: "",
+        terrainHash: 0,
+        collisions: "",
+        collisionsWidth: 0,
+        collisionsHeight: 0,
+        anchorStep: 0,
+        anchorAt: 0,
+        msPerStep: 0,
+        avatars: "",
+        safeStep: 0,
+    };
+    /** A map of 40 x 30 cells (640 x 480 px, 20 x 15 tiles), a pond in its middle, two avatars. */
+    function zombieHarness() {
+        const harnessed = harness();
+        const cells = new Uint8Array(40 * 30);
+        for (let cell = 15 * 40 + 18; cell < 15 * 40 + 22; cell++) cells[cell] = ZOMBIE_WATER;
+        const solids: boolean[] = [];
+        const read = vi.fn((solid: (tileX: number, tileY: number) => boolean) => {
+            solids.push(solid(3, 4), solid(4, 4));
+            return { widthCells: 40, heightCells: 30, cells };
+        });
+        const avatars = [
+            { key: 7, x: 100, y: 100 },
+            { key: 9, x: 300, y: 200 },
+        ];
+        let times = 1;
+        harnessed.manager.zombieTerrainWith(read);
+        harnessed.manager.zombieAvatarsWith(() => avatars);
+        harnessed.manager.zombieTimesWith(() => times);
+        return { ...harnessed, read, cells, avatars, solids, speed: (next: number) => (times = next) };
+    }
+
+    it("sends a horde across the map, told once a second, its ground at once and every five seconds", () => {
+        const { manager, sent, read, cells } = zombieHarness();
+        expect(manager.startZombies(ask)).toBe(true);
+        expect(read).toHaveBeenCalledTimes(1);
+        expect(sent).toHaveLength(1);
+        expect(sent[0]).toMatchObject({ kind: CatastropheKind.CATASTROPHE_ZOMBIES, impactInMs: 3 * 60_000 });
+        const told = sent[0].zombies;
+        expect(told).toMatchObject({
+            count: 1500,
+            minutes: 3,
+            heading: 90,
+            startedAt: 0,
+            durationMs: 180_000,
+            dirX: 1,
+            dirY: 0,
+            anchorX: 320,
+            anchorY: 240,
+            widthCells: 40,
+            heightCells: 30,
+            anchorStep: 0,
+            anchorAt: 0,
+            msPerStep: 100,
+        });
+        expect(decodeZombieTerrain(told?.terrain ?? "", 40 * 30)).toEqual(cells);
+        expect(told?.terrainHash).toBe(zombieTerrainHash(told?.terrain ?? ""));
+        vi.advanceTimersByTime(ZOMBIE_TELL_MS);
+        expect(sent[1]).toMatchObject({ id: sent[0].id, impactInMs: 180_000 - ZOMBIE_TELL_MS });
+        expect(sent[1].zombies).toMatchObject({ terrain: "", terrainHash: told?.terrainHash, seed: told?.seed });
+        vi.advanceTimersByTime(ZOMBIE_TERRAIN_TELL_MS - ZOMBIE_TELL_MS);
+        expect(sent[sent.length - 1].zombies?.terrain).toBe(told?.terrain);
+        vi.advanceTimersByTime(180_000);
+        expect(sent[sent.length - 1]).toMatchObject({ id: sent[0].id, impactInMs: 0 });
+        expect(manager.zombies()).toBeUndefined();
+        const count = sent.length;
+        vi.advanceTimersByTime(5 * ZOMBIE_TELL_MS);
+        expect(sent).toHaveLength(count);
+    });
+
+    it("tells where the avatars stand, applied 2.5 s later, the log complete to the step before", () => {
+        const { manager, sent, avatars } = zombieHarness();
+        manager.startZombies(ask);
+        const first = decodeZombieLog(sent[0].zombies?.avatars ?? "");
+        // Two avatars, a tile each (20 tiles across), 25 steps after now.
+        expect(first).toEqual([
+            {
+                applyStep: 25,
+                changes: [
+                    { slot: 0, tile: 3 * 20 + 3 },
+                    { slot: 1, tile: 6 * 20 + 9 },
+                ],
+            },
+        ]);
+        expect(sent[0].zombies?.safeStep).toBe(24);
+        // One moves, the other leaves: one entry a second later, the log whole again.
+        avatars[0].x = 140;
+        avatars.splice(1, 1);
+        vi.advanceTimersByTime(ZOMBIE_TELL_MS);
+        const second = decodeZombieLog(sent[1].zombies?.avatars ?? "");
+        expect(second).toHaveLength(2);
+        expect(second[1]).toEqual({
+            applyStep: 35,
+            changes: [
+                { slot: 0, tile: 3 * 20 + 4 },
+                { slot: 1, tile: -1 },
+            ],
+        });
+        expect(sent[1].zombies?.safeStep).toBe(34);
+        // Nothing moved: no entry, the log complete further.
+        vi.advanceTimersByTime(ZOMBIE_TELL_MS);
+        expect(decodeZombieLog(sent[2].zombies?.avatars ?? "")).toHaveLength(2);
+        expect(sent[2].zombies?.safeStep).toBe(44);
+    });
+
+    it("goes as fast as the map, on from the same step, its time left in whole ms", () => {
+        const { manager, sent, speed } = zombieHarness();
+        manager.startZombies(ask);
+        vi.advanceTimersByTime(10_000);
+        speed(5);
+        vi.advanceTimersByTime(ZOMBIE_TELL_MS);
+        const told = sent[sent.length - 1].zombies;
+        // At 11 s (step 110), a step every 20 ms from then on.
+        expect(told).toMatchObject({ msPerStep: 20, anchorAt: 11_000 });
+        expect(told?.anchorStep).toBeCloseTo(110, 6);
+        const left = sent[sent.length - 1].impactInMs;
+        expect(left).toBe((1800 - 110) * 20);
+        expect(Number.isInteger(left)).toBe(true);
+        // The log is applied 2.5 s of reality later: 125 steps at five times the speed.
+        expect(told?.safeStep).toBe(110 + 125 - 1);
+    });
+
+    it("freezes the collisions the player sent when they fit the map, and none when they do not", () => {
+        const { manager, solids } = zombieHarness();
+        const tiles = new Uint8Array(20 * 15);
+        tiles[4 * 20 + 3] = 1;
+        manager.startZombies({
+            ...ask,
+            collisions: encodeZombieTerrain(tiles),
+            collisionsWidth: 20,
+            collisionsHeight: 15,
+        });
+        expect(solids).toEqual([true, false]);
+        manager.stopZombies();
+        manager.startZombies({
+            ...ask,
+            collisions: encodeZombieTerrain(tiles),
+            collisionsWidth: 19,
+            collisionsHeight: 15,
+        });
+        expect(solids.slice(2)).toEqual([false, false]);
+    });
+
+    it("keeps one horde a room, which anyone stops, and keeps what is asked within bounds", () => {
+        const { manager, sent } = zombieHarness();
+        expect(manager.startZombies({ ...ask, count: 1_000_000, minutes: 99, heading: 450 })).toBe(true);
+        expect(manager.zombies()).toMatchObject({ count: 4000, durationMs: 15 * 60_000, heading: 90 });
+        expect(manager.startZombies(ask)).toBe(false);
+        expect(manager.stopZombies()).toBe(true);
+        expect(sent[sent.length - 1]).toMatchObject({ kind: CatastropheKind.CATASTROPHE_ZOMBIES, impactInMs: 0 });
+        expect(manager.zombies()).toBeUndefined();
+        expect(manager.stopZombies()).toBe(false);
+        expect(manager.startZombies(ask)).toBe(true);
+        manager.stop();
+        const count = sent.length;
+        vi.advanceTimersByTime(5 * ZOMBIE_TELL_MS);
+        expect(sent).toHaveLength(count);
+        expect(manager.startZombies(ask)).toBe(false);
+    });
+
+    it("sends no horde before the size of the map is read", () => {
+        const { manager, sent } = harness();
+        expect(manager.startZombies(ask)).toBe(false);
+        manager.zombieTerrainWith(() => undefined);
+        expect(manager.startZombies(ask)).toBe(false);
+        expect(sent).toHaveLength(0);
     });
 });

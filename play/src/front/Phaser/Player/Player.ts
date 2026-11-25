@@ -37,7 +37,12 @@ import { localUserStore } from "@wa/front/Connection/LocalUserStore";
 import { bindingKeys, shortcutsStore } from "@wa/front/Stores/ShortcutsStore";
 import { WalkDestinationMarker } from "@wa/front/Phaser/Components/WalkDestinationMarker";
 import { RunSmokeTrail } from "@wa/front/Phaser/Components/RunSmokeTrail";
-import { findDiveTarget, getWaterRectangles, intersectsWater } from "@wa/front/Phaser/Game/Water/WaterZones";
+import {
+    BODY_CENTER_OFFSET_Y,
+    findDiveTarget,
+    getWaterRectangles,
+    intersectsWater,
+} from "@wa/front/Phaser/Game/Water/WaterZones";
 import { InteractionPrompt } from "@wa/front/Phaser/Game/Water/InteractionPrompt";
 import { iceStep, type Vector } from "@wa/front/Phaser/Game/Ice/IcePhysics";
 import LL from "@wa/i18n/i18n-svelte";
@@ -95,6 +100,11 @@ export const hasMovedEventName = "hasMoved";
 export const startMovingEventName = "startMoving";
 export const requestEmoteEventName = "requestEmote";
 
+/**
+ * Whether a horde of zombies shoves an avatar in a conversation too, out of its bubble maybe (the current of the water
+ * does not). The user decided so (2026-11-24): a horde does not stop for a meeting.
+ */
+const ZOMBIES_SHOVE_IN_CONVERSATION = true;
 /** How far from its seat (in tiles) a run aimed at it may end and still slide onto it. */
 const SEAT_RUN_REACH_TILES = 1.5;
 
@@ -1141,6 +1151,19 @@ export class Player extends Character {
             const carried = isCanoeAfloat(this.getVehicleState()) ? CANOE_CURRENT_SHARE : 1;
             x += push.x * carried;
             y += push.y * carried;
+        }
+        // A horde of zombies running over the avatar shoves it: the keys are added on top.
+        if (
+            !followMode &&
+            !this.isInAirplane() &&
+            !this.isSeated() &&
+            (ZOMBIES_SHOVE_IN_CONVERSATION || !get(isInActiveConversationStore))
+        ) {
+            const shove = this.scene?.zombiePushAt?.(this.x, this.y + BODY_CENTER_OFFSET_Y, this.getFloorZ());
+            if (shove) {
+                x += shove.x;
+                y += shove.y;
+            }
         }
 
         if (!followMode && this.vehicleMode === VehicleMode.Off && !this.isSeated() && this.isOnIceHere()) {

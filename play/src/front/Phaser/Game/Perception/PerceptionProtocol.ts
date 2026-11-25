@@ -1,10 +1,13 @@
+import { PERCEPTION_VARIABLE } from "@workadventure/map-editor";
+
 /**
  * Whether a player perceives the world everyone shares, or a world of their own: Basique (no night, no weather, no
  * effects, see BasicModeStore) or the weather of a city they follow on their clock (NightMode.World, see
- * ChosenPlaceWeather), or fast water of their own (FastWaterStore). Shared as a public player variable, not saved, like the torch (no change to the protocol nor
- * the back). Nothing else is sent: neither the name nor the coordinates of the place followed.
+ * ChosenPlaceWeather), or fast water of their own (FastWaterStore). Shared as a public player variable, not saved,
+ * like the torch (no change to the protocol). The back reads it for one thing: a horde of zombies leaves the players
+ * in Basique out. Nothing else is sent: neither the name nor the coordinates of the place followed.
  */
-export const PERCEPTION_VARIABLE = "_perception";
+export { PERCEPTION_VARIABLE };
 
 /** `none`: the shared world; `basic`: Basique; `place`: the weather of another place; `water`: fast water. */
 export type Perception = "none" | "basic" | "place" | "water";

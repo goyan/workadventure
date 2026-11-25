@@ -25,15 +25,40 @@ import {
     METEOR_FALL_MS,
     meteorShape,
     METEORS_PER_ROOM,
+    TERRAIN_CELL,
     TILE_PX,
     TSUNAMI_TELL_MS,
     tsunamiLastsMs,
     tsunamiMetres,
     tsunamiMinutes,
+    decodeZombieTerrain,
+    encodeZombieLog,
+    encodeZombieTerrain,
+    zombieAsk,
+    zombieDirection,
+    zombieHordeGoing,
+    zombieMsLeft,
+    zombieSpedUp,
+    zombieStepAt,
+    zombieTerrainHash,
+    ZOMBIE_INPUT_DELAY_MS,
+    ZOMBIE_MOST_AVATARS,
+    ZOMBIE_STEP_MS,
+    ZOMBIE_TELL_MS,
+    ZOMBIE_TERRAIN_TELL_MS,
 } from "@workadventure/map-editor";
-import type { Ball, ColdMass, Downpour, Drain, Hurricane, Tsunami } from "@workadventure/map-editor";
+import type {
+    Ball,
+    ColdMass,
+    Downpour,
+    Drain,
+    Hurricane,
+    Tsunami,
+    ZombieHorde,
+    ZombieLogEntry,
+} from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
-import type { HurricaneTrackMessage, TsunamiMessage } from "@workadventure/messages";
+import type { HurricaneTrackMessage, TsunamiMessage, ZombieHordeMessage } from "@workadventure/messages";
 import type { GameRoom } from "./GameRoom";
 
 /** The ice broken around a player who goes through it, in tiles: the hole they fall into. */
@@ -113,6 +138,21 @@ export class CatastropheManager {
     private waveTimer: ReturnType<typeof setInterval> | undefined;
     /** How many times faster the hurricane goes (the speed of the map, hurricaneTimesOf): given by the room. */
     private hurricaneTimes: () => number = () => 1;
+    /** The horde of zombies crossing the map, one a room, what tells the room about it, and when its water was told. */
+    private horde: ZombieHorde | undefined;
+    private hordeTimer: ReturnType<typeof setInterval> | undefined;
+    private hordeTerrainToldAt = Number.NEGATIVE_INFINITY;
+    /** The ground of each cell of the map as a horde reads it when it begins (zombieTerrainOf): given by the room. */
+    private zombieTerrain: (
+        solid: (tileX: number, tileY: number) => boolean,
+    ) => { widthCells: number; heightCells: number; cells: Uint8Array } | undefined = () => undefined;
+    /** Where the avatars stand, by a key of their own: given by the room. */
+    private zombieAvatars: () => readonly { key: number; x: number; y: number }[] = () => [];
+    private zombieTimes: () => number = () => 1;
+    /** The log of where the avatars stood, their slots by key, and the tile each slot was last told on. */
+    private hordeLog: ZombieLogEntry[] = [];
+    private hordeSlots = new Map<number, number>();
+    private hordeTiles: number[] = [];
 
     constructor(
         private readonly room: Pick<GameRoom, "sendSubMessageToRoom">,
@@ -700,6 +740,229 @@ export class CatastropheManager {
         if (left <= 0) this.endTsunami();
     }
 
+    /** The ground of the map as a horde reads it is made with the room (its ground): it is given here. */
+    public zombieTerrainWith(
+        terrain: (
+            solid: (tileX: number, tileY: number) => boolean,
+        ) => { widthCells: number; heightCells: number; cells: Uint8Array } | undefined,
+    ): void {
+        this.zombieTerrain = terrain;
+    }
+
+    /** Where the avatars of the room stand (by a key of their own) is read from the room: it is given here. */
+    public zombieAvatarsWith(avatars: () => readonly { key: number; x: number; y: number }[]): void {
+        this.zombieAvatars = avatars;
+    }
+
+    /** How many times faster the horde goes (the speed of the map): given by the room, as for the hurricane. */
+    public zombieTimesWith(times: () => number): void {
+        this.zombieTimes = times;
+    }
+
+    /**
+     * A player sends a horde of zombies across the map, the way, the numbers and the time they chose (kept within what
+     * a horde may be), with the collisions of the map as their browser reads them (a tile a bit): it begins now at
+     * the edge it comes from. The ground of the map is frozen now, once: its water, its walls (doors open), those
+     * collisions; the crowd goes round them as they are now, in every browser and on the ground alike. The room is
+     * told at once, then once a second with where the avatars stand (its ground every few seconds), and once more
+     * when it ends. One a room: false while one goes on, or once the room stopped.
+     */
+    public startZombies(asked: ZombieHordeMessage): boolean {
+        if (this.stopped || this.zombies()) return false;
+        let terrain: { widthCells: number; heightCells: number; cells: Uint8Array } | undefined;
+        try {
+            terrain = this.zombieTerrain(this.collisionsOf(asked));
+        } catch (error) {
+            console.error("The ground of the map could not be read for a horde", error);
+        }
+        if (!terrain || terrain.widthCells <= 0 || terrain.heightCells <= 0) return false;
+        const ask = zombieAsk(asked);
+        const now = Math.round(this.now());
+        this.horde = {
+            id: this.nextId++,
+            ...ask,
+            seed: Math.floor(Math.random() * 0x1_0000_0000) >>> 0,
+            startedAt: now,
+            anchorStep: 0,
+            anchorAt: now,
+            msPerStep: ZOMBIE_STEP_MS,
+            ...zombieDirection(ask.heading),
+            // Its middle over the middle of the map.
+            anchorX: (terrain.widthCells * TERRAIN_CELL) / 2,
+            anchorY: (terrain.heightCells * TERRAIN_CELL) / 2,
+            widthCells: terrain.widthCells,
+            heightCells: terrain.heightCells,
+            terrain: encodeZombieTerrain(terrain.cells),
+            avatars: "",
+            safeStep: -1,
+        };
+        this.hordeLog = [];
+        this.hordeSlots = new Map();
+        this.hordeTiles = [];
+        this.hordeTerrainToldAt = Number.NEGATIVE_INFINITY;
+        this.speedUpZombies();
+        this.readAvatars();
+        this.tellZombies();
+        if (!this.hordeTimer) {
+            this.hordeTimer = setInterval(() => {
+                try {
+                    this.speedUpZombies();
+                    this.readAvatars();
+                    this.tellZombies();
+                } catch (error) {
+                    console.error("The horde of the room could not be told", error);
+                }
+            }, ZOMBIE_TELL_MS);
+            // A horde must never keep the process alive.
+            this.hordeTimer.unref?.();
+        }
+        return true;
+    }
+
+    /** The collisions a player sent with their horde, a tile a bit: none when they do not fit the map. */
+    private collisionsOf(asked: ZombieHordeMessage): (tileX: number, tileY: number) => boolean {
+        const size = this.mapSize();
+        if (!size || !asked.collisions) return () => false;
+        const tilesWide = Math.ceil(size.width / TILE_PX);
+        const tilesHigh = Math.ceil(size.height / TILE_PX);
+        if (asked.collisionsWidth !== tilesWide || asked.collisionsHeight !== tilesHigh) return () => false;
+        const tiles = decodeZombieTerrain(asked.collisions, tilesWide * tilesHigh);
+        return (tileX, tileY) =>
+            tileX >= 0 &&
+            tileY >= 0 &&
+            tileX < tilesWide &&
+            tileY < tilesHigh &&
+            tiles[tileY * tilesWide + tileX] !== 0;
+    }
+
+    /** The horde at the speed the map asks now: it goes on from the same step, its steps faster or slower. */
+    private speedUpZombies(): void {
+        if (!this.horde) return;
+        let times = 1;
+        try {
+            times = this.zombieTimes();
+        } catch (error) {
+            console.error("The speed of the map could not be read", error);
+        }
+        this.horde = zombieSpedUp(this.horde, times, this.now());
+    }
+
+    /**
+     * Where the avatars stand now, a tile each, into the log of the horde: what changed since the last reading,
+     * applied ZOMBIE_INPUT_DELAY_MS from now (every browser has it by then), never before a step already promised.
+     * The log is then complete to the step before that.
+     */
+    private readAvatars(): void {
+        const horde = this.horde;
+        if (!horde) return;
+        let avatars: readonly { key: number; x: number; y: number }[] = [];
+        try {
+            avatars = this.zombieAvatars();
+        } catch (error) {
+            console.error("The avatars of the room could not be read for a horde", error);
+        }
+        const tilesWide = Math.ceil((horde.widthCells * TERRAIN_CELL) / TILE_PX);
+        const tilesHigh = Math.ceil((horde.heightCells * TERRAIN_CELL) / TILE_PX);
+        const seen = new Set<number>();
+        const changes: { slot: number; tile: number }[] = [];
+        for (const avatar of avatars) {
+            if (!Number.isFinite(avatar.x) || !Number.isFinite(avatar.y)) continue;
+            let slot = this.hordeSlots.get(avatar.key);
+            if (slot === undefined) {
+                if (this.hordeSlots.size >= ZOMBIE_MOST_AVATARS) continue;
+                slot = this.hordeSlots.size;
+                this.hordeSlots.set(avatar.key, slot);
+            }
+            const tileX = Math.floor(avatar.x / TILE_PX);
+            const tileY = Math.floor(avatar.y / TILE_PX);
+            const tile =
+                tileX >= 0 && tileY >= 0 && tileX < tilesWide && tileY < tilesHigh ? tileY * tilesWide + tileX : -1;
+            seen.add(slot);
+            if ((this.hordeTiles[slot] ?? -1) !== tile) changes.push({ slot, tile });
+        }
+        for (const slot of this.hordeSlots.values()) {
+            if (!seen.has(slot) && (this.hordeTiles[slot] ?? -1) !== -1) changes.push({ slot, tile: -1 });
+        }
+        changes.sort((a, b) => a.slot - b.slot);
+        const delayed = Math.ceil(zombieStepAt(horde, this.now() + ZOMBIE_INPUT_DELAY_MS));
+        const applyStep = Math.max(delayed, horde.safeStep + 1);
+        if (changes.length > 0) {
+            for (const change of changes) this.hordeTiles[change.slot] = change.tile;
+            this.hordeLog.push({ applyStep, changes });
+        }
+        this.horde = { ...horde, avatars: encodeZombieLog(this.hordeLog), safeStep: applyStep - 1 };
+    }
+
+    /** A player stops the horde of the room: it is gone at once, and the room is told. False when there is none. */
+    public stopZombies(): boolean {
+        const horde = this.zombies();
+        if (!horde || this.stopped) return false;
+        this.tellZombies(horde, 0);
+        this.endZombies();
+        return true;
+    }
+
+    /** The horde crossing the map now; undefined once it ended. */
+    public zombies(): ZombieHorde | undefined {
+        const horde = this.horde;
+        return horde && zombieHordeGoing(horde, this.now()) ? horde : undefined;
+    }
+
+    private endZombies(): void {
+        this.horde = undefined;
+        if (this.hordeTimer) clearInterval(this.hordeTimer);
+        this.hordeTimer = undefined;
+    }
+
+    /** Tells the room the horde, and how long it still lasts: 0 once it ended, and then it is forgotten. */
+    private tellZombies(horde = this.horde, lastsMs?: number): void {
+        if (!horde) return this.endZombies();
+        const now = this.now();
+        const left = lastsMs ?? zombieMsLeft(horde, now);
+        // Its ground at once, then every few seconds, for those who join: the other messages carry its hash only.
+        const withTerrain = left > 0 && now - this.hordeTerrainToldAt >= ZOMBIE_TERRAIN_TELL_MS;
+        if (withTerrain) this.hordeTerrainToldAt = now;
+        this.room.sendSubMessageToRoom({
+            message: {
+                $case: "catastropheMessage",
+                catastropheMessage: {
+                    id: horde.id,
+                    kind: CatastropheKind.CATASTROPHE_ZOMBIES,
+                    x: 0,
+                    y: 0,
+                    impactInMs: Math.round(left),
+                    radiusTiles: 0,
+                    wholeMap: true,
+                    zombies: {
+                        count: horde.count,
+                        minutes: Math.round(horde.durationMs / 60_000),
+                        heading: horde.heading,
+                        seed: horde.seed,
+                        startedAt: horde.startedAt,
+                        durationMs: horde.durationMs,
+                        dirX: horde.dirX,
+                        dirY: horde.dirY,
+                        anchorX: horde.anchorX,
+                        anchorY: horde.anchorY,
+                        widthCells: horde.widthCells,
+                        heightCells: horde.heightCells,
+                        terrain: withTerrain ? horde.terrain : "",
+                        terrainHash: zombieTerrainHash(horde.terrain),
+                        collisions: "",
+                        collisionsWidth: 0,
+                        collisionsHeight: 0,
+                        anchorStep: horde.anchorStep,
+                        anchorAt: horde.anchorAt,
+                        msPerStep: horde.msPerStep,
+                        avatars: horde.avatars,
+                        safeStep: horde.safeStep,
+                    },
+                },
+            },
+        });
+        if (left <= 0) this.endZombies();
+    }
+
     /** What a player asks for: the downpour, the drain or the ball that follows them, or a catastrophe thrown once. */
     public request(
         userId: number,
@@ -787,5 +1050,6 @@ export class CatastropheManager {
         this.holding.clear();
         this.endHurricane();
         this.endTsunami();
+        this.endZombies();
     }
 }

@@ -537,6 +537,18 @@ const actionbar = {
             ebb: "the sea goes down",
             backwash: "backwash to the sea",
         },
+        zombies: "Zombies",
+        zombiesHelp:
+            "A horde of zombies crosses the map in the chosen direction: it tramples the grass and lays the trees down on its way, without touching avatars or furniture.",
+        zombiesCountLabel: "Size of the horde",
+        zombiesCount: "{count} zombies",
+        zombiesMinutesLabel: "Time the horde takes to cross the map, in minutes",
+        zombiesMinutes: "{minutes} min to cross the map",
+        zombiesHeadingLabel: "Where the horde goes",
+        zombiesHeading: "It goes towards {point} ({degrees}°)",
+        zombiesStart: "Launch the horde",
+        zombiesStop: "Stop the horde",
+        zombiesGoing: "Horde under way: {walking} zombies walking, {minutes} min {seconds} s to go",
         ball: "Ball",
         ballSizeLabel: "Size of the ball: its diameter, in tiles",
         ballArmedHelp:

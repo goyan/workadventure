@@ -10,6 +10,7 @@ import type {
     Tsunami,
     PrecipitationAir,
     WaterView,
+    ZombieHorde,
 } from "@workadventure/map-editor";
 import type { HurricaneAirMessage, MeadowMessage, TerrainWaterMessage, TreeFireMessage } from "@workadventure/messages";
 import type { VariablesRepositoryInterface } from "../../Services/Repository/VariablesRepositoryInterface";
@@ -38,6 +39,8 @@ export interface RoomGroundInputs {
     hurricane?(): Hurricane | undefined;
     /** The tsunami coming in by the east edge of the map: the sea it holds at the coast. */
     tsunami?(): Tsunami | undefined;
+    /** The horde of zombies crossing the map: it tramples the meadow and pulls its trees down where it walks. */
+    zombies?(): ZombieHorde | undefined;
     /** Where the animals that graze are (map pixels). */
     grazers(): readonly { x: number; y: number }[];
     /** The air the precipitation of the room falls through; undefined while it is not known. */

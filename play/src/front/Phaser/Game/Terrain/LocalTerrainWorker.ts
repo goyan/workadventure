@@ -57,6 +57,7 @@ workerScope.onmessage = (event: MessageEvent<LocalTerrainCommand>): void => {
                 balls: command.balls,
                 ...(command.colds ? { colds: command.colds } : {}),
                 ...(command.tsunami ? { tsunami: command.tsunami } : {}),
+                ...(command.zombies ? { zombies: command.zombies } : {}),
             });
             return;
         case "calm":

@@ -22,6 +22,7 @@ import type {
     VariableRequest,
     WorldFullWarningToRoomMessage,
 } from "@workadventure/messages";
+import { CatastropheKind } from "@workadventure/messages";
 import type { RoomManagerServer } from "@workadventure/messages/src/ts-proto-generated/services";
 
 import type { sendUnaryData, ServerDuplexStream, ServerUnaryCall, ServerWritableStream } from "@grpc/grpc-js";
@@ -269,6 +270,11 @@ const roomManager = {
                         case "launchCatastropheMessage": {
                             const { kind, x, y, radiusTiles, wholeMap, release, temperature, hurricane, tsunami } =
                                 message.message.launchCatastropheMessage;
+                            // A horde of zombies: how many, for how long, which way; or stopped.
+                            if (kind === CatastropheKind.CATASTROPHE_ZOMBIES) {
+                                room.launchZombies(user, message.message.launchCatastropheMessage.zombies, release);
+                                break;
+                            }
                             room.launchCatastrophe(
                                 user,
                                 kind,
