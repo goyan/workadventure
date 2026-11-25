@@ -109,6 +109,7 @@ function coast(speed = 1) {
     };
     return {
         grid,
+        simulation,
         live,
         encoded,
         now: () => now,
@@ -168,16 +169,20 @@ describe("the water a tsunami left, taken away once its sea is down", () => {
         // Under the sea the lake and the pond are over their level.
         expect(basinOf(grid, POND).totalPx).toBeGreaterThan(1.5 * basinBefore(POND));
         let taken = 0;
+        let brought = 0;
         let lowest = Infinity;
         for (let second = 0; second < TSUNAMI_BACKWASH_MS / 1000; second++) {
             live(1);
-            taken = grid.seaFlood()?.takenPx ?? taken;
+            const flood = grid.seaFlood();
+            taken = flood?.takenPx ?? taken;
+            brought = flood ? flood.inPx - flood.outPx : brought;
             lowest = Math.min(lowest, basinOf(grid, LAKE).lowestPx);
         }
         send(undefined);
         live(30);
         // What was taken away is no more than what the sea brought and did not take back.
         expect(taken).toBeGreaterThan(0);
+        expect(taken).toBeLessThanOrEqual(brought);
         for (const basin of [LAKE, POND]) {
             const after = basinOf(grid, basin).totalPx;
             expect(after / basinBefore(basin), `basin from ${basin.from}`).toBeGreaterThan(0.99);
@@ -204,8 +209,10 @@ describe("the water a tsunami left, taken away once its sea is down", () => {
     });
 
     it("on a map faster than reality (>>), takes it away in the time of its water, every message encodable", () => {
-        const { grid, live, send, now, encoded } = coast(4);
+        const { grid, simulation, live, send, now, encoded } = coast(4);
         live(5);
+        // Four steps of its time in each real step.
+        expect(simulation.livedTimes().flow).toBe(4);
         send({ id: 1, startedAt: now(), metres: 3, durationMs: 60_000 });
         live(60);
         expect(grid.seaFlood()).toBeDefined();
@@ -266,5 +273,77 @@ describe("the water a tsunami left, taken away once its sea is down", () => {
         // What the source poured stays: 1 px a step, every step.
         const expected = start + steps;
         expect(Math.abs(grid.totalPx() - expected) / expected).toBeLessThan(0.01);
+    });
+
+    it("keeps following a tsunami when the map is edited and its grid made again (takeFrom)", () => {
+        const make = (): WaterGrid =>
+            new WaterGrid(withHeights(undefined, coastHeights()), { x: 0, y: 0, width: WIDTH, height: HEIGHT });
+        let grid = make();
+        grid.readDepths(basinDepths());
+        const input = {
+            rainPx: 0,
+            evaporationPx: 0,
+            absorptionPx: 0,
+            flows: [],
+            inertia: true,
+            seconds: 0.1,
+            waves: { roughness: 1, damping: 0.01, breaking: 1, momentum: 1 },
+            moves: 8,
+            pace: 1,
+        };
+        const tsunami: Tsunami = { id: 1, startedAt: 0, metres: 3, durationMs: 60_000 };
+        for (let step = 1; step * 100 < 60_000 + TSUNAMI_BACKWASH_MS + 10_000; step++) {
+            // Edited during the crest, then during the backwash: a new grid takes the water of the last.
+            if (step === 300 || step === 900) {
+                const edited = make();
+                edited.takeFrom(grid);
+                grid = edited;
+            }
+            grid.setSea(tsunamiSea(tsunami, step * 100));
+            grid.step(input);
+        }
+        expect(grid.seaFlood()).toBeUndefined();
+        expect(Math.abs(grid.totalPx() - BEFORE_PX) / BEFORE_PX).toBeLessThan(0.01);
+    });
+
+    it("leaves the lake the water a ball held under itself before the tsunami, as without a tsunami", () => {
+        // The same lake twice, a ball floating in its middle (map pixels, 16 to a cell) taken out once the crest is
+        // over: with a tsunami, and without (what the ball alone does to the lake, its water spilling over the rim).
+        let displaced = 0;
+        const lakeAfter = (sent: Tsunami | undefined): number => {
+            const grid = new WaterGrid(withHeights(undefined, coastHeights()), {
+                x: 0,
+                y: 0,
+                width: WIDTH,
+                height: HEIGHT,
+            });
+            grid.readDepths(basinDepths());
+            grid.setBalls([{ x: 55 * 16, y: 4.5 * 16, radiusPx: 40 }]);
+            // The water the ball holds under itself: what it displaces.
+            displaced = (Reflect.get(grid, "under") as Float32Array).reduce((sum, px) => sum + px, 0);
+            const input = {
+                rainPx: 0,
+                evaporationPx: 0,
+                absorptionPx: 0,
+                flows: [],
+                inertia: true,
+                seconds: 0.1,
+                waves: { roughness: 1, damping: 0.01, breaking: 1, momentum: 1 },
+                moves: 8,
+                pace: 1,
+            };
+            for (let step = 1; step * 100 < 60_000 + TSUNAMI_BACKWASH_MS + 30_000; step++) {
+                if (step === 650) grid.setBalls([]);
+                grid.setSea(tsunamiSea(sent, step * 100));
+                grid.step(input);
+            }
+            return basinOf(grid, LAKE).totalPx;
+        };
+        const without = lakeAfter(undefined);
+        const withTsunami = lakeAfter({ id: 1, startedAt: 0, metres: 3, durationMs: 60_000 });
+        expect(displaced).toBeGreaterThan(0.05 * basinBefore(LAKE));
+        // While the ball is in, the lake stands over its level before, and the ebb may take some of that: never what
+        // the ball displaces (the water under it is of the lake; counted as excess, the lake lost 1.5 times that).
+        expect(without - withTsunami).toBeLessThan(displaced);
     });
 });

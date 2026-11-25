@@ -543,7 +543,10 @@ export class WaterSimulation {
                 this.sums.absorptionPx += tally.absorptionPx;
                 this.sums.lostPx += tally.lostPx;
                 // Still water with nothing coming in: the steps left would change nothing.
-                if (!tally.moved && !pouring && !pressing) break;
+                if (!tally.moved && !pouring && !pressing) {
+                    grid.stillFor(((times - lived - 1) * WATER_STEP_MS) / 1000);
+                    break;
+                }
             }
         } else grid.stillFor((times * WATER_STEP_MS) / 1000);
         // As often as the map asks while the water moves, less while the server or the network is loaded, and at least

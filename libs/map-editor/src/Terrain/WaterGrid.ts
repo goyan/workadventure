@@ -340,7 +340,8 @@ const USUAL_INERTIA_MOVES = 3;
 const MOST_INERTIA_MOVES = 8;
 
 /**
- * How long the water a tsunami left on a map is taken away once its sea is down, in seconds of the time of the water:
+ * How long the water a tsunami left on a map is taken away once its sea is down, in seconds of the steps of the water
+ * (of its time on a map faster than reality; its flow pace aside):
  * the backwash of the tsunami (TSUNAMI_BACKWASH_MS). A backwash crosses a map of a couple of hundred metres in under
  * a minute (outflows of 2 to 5 m/s on land at Banda Aceh in 2004, Fritz et al. 2006, GRL 33, L24605; up to 11 m/s
  * at Kesennuma in 2011, Fritz et al. 2012, GRL 39, L00G23), and the flood of the map goes in that time.
@@ -984,6 +985,8 @@ export class WaterGrid implements WaterView {
     /** The water of the map before the sea came: what it goes back to (see SeaFlood). */
     private floodFromNow(): SeaFlood {
         const before = Float32Array.from(this.depth);
+        // The water a ball holds under itself is of the map too: it comes back to its column when the ball goes.
+        for (const index of this.ballCells) before[index] += this.under[index];
         let beforePx = 0;
         for (let index = 0; index < before.length; index++) beforePx += before[index];
         return {
@@ -1073,10 +1076,12 @@ export class WaterGrid implements WaterView {
             this.flood = undefined;
             return 0;
         }
+        // What a cell holds, the water a ball keeps under itself included (as in the state before).
+        const under = this.under.length === depth.length ? this.under : undefined;
         let excess = 0;
         let total = 0;
         for (let index = 0; index < depth.length; index++) {
-            const held = depth[index];
+            const held = depth[index] + (under ? under[index] : 0);
             total += held;
             if (held > before[index]) excess += held - before[index];
         }
@@ -1088,9 +1093,11 @@ export class WaterGrid implements WaterView {
         if (share > 0) {
             for (let index = 0; index < depth.length; index++) {
                 const held = depth[index];
-                const over = held - before[index];
+                const kept = under ? under[index] : 0;
+                const over = held + kept - before[index];
                 if (over <= 0) continue;
-                depth[index] = share >= 1 ? before[index] : held - over * share;
+                // Under a ball, only what stands over it may go: what it keeps under itself stays.
+                depth[index] = Math.max(0, share >= 1 ? before[index] - kept : held - over * share);
                 taken += held - depth[index];
             }
         }
@@ -1659,10 +1666,9 @@ export class WaterGrid implements WaterView {
             tally.sinksPx += taken;
             if (taken > 0) tally.moved = true;
         }
+        // The seconds this step lived, as many as asked (a room catching up on the time it was empty lives minutes).
         const seconds =
-            input.seconds !== undefined && Number.isFinite(input.seconds) && input.seconds > 0
-                ? Math.min(input.seconds, 1)
-                : 0.1;
+            input.seconds !== undefined && Number.isFinite(input.seconds) && input.seconds > 0 ? input.seconds : 0.1;
         this.followRate(seconds, tally);
         // Once the sea of a tsunami is down, what it left goes, a share a step: counted with the sinks.
         if (this.flood?.ebb === "ebbing") {
@@ -1749,6 +1755,32 @@ export class WaterGrid implements WaterView {
                 if (index !== undefined && !this.blocked[index]) this.depth[index] = held;
             }
         }
+        this.takeFloodFrom(other);
+    }
+
+    /**
+     * What the other grid followed of a tsunami, and how its water changed by itself: a map edited while a tsunami
+     * goes on still goes back to its water before. The state before is kept cell by cell where this grid has the
+     * cell (none where it is new, or a wall now).
+     */
+    private takeFloodFrom(other: WaterGrid): void {
+        this.restRate = other.restRate;
+        this.restSeconds = other.restSeconds;
+        const flood = other.flood;
+        if (!flood || flood.before.length !== other.depth.length) return;
+        const before = new Float32Array(this.depth.length);
+        let beforePx = 0;
+        for (let row = 0; row < other.bounds.height; row++) {
+            for (let column = 0; column < other.bounds.width; column++) {
+                const held = flood.before[row * other.bounds.width + column];
+                if (held <= 0) continue;
+                const index = this.indexOf(other.bounds.x + column, other.bounds.y + row);
+                if (index === undefined || this.blocked[index]) continue;
+                before[index] = held;
+                beforePx += held;
+            }
+        }
+        this.flood = { ...flood, before, beforePx };
     }
 
     /**
