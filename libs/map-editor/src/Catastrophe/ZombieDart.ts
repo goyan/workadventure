@@ -33,9 +33,10 @@ export const ZOMBIE_DART_TICKS = Math.round(((NERF_DART_RANGE_PX / NERF_DART_SPE
 export const ZOMBIE_DART_MOST_STRIDE = 10;
 /**
  * How many steps back the crowd remembers where its zombies were: what a dart applied by the log needs to be met by
- * them as they were when it flew. The longest wait of a dart is the delay of the log (25 steps at the speed of reality,
- * 250 on a map sped up ten times), the lateness of its shot (ZOMBIE_DART_LATE_MS) and its flight (120 steps at most).
- * A constant, so that every crowd remembers the same; a dart that would need more is refused by the server.
+ * them as they were when it flew. A dart waits for the later of the end of its flight (120 steps at most) and the step
+ * the log is complete to (25 steps ahead at the speed of reality, 250 on a map sped up ten times), from a shot up to
+ * half a second late: some 300 steps at most. A constant, so that every crowd remembers the same; a dart that would
+ * need more is refused by the server.
  */
 export const ZOMBIE_DART_HISTORY_STEPS = 400;
 /** A zombie hit lies this many steps (3 s of the horde) from when it was hit: it recoils, falls, lies, and is gone. */
@@ -120,6 +121,19 @@ export function zombieDartAim(shot: {
         toX: Math.round(fromX + (dx / distance) * NERF_DART_RANGE_PX),
         toY: Math.round(fromY + (dy / distance) * NERF_DART_RANGE_PX),
     };
+}
+
+/**
+ * Whether a dart is told as zombieDartAim makes it: whole pixels, its end at the range of the Nerf (within the half
+ * pixels its ends were rounded by). The server takes it so, as it was sent: the browsers find it in the log as they
+ * shot or saw it.
+ */
+export function zombieDartAimed(dart: Pick<ZombieDart, "fromX" | "fromY" | "toX" | "toY">): boolean {
+    if (![dart.fromX, dart.fromY, dart.toX, dart.toY].every(Number.isInteger)) return false;
+    const dx = dart.toX - dart.fromX;
+    const dy = dart.toY - dart.fromY;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    return length >= NERF_DART_RANGE_PX - 1 && length <= NERF_DART_RANGE_PX + 1;
 }
 
 /** The way of a dart: its unit vector and its length, the range of the Nerf at most. */

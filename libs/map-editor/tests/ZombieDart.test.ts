@@ -9,6 +9,7 @@ import {
     ZOMBIE_DART_RECOIL_PX,
     ZOMBIE_DART_TICKS,
     zombieDartAim,
+    zombieDartAimed,
     zombieDartEnters,
     zombieDartFits,
     zombieDartReach,
@@ -291,6 +292,18 @@ describe("a dart of the Nerf in a horde", () => {
             toY: 201,
         });
         expect(zombieDartAim({ fromX: 100, fromY: 100, toX: 100, toY: 100 })).toBeUndefined();
+        // Aimed so at any angle, and taken so by the server; a dart not at its range is not.
+        for (let angle = 0; angle < 6.3; angle += 0.01) {
+            const aimed = zombieDartAim({
+                fromX: 50.4,
+                fromY: 70.7,
+                toX: 50.4 + Math.cos(angle) * 100,
+                toY: 70.7 + Math.sin(angle) * 100,
+            });
+            expect(aimed && zombieDartAimed(aimed)).toBe(true);
+        }
+        expect(zombieDartAimed({ fromX: 0, fromY: 0, toX: 300, toY: 0 })).toBe(false);
+        expect(zombieDartAimed({ fromX: 0.5, fromY: 0, toX: 384.5, toY: 0 })).toBe(false);
         expect(ZOMBIE_DART_TICKS).toBe(12);
         expect(zombieDartStride(100)).toBe(1);
         expect(zombieDartStride(20)).toBe(5);

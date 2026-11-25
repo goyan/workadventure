@@ -21,6 +21,7 @@ import {
     decodeZombieLog,
     decodeZombieTerrain,
     encodeZombieTerrain,
+    zombieDartAim,
     zombieTerrainHash,
     ZOMBIE_WATER,
     ZOMBIE_TELL_MS,
@@ -1182,7 +1183,8 @@ describe("CatastropheManager, a horde of zombies", () => {
     );
 
     const dartFrom = { uuid: "p7", basic: false, x: 100, y: 100 };
-    const dart = (shotStep: number, fromX = 110) => ({ fromX, fromY: 100, toX: 300, toY: 100, shotStep });
+    // A dart as the browser aims it (zombieDartAim): its end at the range of the Nerf, 384 px.
+    const dart = (shotStep: number, fromX = 110) => ({ fromX, fromY: 100, toX: fromX + 384, toY: 100, shotStep });
 
     it("puts a dart of the Nerf into the horde in its log, applied once it flew and every browser has it, told at once", () => {
         const { manager, sent } = zombieHarness();
@@ -1195,7 +1197,7 @@ describe("CatastropheManager, a horde of zombies", () => {
         expect(sent).toHaveLength(before + 1);
         expect(sent[sent.length - 1].zombies?.logFrom).toBe(1);
         const log = decodeZombieLog(sent[sent.length - 1].zombies?.avatars ?? "");
-        // Its end where the range of the Nerf ends (384 px), on the line through the point aimed at.
+        // As it was aimed, its end where the range of the Nerf ends (384 px).
         expect(log).toEqual([
             {
                 applyStep: 45,
@@ -1223,7 +1225,30 @@ describe("CatastropheManager, a horde of zombies", () => {
         expect(manager.zombieDart(dartFrom, dart(28))).toBe(false);
         expect(manager.zombieDart(dartFrom, dart(24.5))).toBe(false);
         expect(manager.zombieDart(dartFrom, { fromX: 110, fromY: 100, toX: 110, toY: 100, shotStep: 25 })).toBe(false);
+        // Not aimed as a browser aims it (its end not at the range of the Nerf): refused.
+        expect(manager.zombieDart(dartFrom, { fromX: 110, fromY: 100, toX: 300, toY: 100, shotStep: 25 })).toBe(false);
         expect(manager.zombieDart(dartFrom, dart(20))).toBe(true);
+    });
+
+    it("keeps a dart as its browser aimed it, whatever the angle: the browsers find it in the log as they know it", () => {
+        const { manager } = zombieHarness();
+        manager.startZombies(ask);
+        vi.advanceTimersByTime(1_000);
+        for (let shot = 0; shot < 400; shot++) {
+            vi.advanceTimersByTime(250);
+            const angle = shot * 0.0157 + 0.003;
+            const aimed = zombieDartAim({
+                fromX: 100.3 + (shot % 7) * 0.1,
+                fromY: 99.6,
+                toX: 100.3 + Math.cos(angle) * 384,
+                toY: 99.6 + Math.sin(angle) * 384,
+            });
+            if (!aimed) throw new Error("no aim");
+            const step = Math.ceil(10 + 2.5 * (shot + 1));
+            expect(manager.zombieDart(dartFrom, { ...aimed, shotStep: step })).toBe(true);
+            const told = decodeZombieLog(manager.zombies()?.avatars ?? "").at(-1)?.darts?.[0];
+            expect(told).toMatchObject({ ...aimed, shotStep: step });
+        }
     });
 
     it("lets a dart fly as long to the eye on a map sped up, its ticks that many steps", () => {

@@ -50,7 +50,7 @@ import {
     ZOMBIE_TELL_MS,
     ZOMBIE_TERRAIN_TELL_MS,
     ZOMBIE_ASK_WHOLE_MS,
-    zombieDartAim,
+    zombieDartAimed,
     zombieDartFits,
     zombieDartFlightEnd,
     zombieDartStride,
@@ -111,10 +111,10 @@ const ZOMBIE_DART_PACE_MS = 250;
 const ZOMBIE_DARTS_A_SECOND = 48;
 /**
  * A dart is shot at the step the browser of its player was at: taken when that step is at most this long before the
- * step of the server (the network, a browser a little behind), or two steps after it (a clock a little ahead).
+ * step of the server (the network, a browser a little behind), or this long after it (a clock a little ahead).
  */
 const ZOMBIE_DART_LATE_MS = 500;
-const ZOMBIE_DART_EARLY_STEPS = 2;
+const ZOMBIE_DART_EARLY_MS = 200;
 /** A dart leaves the barrel of its player: within this of where the server last knows their avatar (px). */
 const ZOMBIE_DART_REACH_PX = 96;
 import type { GameRoom } from "./GameRoom";
@@ -1046,7 +1046,8 @@ export class CatastropheManager {
      * every browser could have it, and the room is told it at once. Every browser and the ground find the zombie it met
      * first, as the crowd was when it flew, and kill it (ZombieDart). Every 250 ms at most for a player (`shooter`: by
      * their uuid), as many as they like. False when refused: no horde, a player in Basique (it does not exist for
-     * them), a barrel off the map or away from their avatar, too soon, a step too far from the server's, past
+     * them), a dart not aimed as zombieDartAim aims it, a barrel off the map or away from their avatar, too soon, a
+     * step too far from the server's, past
      * ZOMBIE_DARTS_A_SECOND darts in the last second, or a wait longer than the crowd remembers.
      */
     public zombieDart(
@@ -1066,14 +1067,15 @@ export class CatastropheManager {
         if (now - (this.dartShots.get(shooter.uuid) ?? Number.NEGATIVE_INFINITY) < ZOMBIE_DART_PACE_MS) return false;
         const step = Math.ceil(zombieStepAt(horde, now));
         const late = Math.ceil(ZOMBIE_DART_LATE_MS / horde.msPerStep);
-        if (shotStep < step - late || shotStep > step + ZOMBIE_DART_EARLY_STEPS) return false;
+        const early = Math.ceil(ZOMBIE_DART_EARLY_MS / horde.msPerStep);
+        if (shotStep < step - late || shotStep > step + early) return false;
         let gone = 0;
         while (gone < this.dartsTakenAt.length && this.dartsTakenAt[gone] <= now - 1000) gone++;
         if (gone > 0) this.dartsTakenAt = this.dartsTakenAt.slice(gone);
         if (this.dartsTakenAt.length >= ZOMBIE_DARTS_A_SECOND) return false;
-        const aimed = zombieDartAim({ fromX, fromY, toX, toY });
-        if (!aimed) return false;
-        const dart = { ...aimed, shotStep, stride: zombieDartStride(horde.msPerStep) };
+        // Taken as it was aimed (zombieDartAim), not aimed again: the browsers find in the log the dart they know.
+        if (!zombieDartAimed({ fromX, fromY, toX, toY })) return false;
+        const dart = { fromX, fromY, toX, toY, shotStep, stride: zombieDartStride(horde.msPerStep) };
         // Once its flight is over, never before a step already promised, nor before a dart told before it: the darts
         // are applied in the order they were told (a dart passes by the zombie a dart before met).
         const applyStep = Math.max(zombieDartFlightEnd(dart), horde.safeStep + 1, this.lastDartStep);

@@ -85,6 +85,8 @@ export class ZombieLogGlue {
         const log = this.log;
         const known = log.writer.entries.length;
         if (from > known) return undefined;
+        // The whole log told again (with the ground, every 30 s) as it is known: nothing to read.
+        if (from === 0 && known > 0 && message.avatars === log.writer.text) return log.writer.text;
         const entries = message.avatars === "" ? [] : decodeZombieLog(message.avatars);
         // Nothing new (entries known already: the same text, which the crowd reads as nothing new), or an old
         // message: told in order, the log is never shortened.
