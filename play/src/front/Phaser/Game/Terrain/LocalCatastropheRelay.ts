@@ -3,7 +3,7 @@ import { hurricaneTrack, tsunamiLastsMs, tsunamiMetres, zombieLastStep } from "@
 import type { Ball, ColdMass, Downpour, Drain, Hurricane, Tsunami, ZombieHorde } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { CatastropheMessage } from "@workadventure/messages";
-import { zombieHordeOf } from "../Catastrophe/ZombieReceiver";
+import { ZombieLogGlue, zombieHordeOf } from "../Catastrophe/ZombieReceiver";
 import type { LocalTerrainCommand } from "./LocalTerrainSimulation";
 
 /** What the relay tells the local ground of the catastrophes of the room. */
@@ -40,6 +40,9 @@ export class LocalCatastropheRelay {
      */
     private zombies: { horde: ZombieHorde; until: number; toldStart: number } | undefined;
     private zombieTerrain: { hash: number; text: string } | undefined;
+    /** The log of the horde, glued from the end each message tells (ZombieLogGlue); the horde last stopped. */
+    private readonly zombieLog = new ZombieLogGlue();
+    private zombiesEnded: { id: number; startedAt: number } | undefined;
 
     /**
      * `epoch`: the clock the local ground reads the time by (ms since the epoch, that of its worker): a tsunami is
@@ -151,16 +154,30 @@ export class LocalCatastropheRelay {
                 const told = message.zombies;
                 if (message.impactInMs <= 0 || !told || !(told.durationMs > 0)) {
                     if (this.zombies) this.changed = true;
+                    if (told) this.zombiesEnded = { id, startedAt: told.startedAt };
                     this.zombies = undefined;
                     this.zombieTerrain = undefined;
+                    this.zombieLog.forget();
                     return [];
                 }
+                // Told after it was stopped (a whole horde answered to this browser a little later): not again.
+                if (this.zombiesEnded?.id === id && this.zombiesEnded.startedAt === told.startedAt) return [];
                 if (told.terrain) this.zombieTerrain = { hash: told.terrainHash, text: told.terrain };
+                // Each message tells the end of its log: glued to what was told before.
+                const log = this.zombieLog.read(id, told);
                 // Its water is told every few seconds: the local ground waits for it.
                 if (!this.zombieTerrain || this.zombieTerrain.hash !== told.terrainHash) return [];
                 // Its clock on the clock of the local ground: its end where the server says it is from now. Told again
                 // each second with where the avatars stood since: the local ground has it each time.
-                const horde = zombieHordeOf(id, told, this.zombieTerrain.text);
+                const toldHorde = zombieHordeOf(id, told, this.zombieTerrain.text);
+                const known = this.zombies?.horde;
+                const same = known?.id === id && this.zombies?.toldStart === told.startedAt;
+                // Entries missed: the log and the step it is complete to stay, until the whole log comes.
+                if (log === undefined && (!same || !known)) return [];
+                const horde =
+                    log === undefined && known
+                        ? { ...toldHorde, avatars: known.avatars, safeStep: known.safeStep }
+                        : { ...toldHorde, avatars: log ?? toldHorde.avatars };
                 const serverEnd = horde.anchorAt + (zombieLastStep(horde) - horde.anchorStep) * horde.msPerStep;
                 const shift = this.epoch() + message.impactInMs - serverEnd;
                 this.zombies = {

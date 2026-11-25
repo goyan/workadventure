@@ -1172,17 +1172,9 @@ describe("CatastropheManager, a horde of zombies", () => {
         const perSecondBefore = Math.round(bytesBefore / (15 * 60));
         expect(perSecondNow).toBeLessThan(25_000);
         expect(perSecondNow * 100).toBeLessThan(perSecondBefore);
-        console.info("zombie log, 15 min, 40 players", {
-            shots,
-            tailBase64: tail,
-            aloneBase64: alone,
-            wholeBase64: whole,
-            bytesASecondABrowserBefore: perSecondBefore,
-            bytesASecondABrowserNow: perSecondNow,
-        });
     });
 
-    it("answers a player who asks for the whole horde alone, once in 2 s at most", () => {
+    it("answers a player who asks for the whole horde alone, once in 1.5 s at most", () => {
         const { manager } = zombieHarness();
         expect(manager.wholeZombies("p1")).toBeUndefined();
         manager.startZombies(ask);
@@ -1195,7 +1187,9 @@ describe("CatastropheManager, a horde of zombies", () => {
         expect(decodeZombieLog(whole?.zombies?.avatars ?? "").some((entry) => entry.grenades)).toBe(true);
         expect(manager.wholeZombies("p1")).toBeUndefined();
         expect(manager.wholeZombies("p3")).toBeDefined();
-        vi.advanceTimersByTime(2_000);
+        vi.advanceTimersByTime(1_000);
+        expect(manager.wholeZombies("p1")).toBeUndefined();
+        vi.advanceTimersByTime(500);
         expect(manager.wholeZombies("p1")).toBeDefined();
     });
 

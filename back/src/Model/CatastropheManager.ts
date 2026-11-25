@@ -75,8 +75,15 @@ import type {
  */
 const ZOMBIE_GRENADE_PACE_MS = 1000;
 /**
+ * A player is answered the whole horde once in this long at most: a little less than the browser waits between two
+ * asks (ZOMBIE_ASK_WHOLE_MS), so that a second ask that comes a little early, by the network, is not refused.
+ */
+const ZOMBIE_ANSWER_WHOLE_MS = (ZOMBIE_ASK_WHOLE_MS * 3) / 4;
+/**
  * The grenades in the air at once in a horde, at most: four a player for as many players as a horde follows. A shot
- * past it is refused. So the log of a horde grows by 32 shots a second at most, over 15 minutes at most.
+ * past it is refused. A fuse burns 40 steps at least: so a horde takes 128 shots in 40 steps at most, 28 800 over its
+ * 9 000 steps (15 minutes at the speed of reality), whatever the speed of the map. At the speed of reality, 32 a
+ * second; on a map sped up (its steps closer, a shot going off once every browser can have it), up to some 64.
  */
 const ZOMBIE_GRENADES_IN_FLIGHT = 4 * ZOMBIE_MOST_AVATARS;
 /**
@@ -1062,14 +1069,14 @@ export class CatastropheManager {
 
     /**
      * The whole horde, its ground and its whole log, for a player whose browser asks for it (it joined, or lost a
-     * message): once in ZOMBIE_ASK_WHOLE_MS at most for a player (`asker`, their uuid). Undefined when there is none,
+     * message): once in ZOMBIE_ANSWER_WHOLE_MS at most for a player (`asker`, their uuid). Undefined when there is none,
      * or too soon.
      */
     public wholeZombies(asker: string): CatastropheMessage | undefined {
         const horde = this.goingHorde();
         if (!horde || this.stopped) return undefined;
         const now = this.now();
-        if (now - (this.wholeAsked.get(asker) ?? Number.NEGATIVE_INFINITY) < ZOMBIE_ASK_WHOLE_MS) return undefined;
+        if (now - (this.wholeAsked.get(asker) ?? Number.NEGATIVE_INFINITY) < ZOMBIE_ANSWER_WHOLE_MS) return undefined;
         this.wholeAsked.set(asker, now);
         return this.zombiesMessage(horde, zombieMsLeft(horde, now), true, 0);
     }

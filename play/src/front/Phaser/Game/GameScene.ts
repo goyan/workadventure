@@ -5568,7 +5568,11 @@ export class GameScene extends DirtyScene {
                 }
                 this.markDirty();
             },
-            () => this.connection?.emitLaunchZombies(zombieWholeAsked(), false),
+            () => {
+                if (!this.connection) return false;
+                this.connection.emitLaunchZombies(zombieWholeAsked(), false);
+                return true;
+            },
         );
         this.zombieReceiver = zombieReceiver;
         this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {
