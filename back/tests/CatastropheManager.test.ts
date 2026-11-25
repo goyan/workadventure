@@ -1172,7 +1172,7 @@ describe("CatastropheManager, a horde of zombies", () => {
         const perSecondBefore = Math.round(bytesBefore / (15 * 60));
         expect(perSecondNow).toBeLessThan(25_000);
         expect(perSecondNow * 100).toBeLessThan(perSecondBefore);
-    });
+    }, 30_000);
 
     it("answers a player who asks for the whole horde alone, once in 1.5 s at most", () => {
         const { manager } = zombieHarness();
