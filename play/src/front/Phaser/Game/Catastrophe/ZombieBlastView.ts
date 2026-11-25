@@ -1,15 +1,19 @@
 import * as Phaser from "phaser";
 import { ZOMBIE_GRENADE_BLAST_M, ZOMBIE_PX_PER_METRE } from "@workadventure/map-editor";
 import { DEPTH_LAMP_LIGHT_INDEX, DEPTH_SEASONAL_GROUND_INDEX } from "../DepthIndexes";
+import { floorDepth } from "../MapEditor/MapLayer/FloorDepth";
 
 const SOFT = "zombie-fx-soft";
 const RING = "zombie-fx-ring";
 const GRENADE = "zombie-fx-grenade";
 const SPECK = "zombie-fx-speck";
-/** The most bits of fire, smoke and debris at once: past it, the oldest go first. */
+/**
+ * The most bits of fire, smoke and debris at once: past it, the oldest go first. Past half of it (many players
+ * shooting, a grenade a second each), a blast throws as little smoke and debris as in reduced motion.
+ */
 const MOST_BITS = 700;
-/** The shadow of a grenade under it, the grenade drawn this much higher than its height in pixels of the map. */
-const GRENADES_AT_ONCE = 24;
+/** The grenades drawn at once: a player has four in the air at most (a fuse of 4 s, a shot a second). */
+const GRENADES_AT_ONCE = 64;
 
 interface Bit {
     image: Phaser.GameObjects.Image;
@@ -40,7 +44,24 @@ export class ZombieBlastView {
     private readonly spare: Phaser.GameObjects.Image[] = [];
     private readonly grenades: { body: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image }[] = [];
 
-    constructor(private readonly scene: Phaser.Scene & { markDirty(): void }) {}
+    constructor(
+        private readonly scene: Phaser.Scene & { markDirty(): void },
+        /**
+         * How high over the ground one walks above a point of the ground (map pixels): the deck of a bridge, where a
+         * grenade rolls and goes off over its slabs. None when absent.
+         */
+        private readonly liftAt: (x: number, y: number) => number = () => 0,
+    ) {}
+
+    /**
+     * The depth of what is drawn `lift` px over the ground, `depth` the one it has on the ground: unchanged there; on
+     * a deck, over its slabs, sorted as on the ground (floorDepth); what lies flat on the ground (`flat`: a shadow, a
+     * scorch, the shock wave) just over the slabs.
+     */
+    private depthOn(lift: number, depth: number, flat = false): number {
+        if (lift <= 0) return depth;
+        return flat ? floorDepth(lift, 0) + (depth - DEPTH_SEASONAL_GROUND_INDEX) : floorDepth(lift, depth);
+    }
 
     private makeTextures(): void {
         if (this.scene.textures.exists(SOFT)) return;
@@ -121,23 +142,33 @@ export class ZombieBlastView {
                 this.grenades[at] = drawn;
             }
             const shrink = Math.max(0.3, 1 - grenade.z / (6 * ZOMBIE_PX_PER_METRE));
+            const lift = Math.round(this.liftAt(grenade.x, grenade.y));
             drawn.shadow
-                .setPosition(grenade.x, grenade.y)
+                .setPosition(grenade.x, grenade.y - lift)
                 .setScale(0.18 * shrink, 0.08 * shrink)
-                .setDepth(DEPTH_SEASONAL_GROUND_INDEX + 0.12)
+                .setDepth(this.depthOn(lift, DEPTH_SEASONAL_GROUND_INDEX + 0.12, true))
                 .setVisible(true);
             drawn.body
-                .setPosition(grenade.x, grenade.y - 4 - grenade.z)
-                .setDepth(grenade.y + 1)
+                .setPosition(grenade.x, grenade.y - lift - 4 - grenade.z)
+                .setDepth(this.depthOn(lift, grenade.y + 1))
                 .setRotation((grenade.x + grenade.z) * 0.05)
                 .setVisible(true);
         }
     }
 
-    /** A grenade goes off at a point (map pixels) at `now` (ms, the clock of the game): its blast, drawn. */
-    public blast(x: number, y: number, now: number, reducedMotion: boolean): void {
+    /**
+     * A grenade goes off at a point of the ground (map pixels) at `now` (ms, the clock of the game): its blast, drawn,
+     * over the deck of a bridge when it is on one.
+     */
+    public blast(groundX: number, groundY: number, now: number, reducedMotion: boolean): void {
         this.makeTextures();
         const px = ZOMBIE_PX_PER_METRE;
+        const lift = Math.round(this.liftAt(groundX, groundY));
+        const x = groundX;
+        // Where it is drawn, and its depths, over the deck it went off on.
+        const y = groundY - lift;
+        const on = (depth: number, flat = false): number => this.depthOn(lift, depth, flat);
+        const light = reducedMotion || this.bits.length > MOST_BITS / 2;
         // The flash, over the night.
         this.spawn(SOFT, x, y, 0, 0, 0, 0, false, now, 160, 0xfff4d0, 4.5, 6, 1, DEPTH_LAMP_LIGHT_INDEX + 1, true);
         // The shock wave on the ground, out to the radius of its casualties.
@@ -157,7 +188,7 @@ export class ZombieBlastView {
             0.2,
             blastScale,
             0.3,
-            DEPTH_SEASONAL_GROUND_INDEX + 0.14,
+            on(DEPTH_SEASONAL_GROUND_INDEX + 0.14, true),
             true,
         );
         // The fireball.
@@ -179,12 +210,12 @@ export class ZombieBlastView {
                 0.6,
                 2.2,
                 0.95,
-                y + 260,
+                on(groundY + 260),
                 true,
             );
         }
         // The smoke, rising and spreading, slower in reduced motion.
-        const smokes = reducedMotion ? 4 : 12;
+        const smokes = light ? 4 : 12;
         for (let puff = 0; puff < smokes; puff++) {
             const angle = (puff / smokes) * Math.PI * 2;
             this.spawn(
@@ -202,12 +233,12 @@ export class ZombieBlastView {
                 0.8,
                 3.4,
                 0.75,
-                y + 300,
+                on(groundY + 300),
                 false,
             );
         }
         // The debris: clods and splinters thrown up and out.
-        const specks = reducedMotion ? 6 : 26;
+        const specks = light ? 6 : 26;
         for (let piece = 0; piece < specks; piece++) {
             const angle = (piece * 2.399963) % (Math.PI * 2);
             const speed = (4 + (piece % 5) * 1.6) * px;
@@ -226,7 +257,7 @@ export class ZombieBlastView {
                 1,
                 1,
                 1,
-                y + 2,
+                on(groundY + 2),
                 false,
             );
         }
@@ -246,16 +277,18 @@ export class ZombieBlastView {
             2.6,
             2.6,
             0.7,
-            DEPTH_SEASONAL_GROUND_INDEX + 0.11,
+            on(DEPTH_SEASONAL_GROUND_INDEX + 0.11, true),
             false,
         );
         this.scene.markDirty();
     }
 
-    /** A flame over a zombie thrown by a blast, burning (map pixels, its foot; how high it is). */
-    public flame(x: number, y: number, z: number, now: number, seed: number): void {
+    /** A flame over a zombie thrown by a blast, burning (map pixels, its foot on the ground; how high it is). */
+    public flame(x: number, groundY: number, z: number, now: number, seed: number): void {
         this.makeTextures();
         const px = ZOMBIE_PX_PER_METRE;
+        const lift = Math.round(this.liftAt(x, groundY));
+        const y = groundY - lift;
         // Tongues of flame rising off the body, and its glow.
         for (let tongue = 0; tongue < 3; tongue++) {
             const side = (((seed + tongue) * 7919) % 11) / 11 - 0.5;
@@ -274,12 +307,29 @@ export class ZombieBlastView {
                 0.55 - tongue * 0.1,
                 0.15,
                 0.95,
-                y + 3,
+                this.depthOn(lift, groundY + 3),
                 true,
             );
         }
         if (seed % 3 === 0)
-            this.spawn(SOFT, x, y, z + 14, 0, 0, 0, false, now, 300, 0xff6a10, 1.1, 1.2, 0.35, y + 2, true);
+            this.spawn(
+                SOFT,
+                x,
+                y,
+                z + 14,
+                0,
+                0,
+                0,
+                false,
+                now,
+                300,
+                0xff6a10,
+                1.1,
+                1.2,
+                0.35,
+                this.depthOn(lift, groundY + 2),
+                true,
+            );
     }
 
     private spawn(

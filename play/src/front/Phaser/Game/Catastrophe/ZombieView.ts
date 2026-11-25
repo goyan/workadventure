@@ -324,7 +324,10 @@ export class ZombieView {
         this.walkingNow = crowd.walking;
         this.blasts?.update(now, now - this.lastNow);
         this.lastNow = now;
-        this.blasts?.setGrenades(crowd.grenadesAt(crowd.steps - 1 + crowd.between(epoch)));
+        const flying = crowd.grenadesAt(crowd.steps - 1 + crowd.between(epoch));
+        // The first grenade shot is drawn too, before any blast.
+        if (flying.length > 0) this.blasts ??= new ZombieBlastView(this.scene, this.liftAt);
+        this.blasts?.setGrenades(flying);
         if (target - crowd.steps > SHOWN_BEHIND_STEPS || crowd.over()) {
             this.shown = false;
             this.hideAll();
@@ -344,7 +347,7 @@ export class ZombieView {
         const blasts = crowd.takeExplosions();
         const dying = crowd.dying;
         if (blasts.length === 0 && dying === 0) return;
-        this.blasts ??= new ZombieBlastView(this.scene);
+        this.blasts ??= new ZombieBlastView(this.scene, this.liftAt);
         for (const blast of blasts) {
             if (target - blast.step < 20) this.blasts.blast(blast.x, blast.y, now, still);
         }
