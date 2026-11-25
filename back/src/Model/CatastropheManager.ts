@@ -33,6 +33,7 @@ import {
     tsunamiMinutes,
     decodeZombieTerrain,
     encodeZombieLog,
+    ZombieLogWriter,
     encodeZombieTerrain,
     zombieAsk,
     zombieDirection,
@@ -214,6 +215,8 @@ export class CatastropheManager {
      */
     private hordeLog: ZombieLogEntry[] = [];
     private hordeLogAt: number[] = [];
+    /** The log written out as it grows: written again whole never (ZombieLogWriter). */
+    private hordeWriter = new ZombieLogWriter();
     /**
      * Whether `horde.avatars` misses entries written since: the whole log is written out when read (zombies(), ten
      * times a second by the ground, and with the ground every few seconds), not at each shot.
@@ -880,6 +883,7 @@ export class CatastropheManager {
             safeStep: -1,
         };
         this.hordeLog = [];
+        this.hordeWriter = new ZombieLogWriter();
         this.hordeLogStale = false;
         this.hordeLogAt = [];
         this.grenadeShots.clear();
@@ -1109,7 +1113,8 @@ export class CatastropheManager {
     /** The horde with its whole log written out, once a while after entries were written. */
     private wholeHorde(): ZombieHorde | undefined {
         if (this.horde && this.hordeLogStale) {
-            this.horde = { ...this.horde, avatars: encodeZombieLog(this.hordeLog) };
+            this.hordeWriter.append(this.hordeLog.slice(this.hordeWriter.entries.length));
+            this.horde = { ...this.horde, avatars: this.hordeWriter.text };
             this.hordeLogStale = false;
         }
         return this.horde;

@@ -16,6 +16,7 @@ import {
 } from "../src/Catastrophe/ZombieDart";
 import type { ZombieDart } from "../src/Catastrophe/ZombieDart";
 import {
+    ZombieLogWriter,
     decodeZombieLog,
     encodeZombieLog,
     encodeZombieTerrain,
@@ -309,5 +310,99 @@ describe("a dart of the Nerf in a horde", () => {
         ]) {
             expect(code).not.toMatch(forbidden);
         }
+    });
+});
+
+describe("the log of a horde, as it grows", () => {
+    /** A log as the server writes it: the avatars each second, a dart every 3 steps, a grenade now and then. */
+    function grownLog(): ZombieLogEntry[] {
+        const log: ZombieLogEntry[] = [];
+        for (let step = 0; step < 300; step += 3) {
+            if (step % 10 === 0) log.push({ applyStep: step + 25, changes: [{ slot: step % 7, tile: 400 + step }] });
+            log.push({
+                applyStep: step + 26,
+                changes: [],
+                darts: [{ fromX: 900 + step, fromY: 600, toX: 516 + step, toY: 640 - step, shotStep: step, stride: 1 }],
+            });
+            if (step % 30 === 0) {
+                log.push({
+                    applyStep: step + 40,
+                    changes: [],
+                    grenades: [{ fromX: 1400, fromY: 600, toX: 1000, toY: 620 }],
+                });
+            }
+        }
+        return log;
+    }
+
+    it("is written entry after entry the same as all at once, whatever the pieces, from a text read back too", () => {
+        const log = grownLog();
+        const writer = new ZombieLogWriter();
+        let at = 0;
+        for (const piece of [1, 2, 3, 5, 8, 13, 1, 1, 40]) {
+            writer.append(log.slice(at, at + piece));
+            at += piece;
+            expect(writer.text).toBe(encodeZombieLog(log.slice(0, at)));
+        }
+        const again = ZombieLogWriter.of(writer.text, decodeZombieLog(writer.text));
+        again.append(log.slice(at));
+        writer.append(log.slice(at));
+        expect(again.text).toBe(encodeZombieLog(log));
+        expect(writer.text).toBe(encodeZombieLog(log));
+        expect(writer.entries).toEqual(log);
+    });
+
+    it("is read as it grows into the same crowd, told another log once (a whole one) and refused one too early", () => {
+        const log = grownLog();
+        const told = horde({ avatars: encodeZombieLog(log), safeStep: 1_000_000 });
+        const whole = new ZombieCrowd(told);
+        whole.advanceTo(START + 35_000);
+        // A browser: told the log as it grows, its entries complete to 24 steps ahead.
+        const grown = new ZombieCrowd(horde({ safeStep: -1 }));
+        // Another browser, told the entries as they were glued: one array growing.
+        const glued = new ZombieCrowd(horde({ safeStep: -1, log: [] }));
+        const gluedLog: ZombieLogEntry[] = [];
+        let refused = false;
+        for (let step = 0; step < 350; step++) {
+            // What the server wrote by then: up to its last entry applied at most 26 steps ahead.
+            let count = 0;
+            for (let at = 0; at < log.length; at++) if (log[at].applyStep <= step + 26) count = at + 1;
+            const prefix = log.slice(0, count);
+            if (step === 120) {
+                // Another log once: the darts of the last steps told in another order (as a whole log after a
+                // loss), those already applied the same.
+                const other = [...prefix.filter((entry) => !entry.darts || entry.applyStep < 130)];
+                other.push(...prefix.filter((entry) => entry.darts && entry.applyStep >= 130));
+                grown.setLog(encodeZombieLog(other), step + 24);
+                glued.setLogEntries(other, step + 24);
+            }
+            if (step === 200 && !refused) {
+                // An entry applied before what was applied already: refused, nothing changes.
+                const before = grown.checksum();
+                grown.setLog(
+                    encodeZombieLog([...prefix, { applyStep: 150, changes: [{ slot: 1, tile: 9 }] }]),
+                    step + 24,
+                );
+                expect(grown.checksum()).toBe(before);
+                gluedLog.push({ applyStep: 150, changes: [{ slot: 1, tile: 9 }] });
+                glued.setLogEntries(gluedLog, step + 24);
+                gluedLog.pop();
+                expect(glued.checksum()).toBe(before);
+                refused = true;
+            }
+            grown.setLog(encodeZombieLog(prefix), step + 24);
+            grown.advanceTo(START + step * 100 + 50, 2);
+            gluedLog.push(...prefix.slice(gluedLog.length));
+            glued.setLogEntries(gluedLog, step + 24);
+            glued.advanceTo(START + step * 100 + 50, 2);
+        }
+        grown.setLog(encodeZombieLog(log), 1_000_000);
+        grown.advanceTo(START + 35_000);
+        glued.setLogEntries(log, 1_000_000);
+        glued.advanceTo(START + 35_000);
+        expect(glued.checksum()).toBe(whole.checksum());
+        expect(grown.steps).toBe(whole.steps);
+        expect(grown.checksum()).toBe(whole.checksum());
+        expect(Array.from(grown.hitStep)).toEqual(Array.from(whole.hitStep));
     });
 });

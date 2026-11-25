@@ -150,7 +150,8 @@ export class ZombieView {
         const crowd = this.crowd;
         if (horde && crowd && crowd.horde.id === horde.id && crowd.horde.startedAt === horde.startedAt) {
             // The same horde told again: where the avatars stood since, its clock (the speed of the map).
-            crowd.setLog(horde.avatars, horde.safeStep);
+            if (horde.log) crowd.setLogEntries(horde.log, horde.safeStep);
+            else crowd.setLog(horde.avatars, horde.safeStep);
             crowd.setClock(horde);
             // Told again after a silence that let it fall to dust: it walks on, the same crowd.
             if (this.dust && !crowd.over()) this.dust = undefined;

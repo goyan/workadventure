@@ -1,4 +1,4 @@
-import { ZOMBIE_ASK_WHOLE_MS, decodeZombieLog, encodeZombieLog, zombieAsk } from "@workadventure/map-editor";
+import { ZOMBIE_ASK_WHOLE_MS, ZombieLogWriter, decodeZombieLog, zombieAsk } from "@workadventure/map-editor";
 import type { ZombieHorde, ZombieLogEntry } from "@workadventure/map-editor";
 import type { CatastropheMessage, ZombieDartMessage, ZombieHordeMessage } from "@workadventure/messages";
 
@@ -70,33 +70,34 @@ export function zombieDartAsked(dart: ZombieDartMessage): ZombieHordeMessage {
  * (the last ones, a shot alone), the whole log from 0 (with the ground, or to a browser that asked for it).
  */
 export class ZombieLogGlue {
-    private log: { id: number; startedAt: number; entries: ZombieLogEntry[]; text: string } | undefined;
+    private log: { id: number; startedAt: number; writer: ZombieLogWriter } | undefined;
 
     /**
      * The whole log with the entries a message tells: its text, undefined when entries before those were missed (a
-     * lost message, or joined while the horde goes on). An old message never shortens it.
+     * lost message, or joined while the horde goes on). An old message never shortens it. The entries after those
+     * known are written on (ZombieLogWriter): a message costs what it tells, not the whole log.
      */
     public read(id: number, message: ZombieHordeMessage): string | undefined {
         const from = message.logFrom ?? 0;
         if (this.log?.id !== id || this.log.startedAt !== message.startedAt) {
-            this.log = { id, startedAt: message.startedAt, entries: [], text: "" };
+            this.log = { id, startedAt: message.startedAt, writer: new ZombieLogWriter() };
         }
         const log = this.log;
-        if (from > log.entries.length) return undefined;
+        const known = log.writer.entries.length;
+        if (from > known) return undefined;
         const entries = message.avatars === "" ? [] : decodeZombieLog(message.avatars);
         // Nothing new (entries known already: the same text, which the crowd reads as nothing new), or an old
         // message: told in order, the log is never shortened.
-        const known =
-            from + entries.length < log.entries.length || (from > 0 && from + entries.length === log.entries.length);
-        if (known || (entries.length === 0 && from === log.entries.length)) return log.text;
-        if (from === 0) {
-            log.entries = entries;
-            log.text = message.avatars;
-        } else {
-            log.entries = log.entries.slice(0, from).concat(entries);
-            log.text = encodeZombieLog(log.entries);
-        }
-        return log.text;
+        const old = from + entries.length < known || (from > 0 && from + entries.length === known);
+        if (old || (entries.length === 0 && from === known)) return log.writer.text;
+        if (from === 0) log.writer = ZombieLogWriter.of(message.avatars, entries);
+        else log.writer.append(entries.slice(known - from));
+        return log.writer.text;
+    }
+
+    /** The entries of the log as last read, in the order they were told: the same array while it grows. */
+    public entries(): readonly ZombieLogEntry[] | undefined {
+        return this.log?.writer.entries;
     }
 
     public forget(): void {
@@ -169,9 +170,9 @@ export class ZombieReceiver {
         if (log === undefined) {
             // Entries missed: the clock goes on, the log stays where it was complete until the whole one comes.
             if (!same || !this.horde) return;
-            this.horde = { ...horde, avatars: this.horde.avatars, safeStep: this.horde.safeStep };
+            this.horde = { ...horde, avatars: this.horde.avatars, safeStep: this.horde.safeStep, log: this.horde.log };
         } else {
-            this.horde = { ...horde, avatars: log };
+            this.horde = { ...horde, avatars: log, log: this.log.entries() };
         }
         // Told each second: where the avatars stood since, the clock of the horde; the view keeps its crowd.
         this.tell(this.horde);

@@ -1,6 +1,7 @@
 import { TERRAIN_CELL, TILE_PX } from "../types";
 import {
     decodeZombieLog,
+    decodeZombieLogFrom,
     decodeZombieTerrain,
     ZOMBIE_EAST,
     ZOMBIE_PX_PER_METRE,
@@ -9,7 +10,9 @@ import {
     ZOMBIE_STEP_MS,
     ZOMBIE_WATER,
     zombieLastStep,
+    zombieLogBytes,
     zombieLogInOrder,
+    zombieLogInsert,
     zombieStepAt,
 } from "./ZombieHorde";
 import {
@@ -335,13 +338,19 @@ export class ZombieCrowd {
     public readonly hitStep: Int32Array;
     /** The darts as far as their flight is known (dartsSeen), and the log they were read from. */
     private seen: DartRecord[] = [];
-    private seenLog: ZombieLogEntry[] | undefined;
+    private seenVersion = -1;
     private seenSteps = -1;
     /** The log of the avatars, the next entry to apply, and the last step it is complete to. */
     private log: ZombieLogEntry[] = [];
     private logAt = 0;
     /** The text of the log last read: told again (the server reads it ten times a second), it is nothing new. */
     private logText: string | undefined;
+    /** The bytes that text holds, and how many times the log changed (what dartsSeen reads again). */
+    private logBytes = 0;
+    /** The entries last read as they were told (setLogEntries), and how many of them. */
+    private toldEntries: readonly ZombieLogEntry[] | undefined;
+    private toldRead = 0;
+    private logVersion = 0;
     private safeStep: number;
     private atX = 0;
     private atY = 0;
@@ -407,7 +416,8 @@ export class ZombieCrowd {
             this.sway[zombie] = (this.random() * 2 - 1) * SWAY;
         }
         this.safeStep = -1;
-        this.setLog(horde.avatars, horde.safeStep);
+        if (horde.log) this.setLogEntries(horde.log, horde.safeStep);
+        else this.setLog(horde.avatars, horde.safeStep);
         this.recordPast();
     }
 
@@ -420,26 +430,83 @@ export class ZombieCrowd {
             if (Number.isFinite(safeStep) && safeStep > this.safeStep) this.safeStep = safeStep;
             return;
         }
-        const entries = zombieLogInOrder(decodeZombieLog(text));
-        for (let at = 0; at < this.logAt; at++) {
-            if (at >= entries.length || entries[at].applyStep !== this.log[at].applyStep) return;
-        }
-        this.log = entries;
+        // The log read before and entries after it (as it grows): only those are read, each put in its place as if the
+        // whole log was read again. Another log (a whole one after a lost message): read whole.
+        const added = this.addedTo(text);
+        if (!this.takeLog(added ?? decodeZombieLog(text), added !== undefined, safeStep)) return;
         this.logText = text;
+        this.logBytes = zombieLogBytes(text);
+        this.toldEntries = undefined;
+    }
+
+    /**
+     * The log as its entries, in the order they were told (a browser glues them as they come): the same array grown
+     * since it was last read gives its new entries only, another array is read whole. The same as setLog of its text.
+     */
+    public setLogEntries(entries: readonly ZombieLogEntry[], safeStep: number): void {
+        const grown = entries === this.toldEntries && entries.length >= this.toldRead;
+        if (grown && entries.length === this.toldRead) {
+            if (Number.isFinite(safeStep) && safeStep > this.safeStep) this.safeStep = safeStep;
+            return;
+        }
+        if (!this.takeLog(grown ? entries.slice(this.toldRead) : entries, grown, safeStep)) return;
+        this.toldEntries = entries;
+        this.toldRead = entries.length;
+        this.logText = undefined;
+    }
+
+    /**
+     * Entries of the log, after those read before (`added`) or the whole log: false when they disagree with what was
+     * applied already (an entry before those applied), and nothing is taken.
+     */
+    private takeLog(entries: readonly ZombieLogEntry[], added: boolean, safeStep: number): boolean {
+        if (added) {
+            const applied = this.logAt > 0 ? this.log[this.logAt - 1].applyStep : Number.NEGATIVE_INFINITY;
+            for (const entry of entries) if (entry.applyStep < applied) return false;
+            for (const entry of entries) zombieLogInsert(this.log, entry);
+        } else {
+            const ordered = zombieLogInOrder(entries);
+            for (let at = 0; at < this.logAt; at++) {
+                if (at >= ordered.length || ordered[at].applyStep !== this.log[at].applyStep) return false;
+            }
+            this.log = ordered;
+        }
+        this.logVersion++;
         if (Number.isFinite(safeStep) && safeStep > this.safeStep) this.safeStep = safeStep;
         // The grenades not gone off yet (and those of the last step, still drawn): their paths, made when first asked
         // for, kept from the log read before. Those gone off long ago are not looked at again.
+        const log = this.log;
         const shots = new Map<string, { explodeStep: number; shot: ZombieGrenadeShot; path?: ZombieGrenadePath }>();
-        let from = entries.length;
-        while (from > 0 && entries[from - 1].applyStep >= this.steps - 1) from--;
-        for (let at = from; at < entries.length; at++) {
-            const entry = entries[at];
+        let from = log.length;
+        while (from > 0 && log[from - 1].applyStep >= this.steps - 1) from--;
+        for (let at = from; at < log.length; at++) {
+            const entry = log[at];
             for (const shot of entry.grenades ?? []) {
                 const key = shotKey(entry.applyStep, shot);
                 shots.set(key, this.shots.get(key) ?? { explodeStep: entry.applyStep, shot });
             }
         }
         this.shots = shots;
+        return true;
+    }
+
+    /**
+     * The entries `text` holds after the log read before, when it is that log with entries after it; undefined when it
+     * is another log. Its whole groups of three bytes compared as text, the bytes before them as bytes.
+     */
+    private addedTo(text: string): ZombieLogEntry[] | undefined {
+        const known = this.logText;
+        if (known === undefined || text.length < known.length) return undefined;
+        const whole = Math.floor(this.logBytes / 3) * 4;
+        if (!text.startsWith(whole === known.length ? known : known.slice(0, whole))) return undefined;
+        const read = decodeZombieLogFrom(text, this.logBytes);
+        if (whole < known.length) {
+            const before = decodeZombieLogFrom(known, this.logBytes).before;
+            if (before.length !== read.before.length || before.some((byte, at) => byte !== read.before[at])) {
+                return undefined;
+            }
+        }
+        return read.entries;
     }
 
     /** The path of a grenade over the ground of the horde. */
@@ -786,14 +853,18 @@ export class ZombieCrowd {
      * draws a dart stopped and its zombie falling as soon as it knows of them. Read by the view only, never by a step.
      */
     public dartsSeen(): readonly ZombieDartSeen[] {
-        if (this.seenLog !== this.log) {
+        if (this.seenVersion !== this.logVersion) {
             // Read again from the log: the records of the darts kept as long as no dart the log did not apply yet came
-            // before them (a dart is told after those before it: it comes at the end).
+            // before them (a dart is told after those before it: it comes at the end). Only the end of the log is read,
+            // those it applies from ZOMBIE_DART_FALL_STEPS steps ago on (it is in the order of the steps).
             const old = new Map<string, DartRecord>();
             for (const record of this.seen) old.set(dartKey(record.applyStep, record.dart), record);
             const records: DartRecord[] = [];
             let same = true;
-            for (const entry of this.log) {
+            let first = this.log.length;
+            while (first > 0 && this.log[first - 1].applyStep >= this.steps - ZOMBIE_DART_FALL_STEPS) first--;
+            for (let at = first; at < this.log.length; at++) {
+                const entry = this.log[at];
                 for (const dart of entry.darts ?? []) {
                     if (!zombieDartFits(dart, entry.applyStep)) continue;
                     const key = dartKey(entry.applyStep, dart);
@@ -821,7 +892,7 @@ export class ZombieCrowd {
                 }
             }
             this.seen = records;
-            this.seenLog = this.log;
+            this.seenVersion = this.logVersion;
             this.seenSteps = -1;
         }
         if (this.seenSteps !== this.steps) {
