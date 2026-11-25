@@ -55,7 +55,7 @@ import { TorchFlameEffect } from "@wa/front/Phaser/Game/Torch/TorchFlameEffect";
 import { decodeTorchEquipped, decodeTorchIntensity } from "@wa/front/Phaser/Game/Torch/TorchProtocol";
 import { decodeRodEquipped } from "@wa/front/Phaser/Game/Fishing/FishingProtocol";
 import type { TorchFlameShape } from "@wa/front/Phaser/Game/Torch/TorchFlameShape";
-import { decodeNerfHearts } from "@wa/front/Phaser/Game/Nerf/NerfProtocol";
+import { decodeNerfHearts, nerfAimHeld, type NerfHeldAim } from "@wa/front/Phaser/Game/Nerf/NerfProtocol";
 import { heartsDropped } from "@wa/front/Phaser/Game/Nerf/NerfHearts";
 import { perceptionMarkLift } from "@wa/front/Phaser/Game/Perception/PerceptionMarkShape";
 import {
@@ -142,6 +142,8 @@ export abstract class Character extends Container implements OutlineableInterfac
     private musicHeadphonesEffect: MusicHeadphonesEffect | undefined;
     private nerfEquipped = false;
     private nerfGunEffect: NerfGunEffect | undefined;
+    /** Where the Nerf was last fired at the pointer, held a while (see nerfAimHeld). */
+    private nerfAim: NerfHeldAim | undefined;
     private torchEquipped = false;
     private rodEquipped = false;
     /** How bright the bearer set their torch, in percent (see decodeTorchIntensity). */
@@ -251,6 +253,7 @@ export abstract class Character extends Container implements OutlineableInterfac
             this._lastDirection,
             this.seated,
             this.getNerfHeading(),
+            this.getNerfAim(),
         );
         this.nerfHeartsEffect?.update(this.nerfHearts, this.nerfEquipped && !this.invisible);
         this.updateNerfBlink();
@@ -906,6 +909,7 @@ export abstract class Character extends Container implements OutlineableInterfac
             this._lastDirection,
             this.seated,
             this.getNerfHeading(),
+            this.getNerfAim(),
         );
         this.applyPerceptionMark();
         this.scene.markDirty();
@@ -1014,6 +1018,28 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     public isNerfEquipped(): boolean {
         return this.nerfEquipped;
+    }
+
+    /** Aims the Nerf where it was just fired at the pointer: the blaster stays pointed there a while. */
+    public aimNerf(angle: number, direction: PositionMessage_Direction): void {
+        this.nerfAim = {
+            angle,
+            direction,
+            x: this.x,
+            y: this.y,
+            at: this.scene.time.now,
+            faced: this._lastDirection === direction,
+        };
+    }
+
+    /** The angle the blaster is still aimed at after a shot at the pointer; undefined once let go. */
+    public getNerfAim(): number | undefined {
+        if (!this.nerfAim) return undefined;
+        if (nerfAimHeld(this.nerfAim, { x: this.x, y: this.y, direction: this._lastDirection }, this.scene.time.now)) {
+            return this.nerfAim.angle;
+        }
+        this.nerfAim = undefined;
+        return undefined;
     }
 
     public getNerfHeading(): number {

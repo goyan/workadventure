@@ -20,6 +20,7 @@ import { countsAsHit, fullHearts, hit, release, thirdsAt, type NerfHeartsState }
 import { findNerfPrison, isInZone, zoneCenter, type NerfZone } from "./NerfPrison";
 import {
     decodeNerfShot,
+    nerfAimAt,
     nerfGunPose,
     NERF_COOLDOWN_MS,
     NERF_EQUIPPED_VARIABLE,
@@ -117,14 +118,20 @@ export class NerfManager {
             return;
         }
         const player = this.scene.CurrentPlayer;
+        // Straight at the pointer when there is one to aim with (as the grenade launcher), else the way the avatar
+        // moves or faces.
+        const target = this.scene.pointerAimPoint();
+        const aim = target && nerfAimAt(player, target, player.isSeated());
         const shot = decodeNerfShot(NERF_SHOT_EVENT, {
             x: player.x,
             y: player.y,
-            direction: player.lastDirection,
             seated: player.isSeated(),
-            heading: player.getNerfHeading(),
+            ...(aim
+                ? { direction: aim.direction, heading: aim.heading, angle: aim.angle }
+                : { direction: player.lastDirection, heading: player.getNerfHeading() }),
         });
         if (!shot || !this.spawn(shot, connection.getUserId())) return;
+        if (aim) player.faceDirection(aim.direction);
         connection.emitScriptableEvent(NERF_SHOT_EVENT, shot, undefined).catch((error: unknown) => {
             debug("Could not send a shot", { error });
         });
@@ -263,7 +270,7 @@ export class NerfManager {
         if (lastShot !== undefined && now - lastShot < NERF_COOLDOWN_MS) return false;
         if (this.projectiles.size >= MAX_PROJECTILES) return false;
         this.lastShots.set(senderId, now);
-        const pose = nerfGunPose(shot.direction, shot.heading);
+        const pose = nerfGunPose(shot.direction, shot.heading, shot.angle);
         const x = shot.x + pose.x + pose.dx * NERF_MUZZLE_LENGTH;
         const y = shot.y + pose.y + pose.dy * NERF_MUZZLE_LENGTH - (shot.seated ? 4 : 0);
         const sprite = this.scene.add.graphics();
@@ -274,6 +281,8 @@ export class NerfManager {
                 ? this.scene.CurrentPlayer
                 : this.scene.MapPlayersByKey.get(senderId);
         const z = shooter?.getFloorZ() ?? 0;
+        // The blaster stays aimed where it fired (an older browser sends no angle: its eight headings show).
+        if (shot.angle !== undefined) shooter?.aimNerf(shot.angle, shot.direction);
         sprite.setPosition(x, y).setRotation(Math.atan2(pose.dy, pose.dx)).setDepth(floorDepth(z, y));
         // The first update also checks the path to the muzzle: a barrel protruding through a wall cannot shoot past it.
         this.projectiles.add({

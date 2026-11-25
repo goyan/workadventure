@@ -17,7 +17,7 @@ const actionbar = {
     nerf: {
         equip: "Equip the Nerf",
         unequip: "Put away the Nerf",
-        help: "SPACE: fire in the direction you move, including diagonals, or the direction you face when stopped.",
+        help: "SPACE: fire straight toward the pointer. Without a mouse over the game, the way you move or face.",
         hearts: {
             label: "{hearts} hearts and {thirds} thirds",
             jailed: "In prison — walk out to come back",

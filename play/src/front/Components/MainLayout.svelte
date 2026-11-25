@@ -84,6 +84,7 @@
     import JamLinkRequestCard from "./ListeningZone/JamLinkRequestCard.svelte";
     import NerfHearts from "./Nerf/NerfHearts.svelte";
     import FishingCards from "./Fishing/FishingCards.svelte";
+    import WeaponHelp from "./HandTools/WeaponHelp.svelte";
     import CallStrip from "./Video/CallStrip/CallStrip.svelte";
     import FishingContestPanel from "./Fishing/FishingContestPanel.svelte";
     import WeatherForecastBanner from "./Weather/WeatherForecastBanner.svelte";
@@ -489,6 +490,9 @@
 
             <!-- What just happened at the end of a fishing line (a catch and its weight, a fish that got away). -->
             <FishingCards />
+
+            <!-- How to fire the Nerf or the grenade launcher just taken, a few seconds. -->
+            <WeaponHelp />
 
             <!-- Toast stack, below the action bar, with the meeting reminders and the host-side raised-hands dock
                  stacked under it so nothing covers anything else's buttons (the dock self-gates on
