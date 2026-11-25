@@ -13,10 +13,11 @@ describe("playsBasic", () => {
 });
 
 describe("zombieAvatarsOf", () => {
-    const user = (id: number, perception?: string, disconnected = false) => ({
+    const user = (id: number, perception?: string, disconnected = false, floorZ = 0) => ({
         id,
         disconnected,
         getPosition: () => ({ x: id * 10, y: id * 20 }),
+        getFloorZ: () => floorZ,
         getVariables: () => ({
             getVariables: () => new Map(perception ? [["_perception", { value: JSON.stringify(perception) }]] : []),
         }),
@@ -27,5 +28,10 @@ describe("zombieAvatarsOf", () => {
             { key: 1, x: 10, y: 20 },
             { key: 3, x: 30, y: 60 },
         ]);
+    });
+
+    it("tells an avatar on the deck of a bridge at the ground under it, where the horde runs", () => {
+        // 20 px up, it is drawn 20 px further north than the ground it stands over.
+        expect(zombieAvatarsOf([user(5, undefined, false, 20)])).toEqual([{ key: 5, x: 50, y: 120 }]);
     });
 });
