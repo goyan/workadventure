@@ -16,6 +16,7 @@ import type { SnowWeather } from "./Snow";
 import {
     ICE_EXACT_FROM_HOURS,
     ICE_GROWTH_TIMES,
+    ICE_LIFTED_MM,
     ICE_MAX_MM,
     ICE_SLIPS_MM,
     iceByte,
@@ -184,6 +185,12 @@ export interface MeadowStepInput {
      * water (iceCurrentShare). Still water when absent: a water without inertia keeps no speed.
      */
     currentAt?: (tileX: number, tileY: number) => number;
+    /**
+     * How far the sea of a tsunami raised the water of a tile over what it held before it came, in mm
+     * (WaterGrid.seaRiseAt): the ice it lifts by more than its own thickness breaks, and no ice takes on that flood.
+     * Nothing lifted when absent.
+     */
+    liftAt?: (tileX: number, tileY: number) => number;
     /** What the map sets of its meadow; the usual paces when absent. */
     growSeconds?: number;
     thirstSeconds?: number;
@@ -965,9 +972,14 @@ export class Meadow {
             heat[index] -= burnt;
             // Open water takes the snow as it falls, unless it freezes; elsewhere the heat melts it first, then the
             // wind takes its share.
-            // The hot water of a pool melts the snow whatever the cold.
+            // The hot water of a pool melts the snow whatever the cold. A tsunami that breaks the ice of a tile
+            // (stepIce) takes the snow lying on it into its flood, as open water does.
             const open =
-                water[index] >= SOAKED_WATER_PX && (hotPool[index] === 1 || (!freezing && ice[index] < ICE_SLIPS_MM));
+                water[index] >= SOAKED_WATER_PX &&
+                (hotPool[index] === 1 ||
+                    (!freezing && ice[index] < ICE_SLIPS_MM) ||
+                    (input.liftAt !== undefined &&
+                        input.liftAt(index % width, Math.floor(index / width)) > Math.max(ice[index], ICE_LIFTED_MM)));
             const thaw = open ? lying : Math.min(lying, melting);
             lying -= thaw;
             lying = Math.max(0, lying - going);
@@ -1034,6 +1046,17 @@ export class Meadow {
                 }
                 thick = Math.max(0, thick - thawing - heat[index]);
                 thick = Math.min(thick, lying / PX_PER_MM, ICE_MAX_MM);
+                // A tsunami lifting a cover by more than its own thickness breaks it along its shores: its floes go
+                // with the flood (the ice of the Mu River, Hokkaido, broken and carried upstream by the tsunami of
+                // 2011: Yoshikawa, Abe and Hirai 2012, JSCE B2 68(2), I_416). Nor does a sheet take on the flood,
+                // which keeps rising, running and falling over it, until it stands no higher than before.
+                if (
+                    thick > 0 &&
+                    input.liftAt &&
+                    input.liftAt(index % this.width, Math.floor(index / this.width)) > Math.max(thick, ICE_LIFTED_MM)
+                ) {
+                    thick = 0;
+                }
             }
             if (thick !== before) {
                 ice[index] = thick;

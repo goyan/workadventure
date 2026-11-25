@@ -520,7 +520,9 @@ export class WaterSimulation {
         // the grid is kept moving while it crosses the map.
         const pressure = hurricanePressure(this.hurricane(), this.now());
         grid.setPressure(pressure);
-        const pressing = pressure !== undefined || sea !== undefined;
+        // So does the water a tsunami left while it is taken away, its sea down or gone (a tsunami stopped).
+        const ebbing = grid.seaEbbing();
+        const pressing = pressure !== undefined || sea !== undefined || ebbing;
         let movesMade = 0;
         if (this.moving || pouring || pressing) {
             const input = stepInputOf(stepWater, this.rainRate, this.objects, WATER_STEP_MS / 1000);
@@ -541,9 +543,12 @@ export class WaterSimulation {
                 this.sums.absorptionPx += tally.absorptionPx;
                 this.sums.lostPx += tally.lostPx;
                 // Still water with nothing coming in: the steps left would change nothing.
-                if (!tally.moved && !pouring && !pressing) break;
+                if (!tally.moved && !pouring && !pressing) {
+                    grid.stillFor(((times - lived - 1) * WATER_STEP_MS) / 1000);
+                    break;
+                }
             }
-        }
+        } else grid.stillFor((times * WATER_STEP_MS) / 1000);
         // As often as the map asks while the water moves, less while the server or the network is loaded, and at least
         // five times a second under a wave unless the states are too big for the network.
         const askedUpdates = settings?.water?.updates ?? DEFAULT_WATER_PACE.updates;
@@ -551,10 +556,12 @@ export class WaterSimulation {
         const between = stepsBetweenUpdates(Math.min(this.load.updates(askedUpdates), sendable));
         const wave = waving && sendable >= askedUpdates;
         // Under a tsunami the whole map runs for minutes and its states are big: they keep under the budget of the
-        // network, fewer than one a second if they must (the water glides from one to the next on the screens).
-        const due = sea
-            ? this.steps - this.toldAtStep >= this.sendLoad.stepsUnderBudget(between, 1000 / WATER_STEP_MS)
-            : this.steps % between === 0;
+        // network, fewer than one a second if they must (the water glides from one to the next on the screens). So
+        // while the water it left is taken away: all of the flood changes at each step.
+        const due =
+            sea || ebbing
+                ? this.steps - this.toldAtStep >= this.sendLoad.stepsUnderBudget(between, 1000 / WATER_STEP_MS)
+                : this.steps % between === 0;
         if (due || (wave && this.steps % Math.min(between, WAVE_STEPS_PER_MESSAGE) === 0)) {
             this.tell(grid);
         }

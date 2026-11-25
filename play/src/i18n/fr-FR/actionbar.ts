@@ -539,13 +539,13 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         tsunamiStart: "Lancer le tsunami",
         tsunamiStop: "Arrêter le tsunami",
         tsunamiHelp:
-            "La mer arrive par le bord est de la carte : elle y monte d'un coup à la hauteur choisie (le mascaret d'un tsunami qui a déferlé avant la côte), puis redescend pendant la durée choisie. L'eau de la carte fait le reste, à l'échelle réelle : le front d'inondation, la vague dans les lacs, les remontées sur les pentes, puis le reflux vers la mer. Il remplit les creux de la carte, qui restent pleins. Tout joueur peut l'arrêter.",
+            "La mer arrive par le bord est de la carte : elle y monte d'un coup à la hauteur choisie (le mascaret d'un tsunami qui a déferlé avant la côte), puis redescend pendant la durée choisie. L'eau de la carte fait le reste, à l'échelle réelle : le front d'inondation, la vague dans les lacs, les remontées sur les pentes, puis le reflux vers la mer. Il casse la glace qu'il soulève. Pendant le reflux, l'eau qu'il a laissée s'en va aussi, comme des pompes l'auraient retirée en quelques semaines : la carte retrouve son eau d'avant, et ses lacs, piscines et rivières gardent la leur. Tout joueur peut l'arrêter ; l'eau entrée s'en va alors de la même façon.",
         tsunamiGoing: "Tsunami de {metres} m : {phase}, la mer à {level} m à la côte, encore {left}",
         tsunamiCelerity: "célérité limitée par le serveur : {percent} % de la réelle",
         tsunamiPhase: {
             front: "le mascaret arrive",
             ebb: "la mer redescend",
-            backwash: "reflux vers la mer",
+            backwash: "reflux vers la mer et retrait de l'eau laissée",
         },
         zombies: "Zombies",
         zombiesHelp:

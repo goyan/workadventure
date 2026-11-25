@@ -101,7 +101,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 tsunamiPhase: {
                     front: label("the bore comes in"),
                     ebb: label("the sea goes down"),
-                    backwash: label("backwash to the sea"),
+                    backwash: label("backwash to the sea, the water it left taken away"),
                 },
                 ball: label("Ball"),
                 ballSizeLabel: label("Size of the ball: its diameter"),
@@ -508,7 +508,8 @@ describe("CatastrophePanel", () => {
         flushSync();
         const going = target.querySelector('[data-testid="catastrophe-tsunami-going"]');
         expect(going?.textContent).toContain(
-            "8 m tsunami: the sea goes down, the sea at 3.8 m at the coast, 2 min 20 s left",
+            // 80 s of the crest left, then 20 s of backwash.
+            "8 m tsunami: the sea goes down, the sea at 3.8 m at the coast, 1 min 40 s left",
         );
         expect(target.querySelector('[data-testid="catastrophe-tsunami-start"]')).toBeNull();
         // At full speed nothing more; when the server bears less of it, the panel says so.

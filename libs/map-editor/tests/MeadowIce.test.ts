@@ -122,6 +122,31 @@ describe("the ice, the snow and the fire", () => {
         meadow.melt(4, 4, 0);
         expect(meadow.iceAt(4, 4)).toBe(0);
     });
+
+    it("breaks where a tsunami lifts it by more than its own thickness, and takes on no such flood", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        run(meadow, 15, under(frost));
+        const thick = meadow.iceAt(10, 10);
+        expect(thick).toBeGreaterThan(ICE_BEARS_MM);
+        // Lifted by less than its thickness: it floats up whole, and goes on thickening.
+        meadow.step(under(frost, { liftAt: () => thick / 2 }));
+        expect(meadow.iceAt(10, 10)).toBeGreaterThan(thick);
+        // By more: broken, and the flood over it does not freeze again while it stands that high.
+        meadow.step(under(frost, { liftAt: (tileX, tileY) => (tileX === 10 && tileY === 10 ? 2 * thick : 0) }));
+        expect(meadow.iceAt(10, 10)).toBe(0);
+        expect(meadow.iceAt(4, 4)).toBeGreaterThan(0);
+        run(meadow, 5, under(frost, { liftAt: () => 1000 }));
+        expect(meadow.iceAt(10, 10)).toBe(0);
+        // The snow lying on a frozen lake the tsunami lifts goes into its flood, as on open water: its water melts in.
+        meadow.snowOn(4, 4, 0, 20);
+        const melted = meadow.step(under(frost, { liftAt: (tileX, tileY) => (tileX === 4 && tileY === 4 ? 1000 : 0) }));
+        expect(meadow.snowAt(4, 4)).toBe(0);
+        expect(melted?.meltedMm[4 * size.width + 4] ?? 0).toBeGreaterThan(19);
+        // The flood gone, the water freezes again by its law, from nothing.
+        meadow.step(under(frost));
+        expect(meadow.iceAt(10, 10)).toBeGreaterThan(0);
+        expect(meadow.iceAt(10, 10)).toBeLessThan(thick);
+    });
 });
 
 describe("the ice kept", () => {

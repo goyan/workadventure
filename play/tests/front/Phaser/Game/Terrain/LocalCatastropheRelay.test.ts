@@ -1,4 +1,4 @@
-import { ballRadiusPx } from "@workadventure/map-editor";
+import { ballRadiusPx, TSUNAMI_BACKWASH_MS } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { CatastropheMessage } from "@workadventure/messages";
 import { describe, expect, it } from "vitest";
@@ -119,12 +119,14 @@ describe("LocalCatastropheRelay", () => {
         // The clock of this browser is a minute behind that of the server: the sea is set on its own clock.
         const relay = new LocalCatastropheRelay(() => 1_000_000 - 60_000);
         const tsunami = { metres: 8, minutes: 3, startedAt: 1_000_000, durationMs: 180_000 };
-        const wave = told({ id: 4, kind: CatastropheKind.CATASTROPHE_TSUNAMI, impactInMs: 240_000, tsunami });
+        // Its crest of 3 min and its backwash still to come.
+        const lasts = 180_000 + TSUNAMI_BACKWASH_MS;
+        const wave = told({ id: 4, kind: CatastropheKind.CATASTROPHE_TSUNAMI, impactInMs: lasts, tsunami });
         relay.receive(wave, 0);
         const going = { id: 4, startedAt: 1_000_000 - 60_000, metres: 8, durationMs: 180_000 };
         expect(relay.due(10)).toEqual([{ kind: "catastrophes", downpours: [], drains: [], balls: [], tsunami: going }]);
         // Told again a second later: nothing new for the local ground.
-        relay.receive({ ...wave, impactInMs: 239_000 }, 1000);
+        relay.receive({ ...wave, impactInMs: lasts - 1000 }, 1000);
         expect(relay.due(1010)).toEqual([]);
         // Stopped: the local ground loses it.
         relay.receive({ ...wave, impactInMs: 0 }, 2000);

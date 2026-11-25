@@ -96,7 +96,8 @@ const FIRE_PATCH_THAW_MM = 60;
  * one pass over its tiles every two seconds.
  */
 /** The water of the relief as the meadow reads it: its depth, and how fast it runs when the grid tells it. */
-export type MeadowWater = Pick<WaterGrid, "depthAt"> & Partial<Pick<WaterGrid, "tileSpeedAt">>;
+export type MeadowWater = Pick<WaterGrid, "depthAt"> &
+    Partial<Pick<WaterGrid, "tileSpeedAt" | "seaRiseAt" | "seaFlood">>;
 
 export class MeadowSimulation {
     private meadow: Meadow | undefined;
@@ -765,6 +766,28 @@ export class MeadowSimulation {
         const speedAt = grid?.tileSpeedAt?.bind(grid);
         const currentAt: MeadowStepInput["currentAt"] =
             speedAt && !replaying && waterHasInertia(settings?.water) ? speedAt : undefined;
+        // How far a tsunami raised the water of a tile (the most of its cells, in mm): the ice it lifts breaks. Read
+        // only while what the sea brought is followed.
+        const riseAt = !replaying && grid?.seaFlood?.() ? grid.seaRiseAt?.bind(grid) : undefined;
+        // Each tile read once a step: the snow and the ice of a tile both ask.
+        const lifts = riseAt ? new Map<number, number>() : undefined;
+        const liftAt: MeadowStepInput["liftAt"] =
+            riseAt && lifts
+                ? (tileX, tileY) => {
+                      const key = tileY * 65536 + tileX;
+                      const known = lifts.get(key);
+                      if (known !== undefined) return known;
+                      let most = 0;
+                      for (let y = 0; y < CELLS_A_TILE; y++) {
+                          for (let x = 0; x < CELLS_A_TILE; x++) {
+                              most = Math.max(most, riseAt(tileX * CELLS_A_TILE + x, tileY * CELLS_A_TILE + y));
+                          }
+                      }
+                      const mm = most / PX_PER_MM;
+                      lifts.set(key, mm);
+                      return mm;
+                  }
+                : undefined;
         const snow = this.snowInput(seconds);
         if (snow.snowfallMm) this.snowMoved = true;
         // The cold air the players lay on the map: not while the room lives the time it missed, nobody was there.
@@ -801,6 +824,7 @@ export class MeadowSimulation {
                     season: seasonAt(date, settings?.weatherLocation),
                     waterAt,
                     currentAt,
+                    ...(liftAt ? { liftAt } : {}),
                     ...snow,
                     ...(cold ? { cold } : {}),
                 });
@@ -834,6 +858,7 @@ export class MeadowSimulation {
             soilFrost: this.frost,
             waterAt,
             currentAt,
+            ...(liftAt ? { liftAt } : {}),
             ...snow,
             ...(cold ? { cold } : {}),
         });
