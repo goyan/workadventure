@@ -23,6 +23,11 @@ const actionbar = {
             jailed: "In prison — walk out to come back",
         },
     },
+    grenadeLauncher: {
+        equip: "Take the grenade launcher",
+        unequip: "Put the grenade launcher away",
+        help: "SPACE: shoot a grenade toward the pointer. One a second, as many as you like.",
+    },
     rod: {
         equip: "Equip the fishing rod",
         unequip: "Put away the fishing rod",

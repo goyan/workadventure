@@ -25,6 +25,7 @@ import { AvatarAction } from "../../../../src/front/Phaser/Entity/AvatarAction";
 import { Swimwear } from "../../../../src/front/Phaser/Entity/Swimwear";
 import { LL, setLocale } from "../../../../src/i18n/i18n-svelte";
 import { nerfEquippedStore } from "../../../../src/front/Stores/NerfStore";
+import { grenadeLauncherEquippedStore } from "../../../../src/front/Stores/ZombieGrenadeStore";
 import type { NerfManager } from "../../../../src/front/Phaser/Game/Nerf/NerfManager";
 import type { FishingManager } from "../../../../src/front/Phaser/Game/Fishing/FishingManager";
 import type { ActivatableInterface } from "../../../../src/front/Phaser/Game/ActivatableInterface";
@@ -45,9 +46,11 @@ import {
     drainRadiusTilesStore,
     meteorRadiusTilesStore,
     toggleArmedCatastrophe,
+    zombieShownStore,
 } from "../../../../src/front/Stores/CatastropheStore";
 import type { RoomConnection } from "../../../../src/front/Connection/RoomConnection";
 import { torchEquippedStore } from "../../../../src/front/Stores/TorchStore";
+import { basicModeStore } from "../../../../src/front/Stores/BasicModeStore";
 import type { TorchManager } from "../../../../src/front/Phaser/Game/Torch/TorchManager";
 import { findSeatAtPoint } from "../../../../src/front/Phaser/Player/Seat";
 import {
@@ -565,6 +568,41 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             expect(get(wokaMenuStore)?.actions.find(({ testId }) => testId === "avatar-nerf")?.actionName).toBe(
                 equipped ? get(LL).actionbar.nerf.equip() : get(LL).actionbar.nerf.unequip(),
             );
+        });
+
+        it("offers the grenade launcher in the own-avatar wheel during a horde only, or to put it away", () => {
+            const self = Object.assign(Object.create(Player.prototype) as Player, {
+                playerName: "Me",
+                sprites: new Map([["body1", mock<Phaser.GameObjects.Sprite>()]]),
+            });
+            const launcher = () =>
+                get(wokaMenuStore)?.actions.find(({ testId }) => testId === "avatar-grenade-launcher");
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            expect(launcher()).toBeUndefined();
+            wokaMenuStore.clear();
+
+            grenadeLauncherEquippedStore.set(true);
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            expect(launcher()?.actionName).toBe(get(LL).actionbar.grenadeLauncher.unequip());
+            launcher()?.callback();
+            expect(get(grenadeLauncherEquippedStore)).toBe(false);
+            expect(get(wokaMenuStore)).toBeUndefined();
+
+            zombieShownStore.set({ count: 1, durationMs: 1, startedAt: 0, heading: 0, walking: 1, secondsLeft: 1 });
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            expect(launcher()?.actionName).toBe(get(LL).actionbar.grenadeLauncher.equip());
+            launcher()?.callback();
+            expect(get(grenadeLauncherEquippedStore)).toBe(true);
+            grenadeLauncherEquippedStore.set(false);
+            wokaMenuStore.clear();
+
+            // In Basique the horde does not exist: no launcher to take.
+            basicModeStore.set(true);
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            expect(launcher()).toBeUndefined();
+            basicModeStore.set(false);
+            wokaMenuStore.clear();
+            zombieShownStore.set(undefined);
         });
 
         it("lets one's tamed animals go from the own-avatar wheel, offered only with an animal", () => {

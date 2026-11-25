@@ -1077,6 +1077,148 @@ describe("CatastropheManager, a horde of zombies", () => {
         expect(manager.startZombies(ask)).toBe(false);
     });
 
+    it("puts a grenade shot into the horde in its log, going off after its fuse, told at once, once a second, at will", () => {
+        const { manager, sent } = zombieHarness();
+        expect(manager.zombieGrenade("p7", { fromX: 100, fromY: 100, toX: 300, toY: 100 })).toBe(false);
+        manager.startZombies(ask);
+        vi.advanceTimersByTime(2_000);
+        const before = sent.length;
+        expect(manager.zombieGrenade("p7", { fromX: 100, fromY: 100, toX: 300, toY: 100 })).toBe(true);
+        expect(sent).toHaveLength(before + 1);
+        // Told at once, alone: the entry before it (the avatars, which did not move since) was told already.
+        expect(sent[sent.length - 1].zombies?.logFrom).toBe(1);
+        const log = decodeZombieLog(sent[sent.length - 1].zombies?.avatars ?? "");
+        expect(log).toHaveLength(1);
+        const shot = log.find((entry) => entry.grenades);
+        // Shot at step 20: it goes off 40 steps later, after the step the log was complete to (44).
+        expect(shot).toMatchObject({ applyStep: 60, grenades: [{ fromX: 100, fromY: 100, toX: 300, toY: 100 }] });
+        expect(manager.zombieGrenade("p7", { fromX: 100, fromY: 100, toX: 300, toY: 100 })).toBe(false);
+        expect(manager.zombieGrenade("p9", { fromX: 100, fromY: 100, toX: 9000, toY: 100 })).toBe(false);
+        vi.advanceTimersByTime(1_000);
+        expect(manager.zombieGrenade("p7", { fromX: 100, fromY: 100, toX: 300, toY: 100 })).toBe(true);
+        // As many as a player likes while the horde goes on, once a second: far past the twelve of before.
+        for (let shot = 2; shot < 40; shot++) {
+            vi.advanceTimersByTime(1_000);
+            expect(manager.zombieGrenade("p7", { fromX: 100, fromY: 100, toX: 300, toY: 100 })).toBe(true);
+            expect(manager.zombieGrenade("p7", { fromX: 100, fromY: 100, toX: 300, toY: 100 })).toBe(false);
+        }
+        expect(manager.zombieGrenade("p8", { fromX: 100, fromY: 100, toX: 300, toY: 100 })).toBe(true);
+        // A player is known by their uuid: their second connection shoots no faster.
+        vi.advanceTimersByTime(1_000);
+        expect(manager.zombieGrenade("p8", { fromX: 100, fromY: 100, toX: 300, toY: 100 })).toBe(true);
+        expect(manager.zombieGrenade("p8", { fromX: 100, fromY: 100, toX: 300, toY: 100 })).toBe(false);
+    });
+
+    it("refuses a grenade past 128 in the air in a horde, and takes them again once some went off", () => {
+        const { manager } = zombieHarness();
+        manager.startZombies(ask);
+        vi.advanceTimersByTime(1_000);
+        const shoot = (shooter: string) =>
+            manager.zombieGrenade(shooter, { fromX: 100, fromY: 100, toX: 300, toY: 100 });
+        // 4 a player for the 32 players a horde follows.
+        for (let shooter = 0; shooter < 4 * 32; shooter++) expect(shoot(`p${shooter}`)).toBe(true);
+        expect(shoot("one-more")).toBe(false);
+        // Their fuse burnt (4 s): there is room again.
+        vi.advanceTimersByTime(4_100);
+        expect(shoot("one-more")).toBe(true);
+    });
+
+    it("keeps its log within bounds over a horde of 15 minutes with 40 players shooting every second", () => {
+        const { manager, sent } = zombieHarness();
+        manager.startZombies({ ...ask, minutes: 15 });
+        // The longest a horde lasts, whatever is asked.
+        expect(manager.zombies()?.durationMs).toBe(15 * 60_000);
+        let tellsOfASecond = 0;
+        let mostTold = 0;
+        // What a browser is sent (its log and its ground, base64): as it is now, and as it was before the log was
+        // told by its end (the whole log in every message, the ground every 5 s).
+        let bytesNow = 0;
+        let bytesBefore = 0;
+        const terrainLength = manager.zombies()?.terrain.length ?? 0;
+        for (let second = 1; second < 15 * 60; second++) {
+            const before = sent.length;
+            vi.advanceTimersByTime(1_000);
+            for (let shooter = 0; shooter < 40; shooter++) {
+                manager.zombieGrenade(`p${shooter}`, { fromX: 100, fromY: 100, toX: 300, toY: 100 });
+            }
+            const ofThisSecond = sent.slice(before);
+            for (const message of ofThisSecond) {
+                const length = (message.zombies?.avatars.length ?? 0) + (message.zombies?.terrain.length ?? 0);
+                mostTold = Math.max(mostTold, length);
+                bytesNow += length;
+            }
+            bytesBefore += ofThisSecond.length * (manager.zombies()?.avatars.length ?? 0);
+            if (second % 5 === 0) bytesBefore += terrainLength;
+            tellsOfASecond = Math.max(tellsOfASecond, ofThisSecond.length);
+        }
+        const entries = decodeZombieLog(manager.zombies()?.avatars ?? "");
+        const shots = entries.filter((entry) => entry.grenades).length;
+        // 32 shots a second at most (128 in the air, a fuse of 4 s), whoever shoots: 40 players shoot no more.
+        expect(shots).toBeLessThanOrEqual(32 * 15 * 60);
+        expect(shots).toBeGreaterThan(30 * 15 * 60);
+        const told = sent.map((message) => message.zombies).filter((zombies) => zombies !== undefined);
+        const tails = told.filter((zombies) => zombies.terrain === "");
+        const tail = Math.max(...tails.map((zombies) => zombies.avatars.length));
+        const whole = Math.max(...told.map((zombies) => zombies.avatars.length));
+        // Each second: the last 10 s of it, some 320 shots, under 8 KB; a shot alone, a few bytes; the whole log
+        // with the ground every 30 s, under 600 KB at the end of the longest horde.
+        expect(tail).toBeLessThan(8_000);
+        const alone = Math.min(...told.filter((zombies) => (zombies.logFrom ?? 0) > 0).map((z) => z.avatars.length));
+        expect(alone).toBeLessThan(40);
+        expect(whole).toBeLessThan(600_000);
+        expect(mostTold).toBeLessThan(600_000);
+        expect(tellsOfASecond).toBeLessThanOrEqual(41);
+        const perSecondNow = Math.round(bytesNow / (15 * 60));
+        const perSecondBefore = Math.round(bytesBefore / (15 * 60));
+        expect(perSecondNow).toBeLessThan(25_000);
+        expect(perSecondNow * 100).toBeLessThan(perSecondBefore);
+    });
+
+    it("answers a player who asks for the whole horde alone, once in 1.5 s at most", () => {
+        const { manager } = zombieHarness();
+        expect(manager.wholeZombies("p1")).toBeUndefined();
+        manager.startZombies(ask);
+        vi.advanceTimersByTime(3_000);
+        manager.zombieGrenade("p2", { fromX: 100, fromY: 100, toX: 300, toY: 100 });
+        const whole = manager.wholeZombies("p1");
+        expect(whole?.zombies?.terrain).toBe(manager.zombies()?.terrain);
+        expect(whole?.zombies?.logFrom).toBe(0);
+        expect(whole?.zombies?.avatars).toBe(manager.zombies()?.avatars);
+        expect(decodeZombieLog(whole?.zombies?.avatars ?? "").some((entry) => entry.grenades)).toBe(true);
+        expect(manager.wholeZombies("p1")).toBeUndefined();
+        expect(manager.wholeZombies("p3")).toBeDefined();
+        vi.advanceTimersByTime(1_000);
+        expect(manager.wholeZombies("p1")).toBeUndefined();
+        vi.advanceTimersByTime(500);
+        expect(manager.wholeZombies("p1")).toBeDefined();
+    });
+
+    it("tells each second the entries of its log of the last 10 s only, and the whole log with its ground", () => {
+        const { manager, sent } = zombieHarness();
+        manager.startZombies(ask);
+        // A grenade a second for 30 s: some 30 entries of shots, and the avatars read.
+        for (let second = 0; second < 30; second++) {
+            vi.advanceTimersByTime(1_000);
+            manager.zombieGrenade("p7", { fromX: 100, fromY: 100, toX: 300, toY: 100 });
+        }
+        const whole = manager.zombies()?.avatars ?? "";
+        const entries = decodeZombieLog(whole);
+        expect(entries.filter((entry) => entry.grenades)).toHaveLength(30);
+        const told = sent.map((message) => message.zombies).filter((zombies) => zombies !== undefined);
+        // With its ground (at once, then every 30 s): the whole log.
+        const withGround = told.filter((zombies) => zombies.terrain !== "");
+        expect(withGround.length).toBe(2);
+        for (const zombies of withGround) expect(zombies.logFrom ?? 0).toBe(0);
+        expect(withGround[withGround.length - 1].avatars.length).toBeGreaterThan(200);
+        // Each second without it: its last entries, a dozen or so, the same as the end of the whole log.
+        const last = told.filter((zombies) => zombies.terrain === "" && zombies.grenade === undefined).at(-1);
+        const from = last?.logFrom ?? 0;
+        expect(from).toBeGreaterThan(20);
+        const tail = decodeZombieLog(last?.avatars ?? "");
+        expect(tail.length).toBeLessThanOrEqual(12);
+        expect(tail).toEqual(decodeZombieLog(whole).slice(from, from + tail.length));
+    });
+
     it("sends no horde before the size of the map is read", () => {
         const { manager, sent } = harness();
         expect(manager.startZombies(ask)).toBe(false);

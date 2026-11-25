@@ -25,6 +25,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
             jailed: "En prison — sortez à pied pour revenir",
         },
     },
+    grenadeLauncher: {
+        equip: "Prendre le lance-grenades",
+        unequip: "Ranger le lance-grenades",
+        help: "ESPACE : tirer une grenade vers le pointeur. Une par seconde, à volonté.",
+    },
     rod: {
         equip: "Équiper la canne à pêche",
         unequip: "Ranger la canne à pêche",

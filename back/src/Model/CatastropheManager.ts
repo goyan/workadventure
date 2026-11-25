@@ -42,10 +42,13 @@ import {
     zombieStepAt,
     zombieTerrainHash,
     ZOMBIE_INPUT_DELAY_MS,
+    ZOMBIE_GRENADE_FUSE_STEPS,
+    zombieGrenadeAim,
     ZOMBIE_MOST_AVATARS,
     ZOMBIE_STEP_MS,
     ZOMBIE_TELL_MS,
     ZOMBIE_TERRAIN_TELL_MS,
+    ZOMBIE_ASK_WHOLE_MS,
 } from "@workadventure/map-editor";
 import type {
     Ball,
@@ -58,7 +61,37 @@ import type {
     ZombieLogEntry,
 } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
-import type { HurricaneTrackMessage, TsunamiMessage, ZombieHordeMessage } from "@workadventure/messages";
+import type {
+    HurricaneTrackMessage,
+    TsunamiMessage,
+    CatastropheMessage,
+    ZombieGrenadeMessage,
+    ZombieHordeMessage,
+} from "@workadventure/messages";
+
+/**
+ * A player shoots a grenade once a second at most, as many as they like while the horde goes on (a choice of the
+ * user): with a fuse of 4 s, four of theirs at most are in the air.
+ */
+const ZOMBIE_GRENADE_PACE_MS = 1000;
+/**
+ * A player is answered the whole horde once in this long at most: a little less than the browser waits between two
+ * asks (ZOMBIE_ASK_WHOLE_MS), so that a second ask that comes a little early, by the network, is not refused.
+ */
+const ZOMBIE_ANSWER_WHOLE_MS = (ZOMBIE_ASK_WHOLE_MS * 3) / 4;
+/**
+ * The grenades in the air at once in a horde, at most: four a player for as many players as a horde follows. A shot
+ * past it is refused. A fuse burns 40 steps at least: so a horde takes 128 shots in 40 steps at most, 28 800 over its
+ * 9 000 steps (15 minutes at the speed of reality), whatever the speed of the map. At the speed of reality, 32 a
+ * second; on a map sped up (its steps closer, a shot going off once every browser can have it), up to some 64.
+ */
+const ZOMBIE_GRENADES_IN_FLIGHT = 4 * ZOMBIE_MOST_AVATARS;
+/**
+ * Each second the room is told the entries of the log of the horde written in the last this many ms, the whole log
+ * with its ground only (every ZOMBIE_TERRAIN_TELL_MS): a log that keeps growing with the shots is not told whole each
+ * second. A browser that missed more than this waits for the whole log.
+ */
+const ZOMBIE_LOG_TAIL_MS = 10_000;
 import type { GameRoom } from "./GameRoom";
 
 /** The ice broken around a player who goes through it, in tiles: the hole they fall into. */
@@ -142,6 +175,8 @@ export class CatastropheManager {
     private horde: ZombieHorde | undefined;
     private hordeTimer: ReturnType<typeof setInterval> | undefined;
     private hordeTerrainToldAt = Number.NEGATIVE_INFINITY;
+    /** The hash of the ground of the horde, computed once: each message carries it, and a message goes at each shot. */
+    private hordeTerrainHash = 0;
     /** The ground of each cell of the map as a horde reads it when it begins (zombieTerrainOf): given by the room. */
     private zombieTerrain: (
         solid: (tileX: number, tileY: number) => boolean,
@@ -149,10 +184,27 @@ export class CatastropheManager {
     /** Where the avatars stand, by a key of their own: given by the room. */
     private zombieAvatars: () => readonly { key: number; x: number; y: number }[] = () => [];
     private zombieTimes: () => number = () => 1;
-    /** The log of where the avatars stood, their slots by key, and the tile each slot was last told on. */
+    /**
+     * The log of where the avatars stood and of the grenades shot, when each entry was written (ms), their slots by
+     * key, and the tile each slot was last told on.
+     */
     private hordeLog: ZombieLogEntry[] = [];
+    private hordeLogAt: number[] = [];
+    /**
+     * Whether `horde.avatars` misses entries written since: the whole log is written out when read (zombies(), ten
+     * times a second by the ground, and with the ground every few seconds), not at each shot.
+     */
+    private hordeLogStale = false;
     private hordeSlots = new Map<number, number>();
     private hordeTiles: number[] = [];
+    /**
+     * When each player last shot a grenade, by their uuid (the same for every connection of theirs: two tabs shoot no
+     * faster than one), and the steps the grenades in the air go off at, in order.
+     */
+    private readonly grenadeShots = new Map<string, number>();
+    private grenadesInFlight: number[] = [];
+    /** When each player last asked for the whole horde, by their uuid. */
+    private readonly wholeAsked = new Map<string, number>();
 
     constructor(
         private readonly room: Pick<GameRoom, "sendSubMessageToRoom">,
@@ -768,7 +820,7 @@ export class CatastropheManager {
      * when it ends. One a room: false while one goes on, or once the room stopped.
      */
     public startZombies(asked: ZombieHordeMessage): boolean {
-        if (this.stopped || this.zombies()) return false;
+        if (this.stopped || this.goingHorde()) return false;
         let terrain: { widthCells: number; heightCells: number; cells: Uint8Array } | undefined;
         try {
             terrain = this.zombieTerrain(this.collisionsOf(asked));
@@ -797,9 +849,15 @@ export class CatastropheManager {
             safeStep: -1,
         };
         this.hordeLog = [];
+        this.hordeLogStale = false;
+        this.hordeLogAt = [];
+        this.grenadeShots.clear();
+        this.grenadesInFlight = [];
+        this.wholeAsked.clear();
         this.hordeSlots = new Map();
         this.hordeTiles = [];
         this.hordeTerrainToldAt = Number.NEGATIVE_INFINITY;
+        this.hordeTerrainHash = zombieTerrainHash(this.horde.terrain);
         this.speedUpZombies();
         this.readAvatars();
         this.tellZombies();
@@ -889,13 +947,64 @@ export class CatastropheManager {
         if (changes.length > 0) {
             for (const change of changes) this.hordeTiles[change.slot] = change.tile;
             this.hordeLog.push({ applyStep, changes });
+            this.hordeLogAt.push(this.now());
         }
-        this.horde = { ...horde, avatars: encodeZombieLog(this.hordeLog), safeStep: applyStep - 1 };
+        this.horde = { ...horde, safeStep: applyStep - 1 };
+        this.hordeLogStale ||= changes.length > 0;
+    }
+
+    /**
+     * A player who holds the grenade launcher shoots a grenade into the horde, from a point to a point (map pixels):
+     * it goes off when its fuse has burnt (ZOMBIE_GRENADE_FUSE_STEPS steps), or later if every browser could not have
+     * it by then; it goes in the log of the horde, and the room is told it at once. Once a second at most for a player,
+     * as many as they like (`shooter`: their uuid). False when refused: no horde, a point off the map, too soon, or
+     * ZOMBIE_GRENADES_IN_FLIGHT grenades in the air already.
+     */
+    public zombieGrenade(shooter: string, shot: ZombieGrenadeMessage): boolean {
+        const horde = this.goingHorde();
+        const size = this.mapSize();
+        if (!horde || !size || this.stopped) return false;
+        const inside = (x: number, y: number): boolean =>
+            Number.isFinite(x) && Number.isFinite(y) && x >= 0 && y >= 0 && x < size.width && y < size.height;
+        if (!inside(shot.fromX, shot.fromY) || !inside(shot.toX, shot.toY)) return false;
+        const now = this.now();
+        if (now - (this.grenadeShots.get(shooter) ?? Number.NEGATIVE_INFINITY) < ZOMBIE_GRENADE_PACE_MS) return false;
+        const step = Math.ceil(zombieStepAt(horde, now));
+        let gone = 0;
+        while (gone < this.grenadesInFlight.length && this.grenadesInFlight[gone] <= step) gone++;
+        if (gone > 0) this.grenadesInFlight = this.grenadesInFlight.slice(gone);
+        if (this.grenadesInFlight.length >= ZOMBIE_GRENADES_IN_FLIGHT) return false;
+        this.grenadeShots.set(shooter, now);
+        const aimed = zombieGrenadeAim({
+            fromX: Math.round(shot.fromX),
+            fromY: Math.round(shot.fromY),
+            toX: Math.round(shot.toX),
+            toY: Math.round(shot.toY),
+        });
+        const explodeStep = Math.max(step + ZOMBIE_GRENADE_FUSE_STEPS, horde.safeStep + 1);
+        this.grenadesInFlight.push(explodeStep);
+        this.hordeLog.push({
+            applyStep: explodeStep,
+            changes: [],
+            grenades: [
+                {
+                    fromX: Math.round(aimed.fromX),
+                    fromY: Math.round(aimed.fromY),
+                    toX: Math.round(aimed.toX),
+                    toY: Math.round(aimed.toY),
+                },
+            ],
+        });
+        this.hordeLogAt.push(now);
+        this.hordeLogStale = true;
+        // The room is told this shot alone: a browser that missed an entry before waits for the next message.
+        this.tellZombies(horde, undefined, this.hordeLog.length - 1);
+        return true;
     }
 
     /** A player stops the horde of the room: it is gone at once, and the room is told. False when there is none. */
     public stopZombies(): boolean {
-        const horde = this.zombies();
+        const horde = this.goingHorde();
         if (!horde || this.stopped) return false;
         this.tellZombies(horde, 0);
         this.endZombies();
@@ -904,8 +1013,23 @@ export class CatastropheManager {
 
     /** The horde crossing the map now; undefined once it ended. */
     public zombies(): ZombieHorde | undefined {
+        const horde = this.wholeHorde();
+        return horde && zombieHordeGoing(horde, this.now()) ? horde : undefined;
+    }
+
+    /** The horde crossing the map now, its log as last written out: what the room checks without writing it. */
+    private goingHorde(): ZombieHorde | undefined {
         const horde = this.horde;
         return horde && zombieHordeGoing(horde, this.now()) ? horde : undefined;
+    }
+
+    /** The horde with its whole log written out, once a while after entries were written. */
+    private wholeHorde(): ZombieHorde | undefined {
+        if (this.horde && this.hordeLogStale) {
+            this.horde = { ...this.horde, avatars: encodeZombieLog(this.hordeLog) };
+            this.hordeLogStale = false;
+        }
+        return this.horde;
     }
 
     private endZombies(): void {
@@ -914,53 +1038,93 @@ export class CatastropheManager {
         this.hordeTimer = undefined;
     }
 
-    /** Tells the room the horde, and how long it still lasts: 0 once it ended, and then it is forgotten. */
-    private tellZombies(horde = this.horde, lastsMs?: number): void {
+    /**
+     * Tells the room the horde, and how long it still lasts: 0 once it ended, and then it is forgotten. Its log from
+     * the entry `from` on (by default those written in the last ZOMBIE_LOG_TAIL_MS), whole with its ground.
+     */
+    private tellZombies(horde = this.horde, lastsMs?: number, from?: number): void {
         if (!horde) return this.endZombies();
         const now = this.now();
         const left = lastsMs ?? zombieMsLeft(horde, now);
-        // Its ground at once, then every few seconds, for those who join: the other messages carry its hash only.
+        // Its ground and its whole log at once, then every 30 s in case a browser lost a message: the other messages
+        // carry the hash of the ground and the last entries of the log only. Who joins asks for them (wholeZombies).
         const withTerrain = left > 0 && now - this.hordeTerrainToldAt >= ZOMBIE_TERRAIN_TELL_MS;
         if (withTerrain) this.hordeTerrainToldAt = now;
+        let logFrom = 0;
+        if (!withTerrain) {
+            logFrom = from ?? this.hordeLogAt.length;
+            while (from === undefined && logFrom > 0 && this.hordeLogAt[logFrom - 1] >= now - ZOMBIE_LOG_TAIL_MS) {
+                logFrom--;
+            }
+            logFrom = Math.max(0, Math.min(logFrom, this.hordeLog.length));
+        }
         this.room.sendSubMessageToRoom({
             message: {
                 $case: "catastropheMessage",
-                catastropheMessage: {
-                    id: horde.id,
-                    kind: CatastropheKind.CATASTROPHE_ZOMBIES,
-                    x: 0,
-                    y: 0,
-                    impactInMs: Math.round(left),
-                    radiusTiles: 0,
-                    wholeMap: true,
-                    zombies: {
-                        count: horde.count,
-                        minutes: Math.round(horde.durationMs / 60_000),
-                        heading: horde.heading,
-                        seed: horde.seed,
-                        startedAt: horde.startedAt,
-                        durationMs: horde.durationMs,
-                        dirX: horde.dirX,
-                        dirY: horde.dirY,
-                        anchorX: horde.anchorX,
-                        anchorY: horde.anchorY,
-                        widthCells: horde.widthCells,
-                        heightCells: horde.heightCells,
-                        terrain: withTerrain ? horde.terrain : "",
-                        terrainHash: zombieTerrainHash(horde.terrain),
-                        collisions: "",
-                        collisionsWidth: 0,
-                        collisionsHeight: 0,
-                        anchorStep: horde.anchorStep,
-                        anchorAt: horde.anchorAt,
-                        msPerStep: horde.msPerStep,
-                        avatars: horde.avatars,
-                        safeStep: horde.safeStep,
-                    },
-                },
+                catastropheMessage: this.zombiesMessage(horde, left, withTerrain, logFrom),
             },
         });
         if (left <= 0) this.endZombies();
+    }
+
+    /**
+     * The whole horde, its ground and its whole log, for a player whose browser asks for it (it joined, or lost a
+     * message): once in ZOMBIE_ANSWER_WHOLE_MS at most for a player (`asker`, their uuid). Undefined when there is none,
+     * or too soon.
+     */
+    public wholeZombies(asker: string): CatastropheMessage | undefined {
+        const horde = this.goingHorde();
+        if (!horde || this.stopped) return undefined;
+        const now = this.now();
+        if (now - (this.wholeAsked.get(asker) ?? Number.NEGATIVE_INFINITY) < ZOMBIE_ANSWER_WHOLE_MS) return undefined;
+        this.wholeAsked.set(asker, now);
+        return this.zombiesMessage(horde, zombieMsLeft(horde, now), true, 0);
+    }
+
+    /** The message of the horde: its ground or only its hash, its log from the entry `logFrom` on (the whole by 0). */
+    private zombiesMessage(
+        horde: ZombieHorde,
+        left: number,
+        withTerrain: boolean,
+        logFrom: number,
+    ): CatastropheMessage {
+        return {
+            id: horde.id,
+            kind: CatastropheKind.CATASTROPHE_ZOMBIES,
+            x: 0,
+            y: 0,
+            impactInMs: Math.round(left),
+            radiusTiles: 0,
+            wholeMap: true,
+            zombies: {
+                count: horde.count,
+                minutes: Math.round(horde.durationMs / 60_000),
+                heading: horde.heading,
+                seed: horde.seed,
+                startedAt: horde.startedAt,
+                durationMs: horde.durationMs,
+                dirX: horde.dirX,
+                dirY: horde.dirY,
+                anchorX: horde.anchorX,
+                anchorY: horde.anchorY,
+                widthCells: horde.widthCells,
+                heightCells: horde.heightCells,
+                terrain: withTerrain ? horde.terrain : "",
+                terrainHash: this.hordeTerrainHash,
+                collisions: "",
+                collisionsWidth: 0,
+                collisionsHeight: 0,
+                anchorStep: horde.anchorStep,
+                anchorAt: horde.anchorAt,
+                msPerStep: horde.msPerStep,
+                avatars:
+                    logFrom > 0
+                        ? encodeZombieLog(this.hordeLog.slice(logFrom))
+                        : (this.wholeHorde()?.avatars ?? horde.avatars),
+                logFrom,
+                safeStep: horde.safeStep,
+            },
+        };
     }
 
     /** What a player asks for: the downpour, the drain or the ball that follows them, or a catastrophe thrown once. */

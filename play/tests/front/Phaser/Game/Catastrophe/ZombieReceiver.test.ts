@@ -1,6 +1,6 @@
 import { CatastropheKind } from "@workadventure/messages";
 import type { CatastropheMessage } from "@workadventure/messages";
-import { encodeZombieTerrain, zombieTerrainHash } from "@workadventure/map-editor";
+import { decodeZombieLog, encodeZombieLog, encodeZombieTerrain, zombieTerrainHash } from "@workadventure/map-editor";
 import type { ZombieHorde } from "@workadventure/map-editor";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ZombieReceiver } from "../../../../../src/front/Phaser/Game/Catastrophe/ZombieReceiver";
@@ -78,6 +78,81 @@ describe("ZombieReceiver", () => {
         receiver.destroy();
     });
 
+    it("glues the last entries each message tells to its log, and waits for the whole log after a lost message", () => {
+        const heard: (ZombieHorde | undefined)[] = [];
+        const receiver = new ZombieReceiver((horde) => heard.push(horde));
+        const entry = (applyStep: number) => ({ applyStep, changes: [{ slot: 0, tile: applyStep }] });
+        const message = (impactInMs: number, withTerrain: boolean, logFrom: number, steps: number[]) => {
+            const base = told(impactInMs, withTerrain);
+            if (!base.zombies) throw new Error("A horde is told");
+            base.zombies.avatars = encodeZombieLog(steps.map(entry));
+            base.zombies.logFrom = logFrom;
+            return base;
+        };
+        const stepsOf = (horde: ZombieHorde | undefined) =>
+            decodeZombieLog(horde?.avatars ?? "").map((told) => told.applyStep);
+        // The whole log with the ground, then the entries from the third on, then from the fourth on.
+        receiver.report(message(169_000, true, 0, [10, 20, 30]));
+        receiver.report(message(168_000, false, 2, [30, 40]));
+        expect(stepsOf(receiver.current())).toEqual([10, 20, 30, 40]);
+        expect(receiver.current()?.safeStep).toBe(145);
+        receiver.report(message(167_000, false, 4, []));
+        expect(stepsOf(receiver.current())).toEqual([10, 20, 30, 40]);
+        // A message lost (the entry 50): the next one starts past what is known. The clock goes on, the log and the
+        // step it is complete to stay, until the whole log comes with the ground.
+        receiver.report(message(165_000, false, 5, [60]));
+        expect(stepsOf(receiver.current())).toEqual([10, 20, 30, 40]);
+        expect(receiver.current()?.safeStep).toBe(155);
+        receiver.report(message(164_000, true, 0, [10, 20, 30, 40, 50, 60]));
+        expect(stepsOf(receiver.current())).toEqual([10, 20, 30, 40, 50, 60]);
+        expect(receiver.current()?.safeStep).toBe(185);
+        // An old whole log never shortens what is known.
+        receiver.report(message(163_000, true, 0, [10, 20, 30]));
+        expect(stepsOf(receiver.current())).toEqual([10, 20, 30, 40, 50, 60]);
+        receiver.destroy();
+    });
+
+    it("asks the server for the whole horde when it joins or misses entries, once in 2 s at most", () => {
+        let clock = 0;
+        const asked: number[] = [];
+        const receiver = new ZombieReceiver(
+            () => {},
+            () => {
+                asked.push(clock);
+                return true;
+            },
+            () => clock,
+        );
+        const withLog = (impactInMs: number, withTerrain: boolean, logFrom: number, steps: number[]) => {
+            const base = told(impactInMs, withTerrain);
+            if (!base.zombies) throw new Error("A horde is told");
+            base.zombies.avatars = encodeZombieLog(steps.map((applyStep) => ({ applyStep, changes: [] })));
+            base.zombies.logFrom = logFrom;
+            return base;
+        };
+        // Joined while it goes on: the end of its log, without its ground.
+        receiver.report(withLog(170_000, false, 3, [40]));
+        expect(asked).toEqual([0]);
+        clock = 1_000;
+        receiver.report(withLog(169_000, false, 3, [40, 50]));
+        expect(asked).toEqual([0]);
+        clock = 2_000;
+        receiver.report(withLog(168_000, false, 3, [40, 50, 60]));
+        expect(asked).toEqual([0, 2_000]);
+        // Answered: up to date, it asks no more.
+        clock = 2_500;
+        receiver.report(withLog(167_500, true, 0, [10, 20, 30, 40, 50, 60]));
+        clock = 5_000;
+        receiver.report(withLog(167_000, false, 5, [60, 70]));
+        expect(asked).toEqual([0, 2_000]);
+        expect(receiver.current()).toBeDefined();
+        // A message lost: it asks again.
+        clock = 7_000;
+        receiver.report(withLog(165_000, false, 9, [90]));
+        expect(asked).toEqual([0, 2_000, 7_000]);
+        receiver.destroy();
+    });
+
     it("forgets the horde when it is stopped, or when the server says nothing more", () => {
         vi.useFakeTimers();
         const heard: (ZombieHorde | undefined)[] = [];
@@ -106,5 +181,51 @@ describe("LocalCatastropheRelay, a horde of zombies", () => {
         const [stopped] = relay.due(3010);
         expect(stopped).toMatchObject({ kind: "catastrophes" });
         expect(stopped).not.toHaveProperty("zombies");
+    });
+    it("gives the local ground the whole log glued from the end each message tells, never a part of it alone", () => {
+        const relay = new LocalCatastropheRelay();
+        const withLog = (impactInMs: number, withTerrain: boolean, logFrom: number, steps: number[]) => {
+            const base = told(impactInMs, withTerrain);
+            if (!base.zombies) throw new Error("A horde is told");
+            base.zombies.avatars = encodeZombieLog(steps.map((applyStep) => ({ applyStep, changes: [] })));
+            base.zombies.logFrom = logFrom;
+            return base;
+        };
+        const stepsOf = (state: unknown) =>
+            decodeZombieLog((state as { zombies?: { avatars: string } }).zombies?.avatars ?? "").map(
+                (entry) => entry.applyStep,
+            );
+        // Its end only, before the whole: nothing yet.
+        relay.receive(withLog(100_000, true, 2, [30]), 0);
+        expect(relay.due(10)).toEqual([]);
+        relay.receive(withLog(99_000, true, 0, [10, 20, 30]), 1000);
+        expect(stepsOf(relay.due(1010)[0])).toEqual([10, 20, 30]);
+        relay.receive(withLog(98_000, false, 2, [30, 40]), 2000);
+        expect(stepsOf(relay.due(2010)[0])).toEqual([10, 20, 30, 40]);
+        // A message lost: the log stays, with the step it is complete to.
+        relay.receive(withLog(97_000, false, 6, [70]), 3000);
+        const [kept] = relay.due(3010);
+        expect(stepsOf(kept)).toEqual([10, 20, 30, 40]);
+        expect((kept as { zombies?: { safeStep: number } }).zombies?.safeStep).toBe((180_000 - 98_000) / 100 + 25);
+        // Stopped, then told again a little later (a whole horde answered in a batch): not back.
+        relay.receive(told(0, false), 4000);
+        relay.due(4010);
+        relay.receive(withLog(96_000, true, 0, [10, 20, 30, 40, 50, 60, 70]), 4100);
+        expect(relay.due(4110)).toEqual([]);
+    });
+
+    it("does not bring back a horde it was told stopped, when a message of it comes after", () => {
+        const heard: (ZombieHorde | undefined)[] = [];
+        const receiver = new ZombieReceiver((horde) => heard.push(horde));
+        receiver.report(told(169_000, true));
+        receiver.report(told(0, false));
+        expect(heard.at(-1)).toBeUndefined();
+        receiver.report(told(168_000, true));
+        expect(heard.at(-1)).toBeUndefined();
+        expect(receiver.current()).toBeUndefined();
+        // Another horde comes.
+        receiver.report(told(169_000, true, START + 60_000));
+        expect(receiver.current()).toBeDefined();
+        receiver.destroy();
     });
 });

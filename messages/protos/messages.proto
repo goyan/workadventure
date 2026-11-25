@@ -956,9 +956,29 @@ message ZombieHordeMessage {
   double anchorAt = 19;
   double msPerStep = 20;
   // Told by the server only: where the avatars stood, as the steps of the horde apply it (ZombieHorde.encodeZombieLog),
-  // the whole log at each message, and the last step that log is complete to: no browser steps the horde past it.
+  // its last entries at each message (`logFrom`), and the last step that log is complete to: no browser steps the
+  // horde past it. Whole with its ground every 30 s, and to a browser that asks for it (`askWhole`).
   string avatars = 21;
   double safeStep = 22;
+  // Sent by a player who holds the grenade launcher while the horde goes on: they shoot a grenade from a point to a
+  // point (map pixels). The server puts it in the log of the horde (`avatars`), with the step it goes off at, and
+  // tells the room at once; every browser computes its path and its blast (ZombieGrenade).
+  optional ZombieGrenadeMessage grenade = 23;
+  // Told by the server only: `avatars` holds the entries of the log from this one on (in the order the server wrote
+  // them), those before being the ones it told before. The whole log (0, or absent) comes with `terrain`, every few
+  // seconds: a browser that missed entries waits for it. So the log told each second stays a few seconds long.
+  optional uint32 logFrom = 24;
+  // Sent by a browser that misses the ground of the horde, or entries of its log (it joined, or lost a message): the
+  // server answers it alone with the whole horde, its ground and its whole log.
+  optional bool askWhole = 25;
+}
+
+// A grenade of the grenade launcher: from where it is shot, to where it is aimed (map pixels).
+message ZombieGrenadeMessage {
+  int32 fromX = 1;
+  int32 fromY = 2;
+  int32 toX = 3;
+  int32 toY = 4;
 }
 
 // How a hurricane crosses the map, as a player asks for it (the server keeps each value within bounds) and as the

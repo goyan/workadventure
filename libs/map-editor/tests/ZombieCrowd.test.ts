@@ -21,6 +21,7 @@ import {
     ZOMBIE_WATER,
 } from "../src/Catastrophe/ZombieHorde";
 import type { ZombieHorde, ZombieLogEntry } from "../src/Catastrophe/ZombieHorde";
+import { ZOMBIE_GRENADE_FUSE_STEPS, zombieGrenadePath } from "../src/Catastrophe/ZombieGrenade";
 import { RAISED_FLOOR_COLLECTION, bridgeTilesOf, bridgesOf, dryOnBridges } from "../src/Terrain/Bridges";
 import type { Bridges } from "../src/Terrain/Bridges";
 import { Meadow, ZOMBIE_TRAMPLE_HALF_PASSES } from "../src/Terrain/Meadow";
@@ -30,7 +31,7 @@ import type { WAMFileFormat } from "../src/types";
 
 const START = 1_800_000_000_000;
 /** The checksum of the reference crowd (see its test): set once, changed only with the model. */
-const REFERENCE_CHECKSUM = 328346713;
+const REFERENCE_CHECKSUM = 1127529049;
 
 /** The walls of a closed box of cells [x0, x1) x [y0, y1), with an opening of `door` cells in its east side. */
 function box(x0: number, y0: number, x1: number, y1: number, door = 0): { east: Set<string>; south: Set<string> } {
@@ -625,5 +626,72 @@ describe("the shove of a horde on an avatar", () => {
         expect(avatar.x).toBeGreaterThan(60 * TERRAIN_CELL);
         expect(fastest).toBeLessThanOrEqual(ZOMBIE_SHOVE_MOST_M_S * 29.3);
         expect(crowd.shoveAt(-500, -500)).toEqual({ x: 0, y: 0 });
+    });
+});
+
+describe("a grenade in the horde", () => {
+    it("flies to where it is aimed, bounces, rolls, never through a wall, and goes off after its fuse", () => {
+        const width = 120;
+        const height = 80;
+        const open = zombieGrenadePath(
+            { fromX: 200, fromY: 600, toX: 200 + 20 * 29.2, toY: 600 },
+            { width, height, terrain: new Uint8Array(width * height) },
+        );
+        expect(open.x).toHaveLength(ZOMBIE_GRENADE_FUSE_STEPS + 1);
+        // Up in the air, then down near the point aimed at, and further on by its bounces and its roll.
+        expect(Math.max(...open.z)).toBeGreaterThan(29.2 * 3);
+        expect(open.z[ZOMBIE_GRENADE_FUSE_STEPS]).toBe(0);
+        expect(open.x[ZOMBIE_GRENADE_FUSE_STEPS]).toBeGreaterThan(200 + 20 * 29.2);
+        expect(open.x[ZOMBIE_GRENADE_FUSE_STEPS]).toBeLessThan(200 + 35 * 29.2);
+        // A wall across its way just beyond where it lands: it rolls to it and stays on its side (it flies over a wall
+        // higher up, as a lob does).
+        const walls = { east: new Set<string>(), south: new Set<string>() };
+        for (let y = 0; y < height; y++) walls.east.add(cellKey(49, y));
+        const walled = zombieGrenadePath(
+            { fromX: 200, fromY: 600, toX: 50 * TERRAIN_CELL - 3 * 29.2, toY: 600 },
+            { width, height, terrain: zombieTerrainOf(width, height, () => 0, undefined, walls) },
+        );
+        expect(Math.max(...walled.x)).toBeLessThan(50 * TERRAIN_CELL);
+    });
+
+    it("kills the zombies near where it goes off, throws them burning, shoves those further, the same everywhere", () => {
+        const told = horde({ count: 400 });
+        const plain = new ZombieCrowd(told);
+        plain.advanceTo(START + 20_000);
+        // Where the horde is thickest at 20 s: a grenade shot from the far side lands there and goes off at 20 s.
+        let sx = 0;
+        let sy = 0;
+        for (let zombie = 0; zombie < plain.count; zombie++) {
+            if (plain.state[zombie] !== ZOMBIE_WALKING) continue;
+            sx += plain.x[zombie];
+            sy += plain.y[zombie];
+        }
+        const aim = {
+            fromX: Math.round(sx / plain.walking + 400),
+            fromY: Math.round(sy / plain.walking),
+            toX: Math.round(sx / plain.walking),
+            toY: Math.round(sy / plain.walking),
+        };
+        const log = encodeZombieLog([{ applyStep: 201, changes: [], grenades: [aim] }]);
+        const shot = new ZombieCrowd({ ...told, avatars: log });
+        shot.advanceTo(START + 20_200);
+        const blasts = shot.takeExplosions();
+        expect(blasts).toHaveLength(1);
+        expect(blasts[0].killed).toBeGreaterThan(2);
+        expect(shot.dying).toBe(blasts[0].killed);
+        let flying = 0;
+        for (let zombie = 0; zombie < shot.count; zombie++) if (shot.z[zombie] > 0) flying++;
+        expect(flying).toBeGreaterThan(0);
+        // It is seen in the air before it goes off.
+        expect(shot.grenadesAt(190)).toHaveLength(1);
+        expect(shot.grenadesAt(202)).toHaveLength(0);
+        // Four seconds later they are gone; the same crowd told the grenade bit by bit.
+        shot.advanceTo(START + 25_000);
+        expect(shot.dying).toBe(0);
+        const late = new ZombieCrowd({ ...told, avatars: "", safeStep: 150 });
+        late.advanceTo(START + 15_000);
+        late.setLog(log, 1_000_000);
+        late.advanceTo(START + 25_000);
+        expect(late.checksum()).toBe(shot.checksum());
     });
 });

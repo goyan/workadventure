@@ -11,6 +11,7 @@ import type { UserInputHandlerInterface } from "@wa/front/Interfaces/UserInputHa
 import type { GameScene } from "@wa/front/Phaser/Game/GameScene";
 import { mapEditorModeStore, mapExplorationModeStore } from "@wa/front/Stores/MapEditorStore";
 import { isActivatable } from "@wa/front/Phaser/Game/ActivatableInterface";
+import { basicModeStore } from "@wa/front/Stores/BasicModeStore";
 import { mapManagerActivated } from "@wa/front/Stores/MenuStore";
 import { displayEmote, isEmoteIndex } from "@wa/front/Stores/EmoteStore";
 import { analyticsClient } from "@wa/front/Administration/AnalyticsClient";
@@ -25,6 +26,8 @@ import { localUserStore } from "@wa/front/Connection/LocalUserStore";
 import { wokaMenuStore } from "@wa/front/Stores/WokaMenuStore";
 import { nerfEquippedStore } from "@wa/front/Stores/NerfStore";
 import { torchEquippedStore } from "@wa/front/Stores/TorchStore";
+import { grenadeLauncherEquippedStore } from "@wa/front/Stores/ZombieGrenadeStore";
+import { toggleHandTool } from "@wa/front/Stores/HandToolStore";
 import { fishingContestSetupStore, fishingContestStore, rodEquippedStore } from "@wa/front/Stores/FishingStore";
 import { characterPickerStore, type CharacterPickerCandidate } from "@wa/front/Stores/CharacterPickerStore";
 import { Vehicle, VehicleMode, VehicleMedium } from "@wa/front/Phaser/Vehicle/Vehicle";
@@ -43,6 +46,7 @@ import {
     fireRadiusTilesStore,
     drainRadiusTilesStore,
     meteorRadiusTilesStore,
+    zombieShownStore,
 } from "@wa/front/Stores/CatastropheStore";
 import {
     endWaterLevelGesture,
@@ -586,6 +590,21 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 wokaMenuStore.clear();
             },
         });
+        // The launcher exists during a horde only; once held, it can always be put away.
+        // Not in Basique: the horde does not exist there (PerceptionProtocol).
+        if ((get(zombieShownStore) !== undefined && !get(basicModeStore)) || get(grenadeLauncherEquippedStore)) {
+            wokaMenuStore.addAction({
+                actionName: get(grenadeLauncherEquippedStore)
+                    ? get(LL).actionbar.grenadeLauncher.unequip()
+                    : get(LL).actionbar.grenadeLauncher.equip(),
+                icon: "grenade",
+                testId: "avatar-grenade-launcher",
+                callback: () => {
+                    toggleHandTool("grenades");
+                    wokaMenuStore.clear();
+                },
+            });
+        }
         wokaMenuStore.addAction({
             actionName: get(torchEquippedStore) ? get(LL).actionbar.torch.unequip() : get(LL).actionbar.torch.equip(),
             icon: "torch",
@@ -936,6 +955,14 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 event.preventDefault();
                 this.nerfSpacePressed = true;
                 if (!event.repeat) this.gameScene.nerfManager.fire();
+            }
+            return event;
+        }
+
+        if (event.code === "Space" && get(grenadeLauncherEquippedStore) && !get(mapEditorModeStore)) {
+            if (!isKeyFromInteractiveElement(event) && !event.ctrlKey && !event.altKey && !event.metaKey) {
+                event.preventDefault();
+                if (!event.repeat) this.gameScene.fireZombieGrenade();
             }
             return event;
         }
