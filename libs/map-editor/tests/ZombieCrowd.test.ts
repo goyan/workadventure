@@ -21,9 +21,12 @@ import {
     ZOMBIE_WATER,
 } from "../src/Catastrophe/ZombieHorde";
 import type { ZombieHorde, ZombieLogEntry } from "../src/Catastrophe/ZombieHorde";
+import { RAISED_FLOOR_COLLECTION, bridgeTilesOf, bridgesOf, dryOnBridges } from "../src/Terrain/Bridges";
+import type { Bridges } from "../src/Terrain/Bridges";
 import { Meadow, ZOMBIE_TRAMPLE_HALF_PASSES } from "../src/Terrain/Meadow";
 import { cellKey } from "../src/Terrain/TerrainGrid";
 import { TERRAIN_CELL, TILE_PX } from "../src/types";
+import type { WAMFileFormat } from "../src/types";
 
 const START = 1_800_000_000_000;
 /** The checksum of the reference crowd (see its test): set once, changed only with the model. */
@@ -73,6 +76,35 @@ function horde(
         safeStep: 1_000_000,
         ...overrides,
     };
+}
+
+/**
+ * A map of 120 x 80 cells crossed north to south by a river of deep water (tiles 28 to 31), with a bridge of the map
+ * over it: a deck of wooden slabs 20 px up on the tiles 28 to 31 of the rows 20 and 21, a ramp 2 tiles wide up to it
+ * on each bank (tiles 27 and 32). Its ground as the server freezes it for a horde (GameRoom.zombieTerrain).
+ */
+function riverWithBridge(): { width: number; height: number; terrain: Uint8Array; bridges: Bridges } {
+    const width = 120;
+    const height = 80;
+    const piece = (name: string, tileX: number, groundTileY: number, elevation = 0) => ({
+        x: tileX * TILE_PX,
+        // Placed where its image is drawn: its altitude further north than the ground it covers.
+        y: groundTileY * TILE_PX - 20,
+        elevation,
+        prefabRef: { collectionName: RAISED_FLOOR_COLLECTION, id: `${RAISED_FLOOR_COLLECTION}:${name}:Default:Down` },
+    });
+    const pieces = [piece("rampe-e-l2-h1", 27, 20), piece("rampe-o-l2-h1", 32, 20)];
+    for (let tileX = 28; tileX < 32; tileX++) {
+        for (const tileY of [20, 21]) pieces.push(piece("dalle-bois", tileX, tileY, 20));
+    }
+    const wam: Pick<WAMFileFormat, "entities"> = {
+        entities: Object.fromEntries(pieces.map((entity, index) => [`piece${index}`, entity])),
+    };
+    const bridges = bridgesOf(wam);
+    const cellsATile = TILE_PX / TERRAIN_CELL;
+    const river = (cellX: number): boolean => cellX >= 28 * cellsATile && cellX < 32 * cellsATile;
+    const depthAt = dryOnBridges((cellX) => (river(cellX) ? 60 : 0), bridgeTilesOf(wam));
+    return { width, height, terrain: zombieTerrainOf(width, height, depthAt), bridges };
 }
 
 /** The tile index of a point of a map `widthCells` cells wide. */
@@ -287,6 +319,38 @@ describe("a crowd of zombies", () => {
         // All over the bridge, out by the far side, and packed at its head on the way.
         expect(crossed / crowd.count).toBeGreaterThan(0.9);
         expect(densest).toBeGreaterThanOrEqual(4);
+    });
+
+    it("crosses deep water on the deck of a bridge of the map, every zombie walking all the way over it", () => {
+        // A river of deep water across the map (tiles 28 to 31), a deck 20 px up over it on the tiles (28 to 31, rows
+        // 20 and 21), a ramp up to it on each bank: the ground the server freezes (GameRoom.zombieTerrain).
+        const { width, height, terrain, bridges } = riverWithBridge();
+        expect(bridges.elevationAt(28 * TILE_PX + 16, 20 * TILE_PX + 16)).toBe(20);
+        const crowd = new ZombieCrowd(horde({ count: 100 }, terrain, width, height));
+        let onDeck = 0;
+        let crossed = 0;
+        const beyond = new Uint8Array(crowd.count);
+        for (let step = 0; step < crowd.lastStep - 1; step++) {
+            const before = new Uint8Array(crowd.state);
+            crowd.step();
+            for (let zombie = 0; zombie < crowd.count; zombie++) {
+                const x = crowd.x[zombie];
+                const y = crowd.y[zombie];
+                // None leaves the crowd but out by the far side (well east of the river), and none goes into it.
+                if (before[zombie] === ZOMBIE_WALKING && crowd.state[zombie] !== ZOMBIE_WALKING) {
+                    expect(crowd.state[zombie]).toBe(ZOMBIE_GONE);
+                    expect(beyond[zombie]).toBe(1);
+                }
+                if (crowd.state[zombie] !== ZOMBIE_WALKING) continue;
+                const cell = Math.floor(y / TERRAIN_CELL) * width + Math.floor(x / TERRAIN_CELL);
+                expect(crowd.terrain[cell] & ZOMBIE_WATER).toBe(0);
+                if (bridges.elevationAt(x, y) === 20) onDeck++;
+                if (x > 33 * TILE_PX) beyond[zombie] = 1;
+            }
+        }
+        for (let zombie = 0; zombie < crowd.count; zombie++) if (beyond[zombie] === 1) crossed++;
+        expect(onDeck).toBeGreaterThan(100);
+        expect(crossed / crowd.count).toBeGreaterThan(0.9);
     });
 
     it("comes in by the shore when its edge is half sea, not from the water", () => {

@@ -5477,7 +5477,12 @@ export class GameScene extends DirtyScene {
         // The horde of zombies of the room: its crowd stepped here as on the server, from what it tells.
         this.zombieReceiver?.destroy();
         this.zombieView?.destroy();
-        const zombieView = new ZombieView(this, (x, y) => this.groundDropAt(x, y));
+        const zombieView = new ZombieView(
+            this,
+            (x, y) => this.groundDropAt(x, y),
+            // Asked for every zombie seen at each image: nothing to read on a map without bridges.
+            (x, y) => (this.bridges?.tiles.size ? this.getBridgeElevationAt(x, y) : 0),
+        );
         this.zombieView = zombieView;
         const zombieReceiver = new ZombieReceiver((horde) => {
             zombieView.setHorde(horde, this.time.now);
