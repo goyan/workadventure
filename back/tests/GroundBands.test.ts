@@ -176,9 +176,10 @@ describe("the bands of the water on real threads (GroundBands)", () => {
             const grid = flooded(true);
             expect(stateOf(grid, live(grid, 40)), `${followers + 1} bands`).toEqual(expected);
             const { here, others } = group.computed();
-            // The other threads took their part, and this one too.
-            expect(others).toBeGreaterThan(40);
-            expect(here).toBeGreaterThan(40);
+            // The other threads took their part, and this one too: how big a part depends on the machine, so only
+            // that each took some is asserted (the water, equal to the bit, proves the slices were all computed).
+            expect(others).toBeGreaterThan(0);
+            expect(here).toBeGreaterThan(0);
             expect(group.bands).toBe(followers + 1);
             // Stopped, its threads end by themselves.
             const ends = threads.map(exited);
@@ -210,8 +211,8 @@ describe("the bands of the water on real threads (GroundBands)", () => {
             expect(grid.kernelName()).toBe("wasm");
             expect(stateOf(grid, live(grid, 40)), `${followers + 1} bands`).toEqual(expected);
             const { here, others } = group.computed();
-            expect(others).toBeGreaterThan(40);
-            expect(here).toBeGreaterThan(40);
+            expect(others).toBeGreaterThan(0);
+            expect(here).toBeGreaterThan(0);
             const ends = threads.map(exited);
             group.stop();
             // eslint-disable-next-line no-await-in-loop -- one group after the other: they share the runner of the thread
