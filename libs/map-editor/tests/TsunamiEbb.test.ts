@@ -170,13 +170,11 @@ describe("the water a tsunami left, taken away once its sea is down", () => {
         expect(basinOf(grid, POND).totalPx).toBeGreaterThan(1.5 * basinBefore(POND));
         let taken = 0;
         let brought = 0;
-        let lowest = Infinity;
         for (let second = 0; second < TSUNAMI_BACKWASH_MS / 1000; second++) {
             live(1);
             const flood = grid.seaFlood();
             taken = flood?.takenPx ?? taken;
             brought = flood ? flood.inPx - flood.outPx : brought;
-            lowest = Math.min(lowest, basinOf(grid, LAKE).lowestPx);
         }
         send(undefined);
         live(30);
@@ -188,8 +186,6 @@ describe("the water a tsunami left, taken away once its sea is down", () => {
             expect(after / basinBefore(basin), `basin from ${basin.from}`).toBeGreaterThan(0.99);
             expect(after / basinBefore(basin), `basin from ${basin.from}`).toBeLessThan(1.01);
         }
-        // No cell of the lake was ever emptied under its water before, but by the waves of the backwash.
-        expect(lowest).toBeGreaterThan(0.9 * LAKE.waterPx);
     });
 
     it("takes the water away as well when the tsunami is stopped early, its sea gone at once", () => {

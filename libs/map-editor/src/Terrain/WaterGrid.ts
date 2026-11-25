@@ -341,18 +341,19 @@ const MOST_INERTIA_MOVES = 8;
 
 /**
  * How long the water a tsunami left on a map is taken away once its sea is down, in seconds of the steps of the water
- * (of its time on a map faster than reality; its flow pace aside):
- * the backwash of the tsunami (TSUNAMI_BACKWASH_MS). A backwash crosses a map of a couple of hundred metres in under
- * a minute (flows of 2 to 5 m/s on land at Banda Aceh in 2004, Fritz et al. 2006, GRL 33, L24605; outflows up to
- * 11 m/s at Kesennuma in 2011, Fritz et al. 2012, GRL 39, L00G23), and the flood of the map goes in that time.
+ * (of its time on a map faster than reality; its flow pace aside): the backwash of the tsunami (TSUNAMI_BACKWASH_MS),
+ * twenty seconds. That is a game's choice, shorter than reality: a backwash runs at 2 to 5 m/s on land (flows at Banda
+ * Aceh in 2004, Fritz et al. 2006, GRL 33, L24605; outflows up to 11 m/s at Kesennuma in 2011, Fritz et al. 2012,
+ * GRL 39, L00G23), so it takes about a minute to cross a map of a couple of hundred metres; and what it leaves in
+ * the low land stays far longer.
  *
  * What the backwash alone takes back by the coast is only part of it: on the map of Antoine, with the water it had
  * saved, two fifths of the water left by a tsunami of 8 m in a minute, seven tenths in three (measured
  * without evaporation nor a ground that drinks; a thin sheet on land runs slowly, held back by the ground). In
  * reality what stays in the low land stays for weeks: in 2011 the land around the airport of Sendai was drained by
  * pump trucks, from the 20th of March on, nine days after the tsunami (MLIT River Bureau, "A First Step to Revive
- * Sendai Airport", 27 March 2011). Here the rest goes as those pumps took it, in the time of a backwash instead of
- * weeks: a game's shortcut, not physics. Nothing of the water the map held before the tsunami goes with it (see
+ * Sendai Airport", 27 March 2011). Here all of it goes in those twenty seconds, as those pumps took it in weeks: a
+ * game's shortcut, not physics. Nothing of the water the map held before the tsunami goes with it (see
  * WaterGrid.ebbSea).
  */
 export const SEA_EBB_SECONDS = TSUNAMI_BACKWASH_MS / 1000;

@@ -46,8 +46,10 @@ export const TSUNAMI_FRONT_SECONDS = 10;
  * Once the crest has gone by, the sea stays at its rest level at the coast for this long (ms): the water the
  * tsunami left on the land runs back to it there (the backwash), instead of creeping off the edge of the map, and
  * what would not run back in that time is taken away with it (WaterGrid, SEA_EBB_SECONDS): the map is as before.
+ * Twenty seconds, as the players asked: a real backwash takes about a minute to cross the map, and leaves water in
+ * the low land for weeks (see SEA_EBB_SECONDS). A game's shortcut.
  */
-export const TSUNAMI_BACKWASH_MS = 60_000;
+export const TSUNAMI_BACKWASH_MS = 20_000;
 /**
  * Under this share of the real speed of its waves (the server affording fewer moves a step than the depth of its bore
  * asks for), the panel says that the server limits the tsunami.

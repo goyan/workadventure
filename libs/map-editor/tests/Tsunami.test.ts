@@ -220,7 +220,9 @@ describe("the coast that holds the level of the sea", () => {
         const rest = grid.depthAt(2, row);
         const swing = [0, 0, 0];
         for (let step = 1; step <= 1200; step++) {
-            grid.setSea(tsunamiSea(tsunami, step * 100));
+            // The coast alone: the sea of the tsunami, then at rest for a minute, nothing taken away.
+            const sea = tsunamiSea(tsunami, step * 100);
+            grid.setSea({ levelPx: sea?.levelPx ?? 0, topPx: sea?.topPx ?? MAX_WATER_MAX_SURFACE });
             grid.step(input);
             // While the sea is at rest (its backwash): three windows of 20 s, half a period of the basin each (a
             // quarter wave between an open end and a wall: 4 L / √(g·h), 40 s).
