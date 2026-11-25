@@ -58,6 +58,7 @@ import {
     pavedTilesOf,
 } from "@workadventure/map-editor";
 import type { Bridges, ColdMass, TerrainData, WeatherLocation } from "@workadventure/map-editor";
+import { zombieGrenadeAim } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
 import { asError } from "catch-unknown";
@@ -523,7 +524,6 @@ import { HurricaneDebris } from "./Catastrophe/HurricaneDebris";
 import { HurricaneView, seaHurricaneOf } from "./Catastrophe/HurricaneView";
 import { ZombieReceiver } from "./Catastrophe/ZombieReceiver";
 import { ZombieView } from "./Catastrophe/ZombieView";
-import { zombieGrenadeShotOf } from "./Catastrophe/ZombieGrenadeAim";
 import { zombieShoveOf, zombieShownOf } from "./Catastrophe/ZombieShown";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
@@ -3959,8 +3959,8 @@ export class GameScene extends DirtyScene {
     }
 
     /**
-     * Shoots a grenade of the launcher from the feet of this player, ahead the way its avatar moves or faces
-     * (zombieGrenadeShotOf). The server puts it in the horde; at most one a second for a player, as many as they like.
+     * Shoots a grenade of the launcher from the feet of this player to the pointer, within its range. The server puts
+     * it in the horde; at most one a second for a player, as many as they like.
      */
     public fireZombieGrenade(): void {
         if (
@@ -3973,12 +3973,13 @@ export class GameScene extends DirtyScene {
             return;
         }
         this.zombieGrenadeShotAt = this.time.now;
-        const player = this.CurrentPlayer;
-        // On the deck of a bridge, its avatar is drawn that much north of the ground under it, where the horde runs.
-        const floorZ = player.isFlying() ? 0 : player.getFloorZ();
-        const aim = zombieGrenadeShotOf(player.x, player.y + floorZ, player.getNerfHeading(), {
-            width: this.Map.widthInPixels,
-            height: this.Map.heightInPixels,
+        const pointer = new Phaser.Math.Vector2();
+        this.input.activePointer.positionToCamera(this.cameras.main, pointer);
+        const aim = zombieGrenadeAim({
+            fromX: this.CurrentPlayer.x,
+            fromY: this.CurrentPlayer.y,
+            toX: pointer.x,
+            toY: pointer.y,
         });
         this.connection?.emitLaunchZombies(
             {

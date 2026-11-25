@@ -39,12 +39,6 @@ export const ZOMBIE_GRENADE_FUSE_STEPS = 40;
 export const ZOMBIE_GRENADE_RANGE_M = 45;
 export const ZOMBIE_GRENADE_LETHAL_M = 5;
 export const ZOMBIE_GRENADE_BLAST_M = 15;
-/**
- * How far ahead of the avatar a grenade is lobbed (m), in the direction it moves or faces: past the 15 m its blast
- * wounds within (ZOMBIE_GRENADE_BLAST_M), so that the one who shoots is out of it, and on the screen at the zoom of the
- * game (20 m is some 580 px, less than half the width of a screen of 1280 px from the avatar in its middle).
- */
-export const ZOMBIE_GRENADE_AHEAD_M = 20;
 /** Where the grenade leaves the launcher, over the ground (m). */
 const MUZZLE_HEIGHT_PX = 1.2 * PX;
 /** Under this height a wall or a collision stops it. */
@@ -86,21 +80,6 @@ export function zombieGrenadeAim(shot: ZombieGrenadeShot): ZombieGrenadeShot {
     const most = ZOMBIE_GRENADE_RANGE_M * PX;
     if (distance <= most) return shot;
     return { ...shot, toX: shot.fromX + (dx / distance) * most, toY: shot.fromY + (dy / distance) * most };
-}
-
-/**
- * The shot of a grenade from (x, y) ZOMBIE_GRENADE_AHEAD_M ahead, the way (dx, dy) goes (map pixels, any length;
- * nothing ahead when it is none): its points whole, as the server tells them.
- */
-export function zombieGrenadeAhead(x: number, y: number, dx: number, dy: number): ZombieGrenadeShot {
-    const length = Math.sqrt(dx * dx + dy * dy);
-    const ahead = length > 1e-9 ? (ZOMBIE_GRENADE_AHEAD_M * PX) / length : 0;
-    return zombieGrenadeAim({
-        fromX: Math.round(x),
-        fromY: Math.round(y),
-        toX: Math.round(x + dx * ahead),
-        toY: Math.round(y + dy * ahead),
-    });
 }
 
 /** The whole path of a grenade, ZOMBIE_GRENADE_FUSE_STEPS + 1 points: the last is where it goes off. */
