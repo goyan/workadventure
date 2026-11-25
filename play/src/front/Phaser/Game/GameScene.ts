@@ -62,6 +62,7 @@ import { zombieGrenadeAim } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
 import { asError } from "catch-unknown";
+import { canAimWithPointer, pointerMapPoint, type MapPoint } from "@wa/front/Phaser/UserInput/PointerAim";
 import { AirplaneSounds, AIRPLANE_SOUND } from "@wa/front/Phaser/Vehicle/AirplaneSounds";
 import { SkateboardSounds, SKATEBOARD_SOUNDS } from "@wa/front/Phaser/Vehicle/SkateboardSounds";
 import { Vehicle } from "@wa/front/Phaser/Vehicle/Vehicle";
@@ -3959,6 +3960,15 @@ export class GameScene extends DirtyScene {
     }
 
     /**
+     * The point of the map the pointer aims at, for the Nerf (the same as the grenade launcher's); undefined when
+     * there is no pointer to aim with: a touch screen, a mouse out of the game or that never moved.
+     */
+    public pointerAimPoint(): MapPoint | undefined {
+        const pointer = this.input.activePointer;
+        return canAimWithPointer(this.input.isOver, pointer) ? pointerMapPoint(pointer, this.cameras.main) : undefined;
+    }
+
+    /**
      * Shoots a grenade of the launcher from the feet of this player to the pointer, within its range. The server puts
      * it in the horde; at most one a second for a player, as many as they like.
      */
@@ -3973,8 +3983,8 @@ export class GameScene extends DirtyScene {
             return;
         }
         this.zombieGrenadeShotAt = this.time.now;
-        const pointer = new Phaser.Math.Vector2();
-        this.input.activePointer.positionToCamera(this.cameras.main, pointer);
+        // Wherever the pointer was left, even out of the game: a point off the map is refused by the server.
+        const pointer = pointerMapPoint(this.input.activePointer, this.cameras.main);
         const aim = zombieGrenadeAim({
             fromX: this.CurrentPlayer.x,
             fromY: this.CurrentPlayer.y,

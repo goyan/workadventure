@@ -169,6 +169,91 @@ describe("NerfManager", () => {
         expect(graphics).toHaveLength(1);
     });
 
+    it("fires straight at the pointer, as far as a dart flies, and turns the avatar to face it", () => {
+        scene.pointerAimPoint.mockReturnValue({ x: 205, y: 165 });
+        manager.toggleEquipment();
+        manager.fire();
+        // From the hand at (105, 105): 100 px right and 60 px down.
+        const angle = Math.round(Math.atan2(60, 100) * 1000) / 1000;
+        expect(connection.emitScriptableEvent.mock.calls).toEqual([
+            [
+                NERF_SHOT_EVENT,
+                { x: 100, y: 100, direction: PositionMessage_Direction.RIGHT, seated: false, heading: 7, angle },
+                undefined,
+            ],
+        ]);
+        expect(player.faceDirection.mock.calls).toEqual([[PositionMessage_Direction.RIGHT]]);
+        expect(player.aimNerf.mock.calls).toEqual([[angle, PositionMessage_Direction.RIGHT]]);
+        const start = { x: graphics[0].x, y: graphics[0].y };
+        expect(start.x).toBeCloseTo(105 + 10 * Math.cos(angle));
+        expect(start.y).toBeCloseTo(105 + 10 * Math.sin(angle));
+        manager.update(1100);
+        expect(graphics[0].x - start.x).toBeCloseTo(32 * Math.cos(angle));
+        expect(graphics[0].y - start.y).toBeCloseTo(32 * Math.sin(angle));
+        // Past the pointer, to the usual range.
+        manager.update(2200);
+        expect(graphics[0].scene).toBeUndefined();
+    });
+
+    it("turns to face the pointer behind the avatar", () => {
+        scene.pointerAimPoint.mockReturnValue({ x: 20, y: 80 });
+        manager.toggleEquipment();
+        manager.fire();
+        expect(connection.emitScriptableEvent.mock.calls[0][1]).toMatchObject({
+            direction: PositionMessage_Direction.LEFT,
+            heading: 2,
+        });
+        expect(player.faceDirection.mock.calls).toEqual([[PositionMessage_Direction.LEFT]]);
+        const startX = graphics[0].x;
+        manager.update(1100);
+        expect(graphics[0].x).toBeLessThan(startX);
+    });
+
+    it.each([
+        { name: "there is no pointer to aim with", point: undefined },
+        { name: "the pointer is on the avatar", point: { x: 104, y: 106 } },
+    ])("fires the way the avatar moves or faces when $name", ({ point }) => {
+        scene.pointerAimPoint.mockReturnValue(point);
+        manager.toggleEquipment();
+        manager.fire();
+        expect(connection.emitScriptableEvent.mock.calls[0][1]).toEqual({
+            x: 100,
+            y: 100,
+            direction: PositionMessage_Direction.RIGHT,
+            seated: false,
+            heading: 6,
+        });
+        expect(player.faceDirection.mock.calls).toEqual([]);
+        expect(player.aimNerf.mock.calls).toEqual([]);
+        expect(graphics[0].x).toBe(115);
+        expect(graphics[0].y).toBe(105);
+    });
+
+    it("shows a colleague's shot at their pointer along its angle, their blaster aimed at it", () => {
+        const aimNerf = vi.fn();
+        scene.MapPlayersByKey.set(
+            2,
+            mock<RemotePlayer>({
+                x: 140,
+                y: 180,
+                getCollisionRectangle: () => ({ x: 132, y: 180, width: 16, height: 16 }),
+                isOnFloor: () => true,
+                getFloorZ: () => 0,
+                aimNerf,
+            }),
+        );
+        stream.next({
+            name: NERF_SHOT_EVENT,
+            data: { x: 140, y: 180, direction: PositionMessage_Direction.UP, heading: 5, angle: -1 },
+            senderId: 2,
+        });
+        expect(aimNerf).toHaveBeenCalledWith(-1, PositionMessage_Direction.UP);
+        const start = { x: graphics[0].x, y: graphics[0].y };
+        manager.update(1100);
+        expect(graphics[0].x - start.x).toBeCloseTo(32 * Math.cos(-1));
+        expect(graphics[0].y - start.y).toBeCloseTo(32 * Math.sin(-1));
+    });
+
     it("limits bursts but allows another shot after the documented 300 ms", () => {
         manager.toggleEquipment();
         manager.fire();

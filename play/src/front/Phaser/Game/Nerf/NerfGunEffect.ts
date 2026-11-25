@@ -20,9 +20,15 @@ export class NerfGunEffect {
         container.add(this.gun);
     }
 
-    public update(active: boolean, direction: PositionMessage_Direction, seated: boolean, heading?: number): void {
+    public update(
+        active: boolean,
+        direction: PositionMessage_Direction,
+        seated: boolean,
+        heading?: number,
+        angle?: number,
+    ): void {
         if (active) this.container.bringToTop(this.gun);
-        const pose = nerfGunPose(direction, heading);
+        const pose = nerfGunPose(direction, heading, angle);
         this.gun
             .setPosition(pose.x, pose.y + (seated ? -4 : 0))
             .setRotation(pose.dx < 0 ? pose.angle - Math.PI : pose.angle)

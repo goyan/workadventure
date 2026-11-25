@@ -954,6 +954,28 @@ export class Player extends Character {
         this.playAnimation(this._lastDirection, false);
     }
 
+    /**
+     * Turns the avatar where it stands to face a direction (a shot at the pointer), told to the others as `rotate`
+     * does. Not while it walks, sits, or rides: the walk, the seat or the vehicle keeps its way.
+     */
+    public faceDirection(direction: PositionMessage_Direction): void {
+        const velocity = this.getBody().velocity;
+        if (
+            direction === this._lastDirection ||
+            velocity.x ||
+            velocity.y ||
+            this.isSeated() ||
+            this.isRidingVehicle() ||
+            this.isSlidingToSeat
+        ) {
+            return;
+        }
+        this.emit(hasMovedEventName, { moving: false, running: false, direction, x: this.x, y: this.y });
+        this._lastDirection = direction;
+        this.companion?.setTarget(this.x, this.y, this._lastDirection);
+        this.playAnimation(this._lastDirection, false);
+    }
+
     public sendFollowRequest() {
         this.scene.connection?.emitFollowRequest();
         followRoleStore.set("leader");
