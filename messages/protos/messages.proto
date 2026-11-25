@@ -971,6 +971,11 @@ message ZombieHordeMessage {
   // Sent by a browser that misses the ground of the horde, or entries of its log (it joined, or lost a message): the
   // server answers it alone with the whole horde, its ground and its whole log.
   optional bool askWhole = 25;
+  // Sent by a player who shoots their Nerf on the ground while the horde goes on: the dart, from the barrel to where
+  // its range ends. The server puts it in the log of the horde (`avatars`), applied once its flight is over and every
+  // browser can have it; every browser and the server find the zombie it met first, as the crowd was when it flew
+  // (ZombieDart), and kill it.
+  optional ZombieDartMessage dart = 26;
 }
 
 // A grenade of the grenade launcher: from where it is shot, to where it is aimed (map pixels).
@@ -979,6 +984,16 @@ message ZombieGrenadeMessage {
   int32 fromY = 2;
   int32 toX = 3;
   int32 toY = 4;
+}
+
+// A dart of the Nerf shot into a horde: from the barrel to where its range ends (whole map pixels), and the step of
+// the horde the browser of its player was at when it was shot (whole).
+message ZombieDartMessage {
+  int32 fromX = 1;
+  int32 fromY = 2;
+  int32 toX = 3;
+  int32 toY = 4;
+  int32 shotStep = 5;
 }
 
 // How a hurricane crosses the map, as a player asks for it (the server keeps each value within bounds) and as the

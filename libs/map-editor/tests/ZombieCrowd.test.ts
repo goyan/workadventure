@@ -496,7 +496,8 @@ describe("a crowd of zombies", () => {
         expect(gone / crowd.count).toBeGreaterThan(0.85);
     });
 
-    it("runs to every avatar of a meeting, not only to the one nearest the door", () => {
+    // 1800 steps of 1500 zombies: some 1.3 s alone, 4.6 to 7 s among the other tests of the library at once.
+    it("runs to every avatar of a meeting, not only to the one nearest the door", { timeout: 20_000 }, () => {
         // Twelve avatars in a closed room, its door on its east side: the one nearest the door is the nearest to the
         // whole map outside. Once it has its share, or a zombie is done with it, the others are run to.
         const width = 160;

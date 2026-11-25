@@ -2,6 +2,7 @@ import { TERRAIN_CELL, TILE_PX } from "../types";
 import { TILE_AREA_M2 } from "../Terrain/Scale";
 import { cellOf } from "../Terrain/TerrainGrid";
 import type { WaterWallSides } from "../Terrain/WaterGrid";
+import type { ZombieDart } from "./ZombieDart";
 
 /**
  * A horde of zombies crosses the map the way a player chose: it comes in by the edge it comes from, runs across as a
@@ -301,9 +302,27 @@ export interface ZombieLogEntry {
      * fuse lit ZOMBIE_GRENADE_FUSE_STEPS steps before. Absent when there is none.
      */
     grenades?: { fromX: number; fromY: number; toX: number; toY: number }[];
+    /**
+     * The darts of the Nerf whose flight is over by this step (ZombieDart): the zombie each met first is killed now.
+     * Absent when there is none.
+     */
+    darts?: ZombieDart[];
 }
 
-/** The log of the avatars, as it is told: for each entry its step, its changes, then its grenades. */
+/** A whole number that may be negative, as a variable number of bytes: 0, -1, 1, -2, 2… as 0, 1, 2, 3, 4… */
+function zigzag(value: number): number {
+    const whole = Math.round(value);
+    return whole >= 0 ? whole * 2 : -whole * 2 - 1;
+}
+
+function unzigzag(value: number): number {
+    return value % 2 === 0 ? value / 2 : -(value + 1) / 2;
+}
+
+/**
+ * The log of the avatars, as it is told: for each entry its step, its changes, its grenades, then its darts (where
+ * each is shot from, the way to its end, how many steps before the entry it was shot, the steps of a tick).
+ */
 export function encodeZombieLog(entries: readonly ZombieLogEntry[]): string {
     const bytes: number[] = [];
     for (const entry of entries) {
@@ -320,6 +339,16 @@ export function encodeZombieLog(entries: readonly ZombieLogEntry[]): string {
             pushVarint(bytes, grenade.fromY);
             pushVarint(bytes, grenade.toX);
             pushVarint(bytes, grenade.toY);
+        }
+        const darts = entry.darts ?? [];
+        pushVarint(bytes, darts.length);
+        for (const dart of darts) {
+            pushVarint(bytes, dart.fromX);
+            pushVarint(bytes, dart.fromY);
+            pushVarint(bytes, zigzag(dart.toX - dart.fromX));
+            pushVarint(bytes, zigzag(dart.toY - dart.fromY));
+            pushVarint(bytes, entry.applyStep - dart.shotStep);
+            pushVarint(bytes, dart.stride);
         }
     }
     return base64Of(bytes);
@@ -345,7 +374,22 @@ export function decodeZombieLog(text: string): ZombieLogEntry[] {
             const toX = readVarint(bytes, at);
             grenades.push({ fromX, fromY, toX, toY: readVarint(bytes, at) });
         }
-        entries.push({ applyStep: step, changes, ...(grenades.length > 0 ? { grenades } : {}) });
+        const thrown = readVarint(bytes, at);
+        const darts: ZombieDart[] = [];
+        for (let dart = 0; dart < thrown && at.read < bytes.length; dart++) {
+            const fromX = readVarint(bytes, at);
+            const fromY = readVarint(bytes, at);
+            const toX = fromX + unzigzag(readVarint(bytes, at));
+            const toY = fromY + unzigzag(readVarint(bytes, at));
+            const shotStep = step - readVarint(bytes, at);
+            darts.push({ fromX, fromY, toX, toY, shotStep, stride: readVarint(bytes, at) });
+        }
+        entries.push({
+            applyStep: step,
+            changes,
+            ...(grenades.length > 0 ? { grenades } : {}),
+            ...(darts.length > 0 ? { darts } : {}),
+        });
     }
     return entries;
 }

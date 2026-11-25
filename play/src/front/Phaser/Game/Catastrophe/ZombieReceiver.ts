@@ -1,6 +1,6 @@
 import { ZOMBIE_ASK_WHOLE_MS, decodeZombieLog, encodeZombieLog, zombieAsk } from "@workadventure/map-editor";
 import type { ZombieHorde, ZombieLogEntry } from "@workadventure/map-editor";
-import type { CatastropheMessage, ZombieHordeMessage } from "@workadventure/messages";
+import type { CatastropheMessage, ZombieDartMessage, ZombieHordeMessage } from "@workadventure/messages";
 
 /** The horde a message of the server tells, over the ground it told before (`terrain`). */
 export function zombieHordeOf(id: number, told: ZombieHordeMessage, terrain: string): ZombieHorde {
@@ -27,8 +27,8 @@ export function zombieHordeOf(id: number, told: ZombieHordeMessage, terrain: str
     };
 }
 
-/** What a browser sends to ask the server for the whole horde (its ground and its whole log), answered to it alone. */
-export function zombieWholeAsked(): ZombieHordeMessage {
+/** A message of the horde that asks for nothing yet: what a browser fills in to ask the server one thing. */
+function zombieAsking(): ZombieHordeMessage {
     return {
         count: 0,
         minutes: 0,
@@ -52,8 +52,17 @@ export function zombieWholeAsked(): ZombieHordeMessage {
         msPerStep: 0,
         avatars: "",
         safeStep: 0,
-        askWhole: true,
     };
+}
+
+/** What a browser sends to ask the server for the whole horde (its ground and its whole log), answered to it alone. */
+export function zombieWholeAsked(): ZombieHordeMessage {
+    return { ...zombieAsking(), askWhole: true };
+}
+
+/** What the browser of a player sends when their Nerf shoots a dart into the horde (ZombieDart). */
+export function zombieDartAsked(dart: ZombieDartMessage): ZombieHordeMessage {
+    return { ...zombieAsking(), dart };
 }
 
 /**

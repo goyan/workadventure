@@ -1427,7 +1427,7 @@ export class GameRoom implements BrothersFinder {
 
     /** A player sends a horde of zombies across the map, or stops the one crossing it (`release`). */
     public launchZombies(
-        user: Pick<User, "uuid" | "getVariables" | "emitInBatch">,
+        user: Pick<User, "uuid" | "getVariables" | "emitInBatch" | "getPosition">,
         zombies: ZombieHordeMessage | undefined,
         release = false,
     ): void {
@@ -1443,6 +1443,14 @@ export class GameRoom implements BrothersFinder {
                 // By the player, not by the connection: two tabs of theirs shoot no faster than one.
                 this.catastrophes?.zombieGrenade(user.uuid, zombies.grenade);
             }
+        }
+        // A dart of the Nerf shot into the horde, by the player (refused in Basique), from near their avatar.
+        else if (zombies?.dart) {
+            const { x, y } = user.getPosition();
+            this.catastrophes?.zombieDart(
+                { uuid: user.uuid, basic: playsBasic(user.getVariables().getVariables()), x, y },
+                zombies.dart,
+            );
         } else if (zombies) this.catastrophes?.startZombies(zombies);
     }
 

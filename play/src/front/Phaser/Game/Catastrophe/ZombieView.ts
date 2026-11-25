@@ -1,6 +1,15 @@
 import * as Phaser from "phaser";
-import { ZOMBIE_BURN_STEPS, ZOMBIE_DYING, ZOMBIE_WALKING, ZombieCrowd } from "@workadventure/map-editor";
-import type { ZombieHorde } from "@workadventure/map-editor";
+import {
+    ZOMBIE_BURN_STEPS,
+    ZOMBIE_DART_FALL_STEPS,
+    ZOMBIE_DART_RECOIL_PX,
+    ZOMBIE_DART_RECOIL_STEPS,
+    ZOMBIE_DYING,
+    ZOMBIE_SHOT,
+    ZOMBIE_WALKING,
+    ZombieCrowd,
+} from "@workadventure/map-editor";
+import type { ZombieDart, ZombieHorde } from "@workadventure/map-editor";
 import { floorDepth } from "../MapEditor/MapLayer/FloorDepth";
 import { SWIM_DEPTH_PX } from "../Terrain/Pixel/TerrainUnits";
 import {
@@ -57,6 +66,19 @@ const SHOWN_BEHIND_STEPS = 3;
 const DUST_MS = 1500;
 /** The batches of a band are told apart by the altitude they are drawn at: this many bands an altitude, at most. */
 const BANDS_AN_ALTITUDE = 65_536;
+/** A zombie a dart met is drawn hurt this many steps, then falls dead over that many, and fades over the last ones. */
+const HURT_STEPS = 4;
+const FALLING_STEPS_AN_IMAGE = 2;
+const FADE_STEPS = 8;
+
+/** A zombie a dart met, as it is drawn: the step it was met at, where, and the way of the dart (0 when unknown). */
+interface Fallen {
+    step: number;
+    x: number;
+    y: number;
+    ux: number;
+    uy: number;
+}
 
 /** The images of one band of the map at one altitude, and how many it shows (`drawn`: at this image so far). */
 interface ZombieBatch {
@@ -91,6 +113,8 @@ export class ZombieView {
     private liftOf = new Int16Array(0);
     /** Whether each zombie seen wades in water one swims in: drawn half under. */
     private wading = new Uint8Array(0);
+    /** How long ago (steps) a dart met each zombie seen, -1 when none did. */
+    private fallAge = new Float32Array(0);
     /** A horde stopped or over: its last zombies (those walking then), fading. */
     private dust: { until: number; walking: Uint8Array } | undefined;
     private walkingNow = 0;
@@ -149,6 +173,7 @@ export class ZombieView {
         this.drawY = new Float32Array(made.count);
         this.liftOf = new Int16Array(made.count);
         this.wading = new Uint8Array(made.count);
+        this.fallAge = new Float32Array(made.count);
         for (let zombie = 0; zombie < made.count; zombie++) {
             // Tinted, a crowd, not copies.
             this.tint[zombie] = TINTS[(Math.imul(zombie, 2654435761) >>> 0) % TINTS.length];
@@ -184,6 +209,47 @@ export class ZombieView {
         const crowd = this.crowd;
         if (!crowd || this.dust || !this.shown) return { x: 0, y: 0 };
         return crowd.shoveAt(x, y);
+    }
+
+    /** The step the crowd is at, where a dart shot now flies from; undefined while it is not drawn. */
+    public step(): number | undefined {
+        const crowd = this.crowd;
+        return crowd && !this.dust && this.shown ? crowd.steps : undefined;
+    }
+
+    /** Whether a zombie walks within `range` px of a point: a dart shot from there may reach it. */
+    public walkingNear(x: number, y: number, range: number): boolean {
+        const crowd = this.crowd;
+        if (!crowd || this.dust || !this.shown) return false;
+        for (let zombie = 0; zombie < crowd.count; zombie++) {
+            if (crowd.state[zombie] !== ZOMBIE_WALKING) continue;
+            const dx = crowd.x[zombie] - x;
+            const dy = crowd.y[zombie] - y;
+            if (dx * dx + dy * dy <= range * range) return true;
+        }
+        return false;
+    }
+
+    /**
+     * How far along a dart told by the log (map pixels from where it was shot) it met a zombie: where it stops.
+     * Undefined while that is not known (not told yet, still flying), when it met none, or when no horde is drawn.
+     */
+    public dartStop(dart: Pick<ZombieDart, "fromX" | "fromY" | "toX" | "toY" | "shotStep">): number | undefined {
+        const crowd = this.crowd;
+        if (!crowd || this.dust || !this.shown) return undefined;
+        for (const seen of crowd.dartsSeen()) {
+            const told = seen.dart;
+            if (
+                told.shotStep === dart.shotStep &&
+                told.fromX === dart.fromX &&
+                told.fromY === dart.fromY &&
+                told.toX === dart.toX &&
+                told.toY === dart.toY
+            ) {
+                return seen.hit?.distance;
+            }
+        }
+        return undefined;
     }
 
     /** Where the body of the horde is (the mean of those walking), map pixels; undefined while none walks. */
@@ -396,13 +462,32 @@ export class ZombieView {
         const counts = this.counts;
         counts.fill(0, 0, slots + 1);
         const dust = this.dust?.walking;
+        const fallen = dust ? undefined : this.fallenOf(crowd);
+        // The time drawn, in steps: the state of the step `steps` is drawn whole at `between` 1.
+        const now = crowd.steps - 1 + between;
         let seen = 0;
         for (let zombie = 0; zombie < crowd.count; zombie++) {
             this.bandOf[zombie] = -1;
+            this.fallAge[zombie] = -1;
             const burning = state[zombie] === ZOMBIE_DYING;
-            if (dust ? dust[zombie] === 0 : state[zombie] !== ZOMBIE_WALKING && !burning) continue;
-            const px = lastX[zombie] + (x[zombie] - lastX[zombie]) * between;
-            const py = lastY[zombie] + (y[zombie] - lastY[zombie]) * between;
+            // Met by a dart: drawn falling from the step it was met at, where it was met (the crowd may have it walk
+            // on until the log applies the dart), recoiling along the dart. Thrown by a grenade before, it burns.
+            const fall = burning ? undefined : fallen?.get(zombie);
+            const fallAge = fall ? now - fall.step : -1;
+            if (fall && fallAge >= ZOMBIE_DART_FALL_STEPS) continue;
+            const falling = fall !== undefined && fallAge >= 0;
+            if (dust ? dust[zombie] === 0 : state[zombie] !== ZOMBIE_WALKING && !burning && !falling) continue;
+            const recoil = falling ? ZOMBIE_DART_RECOIL_PX * Math.min(1, fallAge / ZOMBIE_DART_RECOIL_STEPS) : 0;
+            const px =
+                fall && falling ? fall.x + fall.ux * recoil : lastX[zombie] + (x[zombie] - lastX[zombie]) * between;
+            const py =
+                fall && falling ? fall.y + fall.uy * recoil : lastY[zombie] + (y[zombie] - lastY[zombie]) * between;
+            if (fall && falling) {
+                this.fallAge[zombie] = fallAge;
+                // It faces where the dart came from.
+                if (fall.ux > 0) this.facing[zombie] = 1;
+                else if (fall.ux < 0) this.facing[zombie] = 0;
+            }
             if (px < left || px > right || py < top || py > bottom) continue;
             // On a bridge (the crowd walks on the ground under its deck, dry there): drawn as high as the deck, over
             // its slabs, and sorted there by its place on the ground, as the animals are (LandLifeView). Elsewhere,
@@ -446,7 +531,21 @@ export class ZombieView {
                 let lift = 0;
                 let tint = this.tint[zombie];
                 let fade = 1;
-                if (crowd.state[zombie] === ZOMBIE_DYING) {
+                const fallAge = this.fallAge[zombie];
+                if (fallAge >= 0) {
+                    // Met by a dart: hurt, then falling dead, then lying, fading at the end. It does not burn.
+                    if (fallAge < HURT_STEPS) {
+                        row = ZOMBIE_HURT;
+                        image = Math.min(sheet.counts[ZOMBIE_HURT] - 1, Math.floor(fallAge));
+                    } else {
+                        row = ZOMBIE_DEAD;
+                        image = Math.min(
+                            sheet.counts[ZOMBIE_DEAD] - 1,
+                            Math.floor((fallAge - HURT_STEPS) / FALLING_STEPS_AN_IMAGE),
+                        );
+                    }
+                    fade = Math.min(1, (ZOMBIE_DART_FALL_STEPS - fallAge) / FADE_STEPS);
+                } else if (crowd.state[zombie] === ZOMBIE_DYING) {
                     // Thrown by a blast: hurt in the air, falling dead on the ground, burning, then charred and gone.
                     const age = crowd.steps - (crowd.dieAt[zombie] - ZOMBIE_BURN_STEPS);
                     lift = crowd.z[zombie];
@@ -493,6 +592,33 @@ export class ZombieView {
             for (let hidden = batch.drawn; hidden < batch.shown; hidden++) batch.bobs[hidden].setVisible(false);
             batch.shown = batch.drawn;
         }
+    }
+
+    /**
+     * The zombies darts met, as they are drawn: those the log will kill (seen as soon as the dart is told, before the
+     * crowd applies it) and those it killed, by the step each was met at.
+     */
+    private fallenOf(crowd: ZombieCrowd): Map<number, Fallen> | undefined {
+        let fallen: Map<number, Fallen> | undefined;
+        for (const seen of crowd.dartsSeen()) {
+            if (!seen.hit) continue;
+            fallen ??= new Map();
+            fallen.set(seen.hit.zombie, {
+                step: seen.hit.step,
+                x: seen.hit.x,
+                y: seen.hit.y,
+                ux: seen.ux,
+                uy: seen.uy,
+            });
+        }
+        if (crowd.dying === 0) return fallen;
+        // Killed by a dart this browser did not see fly (it joined): lying where the crowd laid it.
+        for (let zombie = 0; zombie < crowd.count; zombie++) {
+            if (crowd.state[zombie] !== ZOMBIE_SHOT || fallen?.has(zombie)) continue;
+            fallen ??= new Map();
+            fallen.set(zombie, { step: crowd.hitStep[zombie], x: crowd.x[zombie], y: crowd.y[zombie], ux: 0, uy: 0 });
+        }
+        return fallen;
     }
 
     /**

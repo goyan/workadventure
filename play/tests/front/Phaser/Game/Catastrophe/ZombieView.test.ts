@@ -2,11 +2,15 @@ import {
     RAISED_FLOOR_COLLECTION,
     TERRAIN_CELL,
     TILE_PX,
+    ZOMBIE_DART_FALL_STEPS,
+    ZOMBIE_DART_TICKS,
+    ZOMBIE_SHOT,
     ZOMBIE_WALKING,
     ZombieCrowd,
     bridgeTilesOf,
     bridgesOf,
     dryOnBridges,
+    encodeZombieLog,
     encodeZombieTerrain,
     zombieDirection,
     zombieTerrainOf,
@@ -14,7 +18,13 @@ import {
 import type { WAMFileFormat, ZombieHorde } from "@workadventure/map-editor";
 import { describe, expect, it, vi } from "vitest";
 import { ZombieView } from "../../../../../src/front/Phaser/Game/Catastrophe/ZombieView";
-import { ZOMBIE_SHEET_COLUMNS, ZOMBIE_SHEETS } from "../../../../../src/front/Phaser/Game/Catastrophe/ZombieSheets";
+import {
+    ZOMBIE_DEAD,
+    ZOMBIE_HURT,
+    ZOMBIE_SHEET_COLUMNS,
+    ZOMBIE_SHEETS,
+    ZOMBIE_WALK,
+} from "../../../../../src/front/Phaser/Game/Catastrophe/ZombieSheets";
 import { FLOOR_LEVEL_DEPTH, floorDepth } from "../../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorDepth";
 
 vi.mock("phaser", () => ({ Textures: { FilterMode: { LINEAR: 1 } } }));
@@ -245,6 +255,85 @@ describe("ZombieView", () => {
         expect(crossed).toBe(true);
         expect(view.walking()).toBe(1);
     });
+    it("draws a zombie a dart met hurt, then falling dead where it was met, recoiling along the dart, then gone", () => {
+        const dry = new Uint8Array(WIDTH_CELLS * HEIGHT_CELLS);
+        const shotStep = 20;
+        // Where the zombie runs at the step the dart is shot at: the dart comes from 12 px east of it, westwards.
+        const twin = new ZombieCrowd(hordeOver(dry));
+        while (twin.steps < shotStep) twin.step();
+        const fromX = Math.round(twin.x[0] + 12);
+        const fromY = Math.round(twin.y[0] - 10);
+        // Applied by the log well after its flight, as on a map sped up: the zombie is drawn falling before.
+        const applyStep = shotStep + ZOMBIE_DART_TICKS + 20;
+        const told = {
+            ...hordeOver(dry),
+            avatars: encodeZombieLog([
+                {
+                    applyStep,
+                    changes: [],
+                    darts: [{ fromX, fromY, toX: fromX - 384, toY: fromY, shotStep, stride: 1 }],
+                },
+            ]),
+        };
+        const { scene, blitters } = createScene();
+        const view = new ZombieView(scene);
+        view.setHorde(told, START);
+        const shown = () => blitters.flatMap((blitter) => blitter.bobs.filter((bob) => bob.visible));
+        // Zombie 0: the first sheet, the first scale, its rows of eight images.
+        const rowOf = (frame: number) => Math.floor(frame / ZOMBIE_SHEET_COLUMNS);
+        const rows: number[] = [];
+        let fallenAt: number | undefined;
+        let walkedAt: number | undefined;
+        for (let image = 1; image <= shotStep + ZOMBIE_DART_FALL_STEPS + 5; image++) {
+            const epoch = START + image * 100 - 1;
+            view.update(epoch, epoch, true, false);
+            const bobs = shown();
+            if (image <= shotStep) {
+                // It runs up to the step it is met at.
+                expect(bobs).toHaveLength(1);
+                expect(rowOf(bobs[0].frame)).toBe(ZOMBIE_WALK);
+                walkedAt = bobs[0].x;
+                continue;
+            }
+            if (image >= shotStep + ZOMBIE_DART_FALL_STEPS + 1) {
+                expect(bobs).toHaveLength(0);
+                continue;
+            }
+            expect(bobs).toHaveLength(1);
+            rows.push(rowOf(bobs[0].frame));
+            // Where it was met, a few pixels further west (the dart flies west), and no further: it does not run on.
+            fallenAt ??= bobs[0].x;
+            expect(bobs[0].x).toBeLessThanOrEqual(fallenAt);
+            expect(bobs[0].x).toBeGreaterThanOrEqual(fallenAt - 10);
+            // It faces where the dart came from.
+            expect(bobs[0].flipX).toBe(false);
+        }
+        expect(Math.abs((fallenAt ?? 0) - (walkedAt ?? 0))).toBeLessThan(16);
+        expect(rows.slice(0, 3)).toEqual([ZOMBIE_HURT, ZOMBIE_HURT, ZOMBIE_HURT]);
+        expect(rows.at(-1)).toBe(ZOMBIE_DEAD);
+        expect(new Set(rows)).toEqual(new Set([ZOMBIE_HURT, ZOMBIE_DEAD]));
+        // The crowd killed it once the log applied the dart: met at the step it was shot at, it lay its 3 s already.
+        const crowd = new ZombieCrowd(told);
+        while (crowd.steps < applyStep) crowd.step();
+        expect(crowd.state[0]).toBe(ZOMBIE_WALKING);
+        crowd.step();
+        expect(crowd.hitStep[0]).toBe(shotStep);
+        expect(crowd.state[0]).not.toBe(ZOMBIE_WALKING);
+        expect(crowd.state[0]).not.toBe(ZOMBIE_SHOT);
+        // The dart stops on it: where it met it, along the dart from its barrel.
+        const stopped = new ZombieView(createScene().scene);
+        stopped.setHorde(told, START);
+        for (let image = 1; image <= shotStep + 2; image++) {
+            stopped.update(START + image * 100, START + image * 100, true, false);
+        }
+        const stop = stopped.dartStop({ fromX, fromY, toX: fromX - 384, toY: fromY, shotStep });
+        expect(stop).toBeGreaterThanOrEqual(0);
+        expect(stop).toBeLessThan(12);
+        expect(
+            stopped.dartStop({ fromX, fromY, toX: fromX - 384, toY: fromY, shotStep: shotStep + 1 }),
+        ).toBeUndefined();
+    });
+
     it("never steps past the step its log is complete to: it waits there, still drawn, then goes on", () => {
         const dry = new Uint8Array(WIDTH_CELLS * HEIGHT_CELLS);
         const visible = (blitters: { bobs: { visible: boolean; x: number; y: number }[] }[]) =>

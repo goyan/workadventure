@@ -59,6 +59,8 @@ interface Projectile {
     /** Where the shooter stood: a shot fired from the prison hurts nobody. */
     originX: number;
     originY: number;
+    /** The dart it sent into the horde of zombies: it stops where the log of the horde says it met one. */
+    zombieDart: NerfShot["zombieDart"];
 }
 
 /**
@@ -130,9 +132,18 @@ export class NerfManager {
                 ? { direction: aim.direction, heading: aim.heading, angle: aim.angle }
                 : { direction: player.lastDirection, heading: player.getNerfHeading() }),
         });
-        if (!shot || !this.spawn(shot, connection.getUserId())) return;
+        const projectile = shot && this.spawn(shot, connection.getUserId());
+        if (!shot || !projectile) return;
         if (aim) player.faceDirection(aim.direction);
-        connection.emitScriptableEvent(NERF_SHOT_EVENT, shot, undefined).catch((error: unknown) => {
+        // Into the horde of zombies too, when one crosses the map: the colleagues stop it where it met a zombie.
+        projectile.zombieDart = this.scene.shootZombieDart(
+            projectile.startX,
+            projectile.startY,
+            projectile.dx,
+            projectile.dy,
+        );
+        const told = projectile.zombieDart ? { ...shot, zombieDart: projectile.zombieDart } : shot;
+        connection.emitScriptableEvent(NERF_SHOT_EVENT, told, undefined).catch((error: unknown) => {
             debug("Could not send a shot", { error });
         });
     }
@@ -196,7 +207,11 @@ export class NerfManager {
                 continue;
             }
             projectile.lastAt = time;
-            const distance = Math.min(NERF_RANGE, (Math.max(0, time - projectile.bornAt) * NERF_SPEED) / 1000);
+            const flown = Math.min(NERF_RANGE, (Math.max(0, time - projectile.bornAt) * NERF_SPEED) / 1000);
+            // Where it met a zombie of the horde, once the log of the horde tells it: it stops there.
+            const zombieStop = projectile.zombieDart && this.scene.zombieDartStop(projectile.zombieDart);
+            const metZombie = zombieStop !== undefined && flown >= zombieStop;
+            const distance = metZombie ? Math.max(0, zombieStop) : flown;
             const next = {
                 x: projectile.startX + projectile.dx * distance,
                 y: projectile.startY + projectile.dy * distance,
@@ -235,6 +250,7 @@ export class NerfManager {
                 previous = point;
             }
             if (hitId !== undefined && hitId === ownId) this.receiveDart(projectile, prison, time);
+            if (!impactPoint && metZombie) impactPoint = next;
             if (impactPoint || distance >= NERF_RANGE) {
                 if (impactPoint && this.impacts.size < MAX_PROJECTILES) {
                     this.impacts.add(new NerfImpactEffect(this.scene, impactPoint.x, impactPoint.y, time));
@@ -264,11 +280,11 @@ export class NerfManager {
         this.scene.markDirty();
     }
 
-    private spawn(shot: NerfShot, senderId: number): boolean {
+    private spawn(shot: NerfShot, senderId: number): Projectile | undefined {
         const now = this.scene.time.now;
         const lastShot = this.lastShots.get(senderId);
-        if (lastShot !== undefined && now - lastShot < NERF_COOLDOWN_MS) return false;
-        if (this.projectiles.size >= MAX_PROJECTILES) return false;
+        if (lastShot !== undefined && now - lastShot < NERF_COOLDOWN_MS) return undefined;
+        if (this.projectiles.size >= MAX_PROJECTILES) return undefined;
         this.lastShots.set(senderId, now);
         const pose = nerfGunPose(shot.direction, shot.heading, shot.angle);
         const x = shot.x + pose.x + pose.dx * NERF_MUZZLE_LENGTH;
@@ -285,7 +301,7 @@ export class NerfManager {
         if (shot.angle !== undefined) shooter?.aimNerf(shot.angle, shot.direction);
         sprite.setPosition(x, y).setRotation(Math.atan2(pose.dy, pose.dx)).setDepth(floorDepth(z, y));
         // The first update also checks the path to the muzzle: a barrel protruding through a wall cannot shoot past it.
-        this.projectiles.add({
+        const projectile: Projectile = {
             sprite,
             x: shot.x,
             y: shot.y,
@@ -299,10 +315,12 @@ export class NerfManager {
             z,
             originX: shot.x,
             originY: shot.y,
-        });
+            zombieDart: shot.zombieDart,
+        };
+        this.projectiles.add(projectile);
         this.scene.markDirty();
         this.playPop(shot);
-        return true;
+        return projectile;
     }
 
     /** The prison of the map, read again each frame: the map editor may move it. */

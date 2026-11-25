@@ -1,3 +1,4 @@
+import { NERF_DART_RANGE_PX, NERF_DART_SPEED_PX_S } from "@workadventure/map-editor";
 import { PositionMessage_Direction } from "@workadventure/messages";
 import { z } from "zod";
 import { cardinalVehicleHeading, vehicleHeading, VEHICLE_DIRECTIONS } from "../../Vehicle/VehicleFrames";
@@ -12,8 +13,9 @@ export const NERF_SOUND_KEY = "audio-nerf-pop";
 export const NERF_SOUND_URL = "/resources/objects/nerf/pop.wav";
 export const NERF_MAX_VOLUME = 0.7;
 export const NERF_COOLDOWN_MS = 300;
-export const NERF_SPEED = 320;
-export const NERF_RANGE = 384;
+/** Px/s and px: the same as the darts the horde of zombies is shot with (ZombieDart). */
+export const NERF_SPEED = NERF_DART_SPEED_PX_S;
+export const NERF_RANGE = NERF_DART_RANGE_PX;
 export const NERF_HEARING_DISTANCE = 256;
 /** From the grip to the end of the barrel: the dart leaves there. */
 export const NERF_MUZZLE_LENGTH = 10;
@@ -36,6 +38,19 @@ const shotSchema = z.object({
      * along `heading` (the nearest of its eight directions) instead.
      */
     angle: z.number().finite().min(-Math.PI).max(Math.PI).optional(),
+    /**
+     * The dart this shot sent into the horde of zombies, as the server was told it (whole map pixels, the step of the
+     * horde): the browsers stop it where the log says it met a zombie. Absent when none was sent.
+     */
+    zombieDart: z
+        .object({
+            fromX: z.number().int(),
+            fromY: z.number().int(),
+            toX: z.number().int(),
+            toY: z.number().int(),
+            shotStep: z.number().int().min(0),
+        })
+        .optional(),
     direction: z.union([
         z.literal(PositionMessage_Direction.UP),
         z.literal(PositionMessage_Direction.RIGHT),
