@@ -862,6 +862,18 @@ export class WaterGrid implements WaterView {
         return index === undefined ? 0 : this.depth[index];
     }
 
+    /**
+     * How far the water of a cell stands over what it held before the sea of a tsunami came (pixels), while what
+     * the sea brought is followed (seaFlood): what lifts the ice of a lake. 0 otherwise, and where it stands lower.
+     */
+    public seaRiseAt(cellX: number, cellY: number): number {
+        const flood = this.flood;
+        const index = this.indexOf(cellX, cellY);
+        if (!flood || index === undefined || flood.before.length !== this.depth.length) return 0;
+        const held = this.depth[index] + (this.under.length === this.depth.length ? this.under[index] : 0);
+        return Math.max(0, held - flood.before[index]);
+    }
+
     public cells(): WaterCells {
         return { depth: this.depth, closed: this.closed };
     }
