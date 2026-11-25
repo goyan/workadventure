@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import { ZOMBIE_BURN_STEPS, ZOMBIE_DYING, ZOMBIE_WALKING, ZombieCrowd } from "@workadventure/map-editor";
 import type { ZombieHorde } from "@workadventure/map-editor";
+import { floorDepth } from "../MapEditor/MapLayer/FloorDepth";
 import {
     ZOMBIE_DEAD,
     ZOMBIE_HURT,
@@ -45,6 +46,16 @@ const CATCH_UP_MS = 8;
 const SHOWN_BEHIND_STEPS = 3;
 /** Stopped or over, the zombies left fall to dust over this long (ms). */
 const DUST_MS = 1500;
+/** The batches of a band are told apart by the altitude they are drawn at: this many bands an altitude, at most. */
+const BANDS_AN_ALTITUDE = 65_536;
+
+/** The images of one band of the map at one altitude, and how many it shows (`drawn`: at this image so far). */
+interface ZombieBatch {
+    blitter: Phaser.GameObjects.Blitter;
+    bobs: Phaser.GameObjects.Bob[];
+    shown: number;
+    drawn: number;
+}
 
 /**
  * The horde of zombies of the room, drawn: its crowd (ZombieCrowd, the same as the server's and every other
@@ -58,11 +69,8 @@ export class ZombieView {
     private facing = new Uint8Array(0);
     private stride = new Float32Array(0);
     private tint = new Uint32Array(0);
-    /** The batches of images, by band of the map, and how many each shows. */
-    private readonly bands = new Map<
-        number,
-        { blitter: Phaser.GameObjects.Blitter; bobs: Phaser.GameObjects.Bob[]; shown: number }
-    >();
+    /** The batches of images, by band of the map and altitude (see batchOf), and how many each shows. */
+    private readonly bands = new Map<number, ZombieBatch>();
     /** Whether the sheets are asked for, and laid in the atlas of the horde. */
     private requested = false;
     /** The zombies seen, sorted by band then by row, refilled at each image. */
@@ -70,6 +78,8 @@ export class ZombieView {
     private bandOf = new Int32Array(0);
     private drawY = new Float32Array(0);
     private drawX = new Float32Array(0);
+    /** How high over the ground each zombie seen is drawn (px): on the deck of a bridge, or up its ramp. */
+    private liftOf = new Int16Array(0);
     /** A horde stopped or over: its last zombies (those walking then), fading. */
     private dust: { until: number; walking: Uint8Array } | undefined;
     private walkingNow = 0;
@@ -81,12 +91,16 @@ export class ZombieView {
     /** What draw sorts with, kept from an image to the next. */
     private counts = new Int32Array(0);
     private next = new Int32Array(0);
-    private readonly used = new Set<number>();
 
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
         /** How much lower a point of the ground is drawn (the relief in 3/4); none when absent. */
         private readonly groundDropAt: (x: number, y: number) => number = () => 0,
+        /**
+         * How high over the ground one walks above a point of the ground (map pixels): the bridges of the map
+         * (GameScene.getBridgeElevationAt). None when absent.
+         */
+        private readonly liftAt: (x: number, y: number) => number = () => 0,
         /** Where each sheet is fetched from: the resources of the game by default. */
         private readonly urlOf: (sheet: (typeof ZOMBIE_SHEETS)[number]) => string = (sheet) => sheet.url,
     ) {}
@@ -117,6 +131,7 @@ export class ZombieView {
         this.bandOf = new Int32Array(made.count);
         this.drawX = new Float32Array(made.count);
         this.drawY = new Float32Array(made.count);
+        this.liftOf = new Int16Array(made.count);
         for (let zombie = 0; zombie < made.count; zombie++) {
             // Tinted, a crowd, not copies.
             this.tint[zombie] = TINTS[(Math.imul(zombie, 2654435761) >>> 0) % TINTS.length];
@@ -371,11 +386,15 @@ export class ZombieView {
             const px = lastX[zombie] + (x[zombie] - lastX[zombie]) * between;
             const py = lastY[zombie] + (y[zombie] - lastY[zombie]) * between;
             if (px < left || px > right || py < top || py > bottom) continue;
-            const drop = this.groundDropAt(px, py);
-            const dy = py + drop;
+            // On a bridge (the crowd walks on the ground under its deck, dry there): drawn as high as the deck, over
+            // its slabs, and sorted there by its place on the ground, as the animals are (LandLifeView). Elsewhere,
+            // where the ground is drawn: lower in a hollow, higher on a mount.
+            const lift = Math.round(this.liftAt(px, py));
+            const dy = lift > 0 ? py : py + this.groundDropAt(px, py);
             const slot = Math.min(slots - 1, Math.max(0, Math.floor((dy / BAND_PX - firstBand) * SUB_BANDS)));
             this.drawX[zombie] = px;
-            this.drawY[zombie] = dy;
+            this.drawY[zombie] = dy - lift;
+            this.liftOf[zombie] = lift;
             this.bandOf[zombie] = slot;
             counts[slot + 1]++;
             seen++;
@@ -387,24 +406,20 @@ export class ZombieView {
             // Only those counted above: drawn at this image.
             if (this.bandOf[zombie] >= 0) this.order[next[this.bandOf[zombie]]++] = zombie;
         }
-        // Each band its zombies, from the top down.
-        const used = this.used;
-        used.clear();
+        // Each band its zombies, from the top down, in the batch of the altitude each is drawn at.
+        for (const batch of this.bands.values()) batch.drawn = 0;
         let at = 0;
+        const dying = this.dust ? 1 - alpha : 0;
         for (let band = firstBand; band <= lastBand && at < seen; band++) {
             const end = counts[(band - firstBand + 1) * SUB_BANDS];
-            if (end <= at) continue;
-            const batch = this.band(band);
-            used.add(band);
-            let shown = 0;
-            const dying = this.dust ? 1 - alpha : 0;
             for (; at < end; at++) {
                 const zombie = this.order[at];
+                const batch = this.batchOf(band, this.liftOf[zombie]);
                 const look = zombie % ZOMBIE_SHEETS.length;
                 const sheet = ZOMBIE_SHEETS[look];
                 const size = (zombie >> 2) % SCALES.length;
-                const bob = shown < batch.bobs.length ? batch.bobs[shown] : this.addBob(batch);
-                shown++;
+                const bob = batch.drawn < batch.bobs.length ? batch.bobs[batch.drawn] : this.addBob(batch);
+                batch.drawn++;
                 let row = ZOMBIE_WALK;
                 let image: number;
                 let lift = 0;
@@ -449,30 +464,30 @@ export class ZombieView {
                 bob.setAlpha((this.dust ? Math.min(1, alpha * 2) : 1) * fade);
                 bob.setVisible(true);
             }
-            for (let hidden = shown; hidden < batch.shown; hidden++) batch.bobs[hidden].setVisible(false);
-            batch.shown = shown;
         }
-        for (const [band, batch] of this.bands) {
-            if (used.has(band) || batch.shown === 0) continue;
-            for (let hidden = 0; hidden < batch.shown; hidden++) batch.bobs[hidden].setVisible(false);
-            batch.shown = 0;
+        for (const batch of this.bands.values()) {
+            for (let hidden = batch.drawn; hidden < batch.shown; hidden++) batch.bobs[hidden].setVisible(false);
+            batch.shown = batch.drawn;
         }
     }
 
-    private band(band: number): { blitter: Phaser.GameObjects.Blitter; bobs: Phaser.GameObjects.Bob[]; shown: number } {
-        let batch = this.bands.get(band);
+    /**
+     * The batch of a band of the map at an altitude: on the ground at the depth of the bottom of the band; above it
+     * (a deck, a ramp), in the band of depths of that altitude, over its slabs (floorDepth), sorted as on the ground.
+     */
+    private batchOf(band: number, lift: number): ZombieBatch {
+        const key = lift * BANDS_AN_ALTITUDE + band;
+        let batch = this.bands.get(key);
         if (!batch) {
-            const blitter = this.scene.add.blitter(0, 0, TEXTURE).setDepth((band + 1) * BAND_PX);
-            batch = { blitter, bobs: [], shown: 0 };
-            this.bands.set(band, batch);
+            const groundDepth = (band + 1) * BAND_PX;
+            const blitter = this.scene.add.blitter(0, 0, TEXTURE).setDepth(floorDepth(lift, groundDepth));
+            batch = { blitter, bobs: [], shown: 0, drawn: 0 };
+            this.bands.set(key, batch);
         }
         return batch;
     }
 
-    private addBob(batch: {
-        blitter: Phaser.GameObjects.Blitter;
-        bobs: Phaser.GameObjects.Bob[];
-    }): Phaser.GameObjects.Bob {
+    private addBob(batch: ZombieBatch): Phaser.GameObjects.Bob {
         const bob = batch.blitter.create(0, 0, 0);
         batch.bobs.push(bob);
         return bob;
