@@ -3972,8 +3972,8 @@ export class GameScene extends DirtyScene {
 
     /**
      * A dart of the Nerf this player just shot, from its barrel at (x, y) the way (dx, dy), sent into the horde of the
-     * room (zombieDartOf): the server puts it in its log, and the zombie it meets first falls. Undefined when none is
-     * sent (no horde, Basique, a floor, no zombie near).
+     * room (zombieDartOf): the server puts it in its log, and every zombie it goes through falls. Undefined when none
+     * is sent (no horde, Basique, a floor, no zombie near).
      */
     public shootZombieDart(x: number, y: number, dx: number, dy: number): ZombieDartMessage | undefined {
         const dart = zombieDartOf(
@@ -3988,15 +3988,6 @@ export class GameScene extends DirtyScene {
         if (!dart || !this.connection) return undefined;
         this.connection.emitLaunchZombies(zombieDartAsked(dart), false);
         return dart;
-    }
-
-    /**
-     * How far along a dart sent into the horde (by this player or another) it met a zombie, from its barrel: where it
-     * stops. Undefined while that is not known, when it met none, and in Basique (no horde is seen).
-     */
-    public zombieDartStop(dart: ZombieDartMessage): number | undefined {
-        if (get(basicModeStore)) return undefined;
-        return this.zombieView?.dartStop(dart);
     }
 
     /**

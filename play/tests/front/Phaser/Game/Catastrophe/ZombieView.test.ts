@@ -255,7 +255,7 @@ describe("ZombieView", () => {
         expect(crossed).toBe(true);
         expect(view.walking()).toBe(1);
     });
-    it("draws a zombie a dart met hurt, then falling dead where it was met, recoiling along the dart, then gone", () => {
+    it("draws a zombie a dart went through hurt, then falling dead where it was met, recoiling along it, then gone", () => {
         const dry = new Uint8Array(WIDTH_CELLS * HEIGHT_CELLS);
         const shotStep = 20;
         // Where the zombie runs at the step the dart is shot at: the dart comes from 12 px east of it, westwards.
@@ -320,18 +320,6 @@ describe("ZombieView", () => {
         expect(crowd.hitStep[0]).toBe(shotStep);
         expect(crowd.state[0]).not.toBe(ZOMBIE_WALKING);
         expect(crowd.state[0]).not.toBe(ZOMBIE_SHOT);
-        // The dart stops on it: where it met it, along the dart from its barrel.
-        const stopped = new ZombieView(createScene().scene);
-        stopped.setHorde(told, START);
-        for (let image = 1; image <= shotStep + 2; image++) {
-            stopped.update(START + image * 100, START + image * 100, true, false);
-        }
-        const stop = stopped.dartStop({ fromX, fromY, toX: fromX - 384, toY: fromY, shotStep });
-        expect(stop).toBeGreaterThanOrEqual(0);
-        expect(stop).toBeLessThan(12);
-        expect(
-            stopped.dartStop({ fromX, fromY, toX: fromX - 384, toY: fromY, shotStep: shotStep + 1 }),
-        ).toBeUndefined();
     });
 
     it("never steps past the step its log is complete to: it waits there, still drawn, then goes on", () => {

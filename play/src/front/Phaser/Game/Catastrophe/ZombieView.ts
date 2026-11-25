@@ -9,7 +9,7 @@ import {
     ZOMBIE_WALKING,
     ZombieCrowd,
 } from "@workadventure/map-editor";
-import type { ZombieDart, ZombieHorde } from "@workadventure/map-editor";
+import type { ZombieHorde } from "@workadventure/map-editor";
 import { floorDepth } from "../MapEditor/MapLayer/FloorDepth";
 import { SWIM_DEPTH_PX } from "../Terrain/Pixel/TerrainUnits";
 import {
@@ -229,28 +229,6 @@ export class ZombieView {
             if (dx * dx + dy * dy <= range * range) return true;
         }
         return false;
-    }
-
-    /**
-     * How far along a dart told by the log (map pixels from where it was shot) it met a zombie: where it stops.
-     * Undefined while that is not known (not told yet, still flying), when it met none, or when no horde is drawn.
-     */
-    public dartStop(dart: Pick<ZombieDart, "fromX" | "fromY" | "toX" | "toY" | "shotStep">): number | undefined {
-        const crowd = this.crowd;
-        if (!crowd || this.dust || !this.shown) return undefined;
-        for (const seen of crowd.dartsSeen()) {
-            const told = seen.dart;
-            if (
-                told.shotStep === dart.shotStep &&
-                told.fromX === dart.fromX &&
-                told.fromY === dart.fromY &&
-                told.toX === dart.toX &&
-                told.toY === dart.toY
-            ) {
-                return seen.hit?.distance;
-            }
-        }
-        return undefined;
     }
 
     /** Where the body of the horde is (the mean of those walking), map pixels; undefined while none walks. */
@@ -602,15 +580,10 @@ export class ZombieView {
     private fallenOf(crowd: ZombieCrowd): Map<number, Fallen> | undefined {
         let fallen: Map<number, Fallen> | undefined;
         for (const seen of crowd.dartsSeen()) {
-            if (!seen.hit) continue;
-            fallen ??= new Map();
-            fallen.set(seen.hit.zombie, {
-                step: seen.hit.step,
-                x: seen.hit.x,
-                y: seen.hit.y,
-                ux: seen.ux,
-                uy: seen.uy,
-            });
+            for (const hit of seen.hits) {
+                fallen ??= new Map();
+                fallen.set(hit.zombie, { step: hit.step, x: hit.x, y: hit.y, ux: seen.ux, uy: seen.uy });
+            }
         }
         if (crowd.dying === 0) return fallen;
         // Killed by a dart this browser did not see fly (it joined): lying where the crowd laid it.

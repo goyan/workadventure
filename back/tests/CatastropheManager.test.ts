@@ -1124,63 +1124,56 @@ describe("CatastropheManager, a horde of zombies", () => {
         expect(shoot("one-more")).toBe(true);
     });
 
-    // Ten seconds or so on a runner of the CI (6.3 s once for the 5 s of before): far from a loop, not a hang.
-    it(
-        "keeps its log within bounds over a horde of 15 minutes with 40 players shooting every second",
-        { timeout: 30_000 },
-        () => {
-            const { manager, sent } = zombieHarness();
-            manager.startZombies({ ...ask, minutes: 15 });
-            // The longest a horde lasts, whatever is asked.
-            expect(manager.zombies()?.durationMs).toBe(15 * 60_000);
-            let tellsOfASecond = 0;
-            let mostTold = 0;
-            // What a browser is sent (its log and its ground, base64): as it is now, and as it was before the log was
-            // told by its end (the whole log in every message, the ground every 5 s).
-            let bytesNow = 0;
-            let bytesBefore = 0;
-            const terrainLength = manager.zombies()?.terrain.length ?? 0;
-            for (let second = 1; second < 15 * 60; second++) {
-                const before = sent.length;
-                vi.advanceTimersByTime(1_000);
-                for (let shooter = 0; shooter < 40; shooter++) {
-                    manager.zombieGrenade(`p${shooter}`, { fromX: 100, fromY: 100, toX: 300, toY: 100 });
-                }
-                const ofThisSecond = sent.slice(before);
-                for (const message of ofThisSecond) {
-                    const length = (message.zombies?.avatars.length ?? 0) + (message.zombies?.terrain.length ?? 0);
-                    mostTold = Math.max(mostTold, length);
-                    bytesNow += length;
-                }
-                bytesBefore += ofThisSecond.length * (manager.zombies()?.avatars.length ?? 0);
-                if (second % 5 === 0) bytesBefore += terrainLength;
-                tellsOfASecond = Math.max(tellsOfASecond, ofThisSecond.length);
+    it("keeps its log within bounds over a horde of 15 minutes with 40 players shooting every second", () => {
+        const { manager, sent } = zombieHarness();
+        manager.startZombies({ ...ask, minutes: 15 });
+        // The longest a horde lasts, whatever is asked.
+        expect(manager.zombies()?.durationMs).toBe(15 * 60_000);
+        let tellsOfASecond = 0;
+        let mostTold = 0;
+        // What a browser is sent (its log and its ground, base64): as it is now, and as it was before the log was
+        // told by its end (the whole log in every message, the ground every 5 s).
+        let bytesNow = 0;
+        let bytesBefore = 0;
+        const terrainLength = manager.zombies()?.terrain.length ?? 0;
+        for (let second = 1; second < 15 * 60; second++) {
+            const before = sent.length;
+            vi.advanceTimersByTime(1_000);
+            for (let shooter = 0; shooter < 40; shooter++) {
+                manager.zombieGrenade(`p${shooter}`, { fromX: 100, fromY: 100, toX: 300, toY: 100 });
             }
-            const entries = decodeZombieLog(manager.zombies()?.avatars ?? "");
-            const shots = entries.filter((entry) => entry.grenades).length;
-            // 32 shots a second at most (128 in the air, a fuse of 4 s), whoever shoots: 40 players shoot no more.
-            expect(shots).toBeLessThanOrEqual(32 * 15 * 60);
-            expect(shots).toBeGreaterThan(30 * 15 * 60);
-            const told = sent.map((message) => message.zombies).filter((zombies) => zombies !== undefined);
-            const tails = told.filter((zombies) => zombies.terrain === "");
-            const tail = Math.max(...tails.map((zombies) => zombies.avatars.length));
-            const whole = Math.max(...told.map((zombies) => zombies.avatars.length));
-            // Each second: the last 10 s of it, some 320 shots, under 8 KB; a shot alone, a few bytes; the whole log
-            // with the ground every 30 s, under 600 KB at the end of the longest horde.
-            expect(tail).toBeLessThan(8_000);
-            const alone = Math.min(
-                ...told.filter((zombies) => (zombies.logFrom ?? 0) > 0).map((z) => z.avatars.length),
-            );
-            expect(alone).toBeLessThan(40);
-            expect(whole).toBeLessThan(600_000);
-            expect(mostTold).toBeLessThan(600_000);
-            expect(tellsOfASecond).toBeLessThanOrEqual(41);
-            const perSecondNow = Math.round(bytesNow / (15 * 60));
-            const perSecondBefore = Math.round(bytesBefore / (15 * 60));
-            expect(perSecondNow).toBeLessThan(25_000);
-            expect(perSecondNow * 100).toBeLessThan(perSecondBefore);
-        },
-    );
+            const ofThisSecond = sent.slice(before);
+            for (const message of ofThisSecond) {
+                const length = (message.zombies?.avatars.length ?? 0) + (message.zombies?.terrain.length ?? 0);
+                mostTold = Math.max(mostTold, length);
+                bytesNow += length;
+            }
+            bytesBefore += ofThisSecond.length * (manager.zombies()?.avatars.length ?? 0);
+            if (second % 5 === 0) bytesBefore += terrainLength;
+            tellsOfASecond = Math.max(tellsOfASecond, ofThisSecond.length);
+        }
+        const entries = decodeZombieLog(manager.zombies()?.avatars ?? "");
+        const shots = entries.filter((entry) => entry.grenades).length;
+        // 32 shots a second at most (128 in the air, a fuse of 4 s), whoever shoots: 40 players shoot no more.
+        expect(shots).toBeLessThanOrEqual(32 * 15 * 60);
+        expect(shots).toBeGreaterThan(30 * 15 * 60);
+        const told = sent.map((message) => message.zombies).filter((zombies) => zombies !== undefined);
+        const tails = told.filter((zombies) => zombies.terrain === "");
+        const tail = Math.max(...tails.map((zombies) => zombies.avatars.length));
+        const whole = Math.max(...told.map((zombies) => zombies.avatars.length));
+        // Each second: the last 10 s of it, some 320 shots, under 8 KB; a shot alone, a few bytes; the whole log
+        // with the ground every 30 s, under 600 KB at the end of the longest horde.
+        expect(tail).toBeLessThan(8_000);
+        const alone = Math.min(...told.filter((zombies) => (zombies.logFrom ?? 0) > 0).map((z) => z.avatars.length));
+        expect(alone).toBeLessThan(40);
+        expect(whole).toBeLessThan(600_000);
+        expect(mostTold).toBeLessThan(600_000);
+        expect(tellsOfASecond).toBeLessThanOrEqual(41);
+        const perSecondNow = Math.round(bytesNow / (15 * 60));
+        const perSecondBefore = Math.round(bytesBefore / (15 * 60));
+        expect(perSecondNow).toBeLessThan(25_000);
+        expect(perSecondNow * 100).toBeLessThan(perSecondBefore);
+    });
 
     const dartFrom = { uuid: "p7", basic: false, x: 100, y: 100 };
     // A dart as the browser aims it (zombieDartAim): its end at the range of the Nerf, 384 px.

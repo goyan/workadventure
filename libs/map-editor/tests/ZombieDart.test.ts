@@ -14,6 +14,7 @@ import {
     zombieDartFits,
     zombieDartReach,
     zombieDartStride,
+    zombieDartWay,
 } from "../src/Catastrophe/ZombieDart";
 import type { ZombieDart } from "../src/Catastrophe/ZombieDart";
 import {
@@ -95,6 +96,37 @@ function shotZombies(crowd: ZombieCrowd): number[] {
     return shot;
 }
 
+/**
+ * The zombies a dart goes through, worked out from the rules alone on the crowd nobody shot at: at each tick of its
+ * flight, the part of its way it covers then (up to a wall), against the body of each zombie walking at that step, where
+ * the crowd keeps it (half pixels). Each once, in the order met.
+ */
+function crossedBy(told: ZombieHorde, dart: ZombieDart, terrain = new Uint8Array(120 * 80)): number[] {
+    const plain = new ZombieCrowd(told);
+    const { ux, uy, length } = zombieDartWay(dart);
+    const reach = zombieDartReach(dart, { width: 120, height: 80, terrain });
+    const crossed: number[] = [];
+    for (let tick = 0; tick < ZOMBIE_DART_TICKS; tick++) {
+        const near = (length * tick) / ZOMBIE_DART_TICKS;
+        if (near >= reach) break;
+        const far = Math.min(reach, (length * (tick + 1)) / ZOMBIE_DART_TICKS);
+        while (plain.steps < dart.shotStep + tick * dart.stride) plain.step();
+        for (let zombie = 0; zombie < plain.count; zombie++) {
+            if (plain.state[zombie] !== ZOMBIE_WALKING || crossed.includes(zombie)) continue;
+            const at = zombieDartEnters(
+                dart.fromX + ux * near,
+                dart.fromY + uy * near,
+                dart.fromX + ux * far,
+                dart.fromY + uy * far,
+                Math.round(plain.x[zombie] * 2) / 2,
+                Math.round(plain.y[zombie] * 2) / 2,
+            );
+            if (at >= 0) crossed.push(zombie);
+        }
+    }
+    return crossed;
+}
+
 describe("a dart of the Nerf in a horde", () => {
     it("kills the zombie it reaches: drawn falling at once, killed by the log, recoiled along the dart, then gone", () => {
         const shotStep = 150;
@@ -107,19 +139,30 @@ describe("a dart of the Nerf in a horde", () => {
         const entry = dartEntry({ fromX, fromY, toX: fromX - NERF_DART_RANGE_PX, toY: fromY, shotStep });
         const crowd = new ZombieCrowd(horde({ avatars: encodeZombieLog([entry]) }));
         while (crowd.steps < shotStep) crowd.step();
-        // Seen at the step it was shot at: the dart stopped on it, while the crowd still has it walking.
+        // Seen at the step it was shot at: falling, while the crowd still has it walking.
         const seen = crowd.dartsSeen();
         expect(seen).toHaveLength(1);
-        expect(seen[0].hit).toMatchObject({ zombie: target, step: shotStep });
-        expect(seen[0].hit?.distance).toBeLessThan(12);
+        const hit = seen[0].hits[0];
+        expect(hit).toMatchObject({ zombie: target, step: shotStep });
+        expect(hit.distance).toBeLessThan(12);
         expect(crowd.state[target]).toBe(ZOMBIE_WALKING);
-        // The log applies it once its flight is over: that zombie, and it alone, is killed.
+        // The log applies it once its flight is over: the zombies it went through are killed, it first, and only them.
         while (crowd.steps <= entry.applyStep) crowd.step();
-        expect(shotZombies(crowd)).toEqual([target]);
+        const crossed = crossedBy(horde(), {
+            fromX,
+            fromY,
+            toX: fromX - NERF_DART_RANGE_PX,
+            toY: fromY,
+            shotStep,
+            stride: 1,
+        });
+        expect(crossed[0]).toBe(target);
+        expect(shotZombies(crowd)).toEqual([...crossed].sort((a, b) => a - b));
+        expect(seen[0].hits.map((met) => met.zombie)).toEqual(crossed);
         expect(crowd.hitStep[target]).toBe(shotStep);
         // Laid where the dart met it, a little further west along the dart; not burning, not thrown up.
-        expect(crowd.x[target]).toBeCloseTo((seen[0].hit?.x ?? 0) - ZOMBIE_DART_RECOIL_PX, 5);
-        expect(crowd.y[target]).toBe(seen[0].hit?.y);
+        expect(crowd.x[target]).toBeCloseTo(hit.x - ZOMBIE_DART_RECOIL_PX, 5);
+        expect(crowd.y[target]).toBe(hit.y);
         expect(crowd.z[target]).toBe(0);
         // Gone ZOMBIE_DART_FALL_STEPS after it was met.
         while (crowd.steps < shotStep + ZOMBIE_DART_FALL_STEPS - 1) crowd.step();
@@ -127,51 +170,51 @@ describe("a dart of the Nerf in a horde", () => {
         crowd.step();
         expect(crowd.state[target]).not.toBe(ZOMBIE_SHOT);
         expect(crowd.state[target]).not.toBe(ZOMBIE_WALKING);
-        expect(crowd.dying).toBe(0);
     });
 
-    it("stops on the first zombie it reaches: the one behind lives, and a second dart passes the fallen one by", () => {
+    it("goes through every zombie on its way and kills them all; a second dart passes the fallen ones by", () => {
         const shotStep = 200;
-        const plain = crowdAt(horde({ count: 600 }), shotStep);
+        const told = horde({ count: 600 });
+        const plain = crowdAt(told, shotStep);
         const first = clearTarget(plain, 20);
-        // A zombie some 2 to 9 m west of it: the dart is shot through the first towards it, 20 px before the first.
-        let behind = -1;
-        for (let zombie = 0; zombie < plain.count && behind < 0; zombie++) {
-            if (plain.x[zombie] > plain.x[first] - 40) continue;
-            if (zombie === first || plain.state[zombie] !== ZOMBIE_WALKING) continue;
-            const d = Math.sqrt(
-                (plain.x[zombie] - plain.x[first]) * (plain.x[zombie] - plain.x[first]) +
-                    (plain.y[zombie] - plain.y[first]) * (plain.y[zombie] - plain.y[first]),
-            );
-            if (d > 60 && d < 260) behind = zombie;
+        // Shot through it towards another zombie 2 to 9 m west of it, from 20 px before it: the first such line on
+        // which the dart, as the rules have it, goes through more than one zombie.
+        let crossed: number[] = [];
+        let one: ZombieLogEntry | undefined;
+        let aim: ReturnType<typeof zombieDartAim>;
+        for (let other = 0; other < plain.count && crossed.length < 2; other++) {
+            if (other === first || plain.state[other] !== ZOMBIE_WALKING) continue;
+            if (plain.x[other] > plain.x[first] - 40) continue;
+            const ax = plain.x[first];
+            const ay = plain.y[first] - 14;
+            const bx = plain.x[other];
+            const by = plain.y[other] - 14;
+            const length = Math.sqrt((ax - bx) * (ax - bx) + (ay - by) * (ay - by));
+            if (length < 60 || length > 260) continue;
+            aim = zombieDartAim({
+                fromX: ax + ((ax - bx) / length) * 20,
+                fromY: ay + ((ay - by) / length) * 20,
+                toX: bx,
+                toY: by,
+            });
+            if (!aim) continue;
+            one = dartEntry({ ...aim, shotStep });
+            crossed = crossedBy(told, { ...aim, shotStep, stride: 1 });
         }
-        expect(behind).toBeGreaterThanOrEqual(0);
-        const ax = plain.x[first];
-        const ay = plain.y[first] - 14;
-        const bx = plain.x[behind];
-        const by = plain.y[behind] - 14;
-        const length = Math.sqrt((ax - bx) * (ax - bx) + (ay - by) * (ay - by));
-        const fromX = Math.round(ax + ((ax - bx) / length) * 20);
-        const fromY = Math.round(ay + ((ay - by) / length) * 20);
-        const aim = zombieDartAim({ fromX, fromY, toX: bx, toY: by });
-        if (!aim) throw new Error("no aim");
-        // Nothing else is entered on the way to the first, at the step it is shot at.
-        for (let zombie = 0; zombie < plain.count; zombie++) {
-            if (zombie === first || plain.state[zombie] !== ZOMBIE_WALKING) continue;
-            expect(zombieDartEnters(fromX, fromY, ax, ay, plain.x[zombie], plain.y[zombie])).toBe(-1);
-        }
-        const one = dartEntry({ ...aim, shotStep });
+        if (!one || !aim) throw new Error("no line through two zombies");
+        // All of them on its way, the first one first.
+        expect(crossed.length).toBeGreaterThanOrEqual(2);
+        expect(crossed[0]).toBe(first);
         const crowd = new ZombieCrowd(horde({ count: 600, avatars: encodeZombieLog([one]) }));
         while (crowd.steps <= one.applyStep) crowd.step();
-        expect(shotZombies(crowd)).toEqual([first]);
-        expect(crowd.state[behind]).toBe(ZOMBIE_WALKING);
-        // The same dart shot again a step later, its fallen zombie lying on its way: it goes on to another one.
+        expect(shotZombies(crowd)).toEqual([...crossed].sort((a, b) => a - b));
+        for (const zombie of crossed) expect(crowd.hitStep[zombie]).toBeGreaterThanOrEqual(crowd.hitStep[first]);
+        // The same dart shot again a step later, the fallen lying on its way: it kills none of them again.
         const again = dartEntry({ ...aim, shotStep: shotStep + 1 });
         const twice = new ZombieCrowd(horde({ count: 600, avatars: encodeZombieLog([one, again]) }));
         while (twice.steps <= again.applyStep) twice.step();
-        const killed = shotZombies(twice);
-        expect(killed).toHaveLength(2);
-        expect(killed).toContain(first);
+        for (const zombie of crossed) expect(twice.hitStep[zombie]).toBe(crowd.hitStep[zombie]);
+        expect(shotZombies(twice).length).toBeGreaterThanOrEqual(crossed.length);
     });
 
     it("goes neither through a wall nor further than its range", () => {
@@ -192,7 +235,11 @@ describe("a dart of the Nerf in a horde", () => {
                 { width: 120, height: 80, terrain: walled },
             ),
         ).toBeLessThan(60);
-        // The horde is not stopped by that wall before the shot (it is the plain one up to there): only the dart is.
+        // Without the wall it kills; behind it, nothing (the zombies there live). The ground of a horde is frozen when
+        // it begins: the wall is there from the start.
+        const open = new ZombieCrowd(horde({ avatars: encodeZombieLog([entry]) }));
+        while (open.steps <= entry.applyStep) open.step();
+        expect(shotZombies(open)).toContain(target);
         const behindWall = new ZombieCrowd(horde({ avatars: encodeZombieLog([entry]) }, walled));
         while (behindWall.steps <= entry.applyStep) behindWall.step();
         expect(shotZombies(behindWall)).toEqual([]);
@@ -244,9 +291,36 @@ describe("a dart of the Nerf in a horde", () => {
         ];
         const crowd = new ZombieCrowd(horde({ count: 400, avatars: encodeZombieLog(log) }));
         for (let step = 0; step < 400; step++) crowd.step();
-        // Each dart met a zombie, the one on the sped-up map too.
-        expect(Array.from(crowd.hitStep).filter((step) => step < 1_000_000)).toHaveLength(3);
+        // Each dart met a zombie at least, the one on the sped-up map too.
+        expect(Array.from(crowd.hitStep).filter((step) => step < 1_000_000).length).toBeGreaterThanOrEqual(3);
         expect(crowd.checksum()).toBe(DART_REFERENCE_CHECKSUM);
+    });
+
+    it("goes through the thick of a horde, many zombies a dart: the same number in every engine", () => {
+        // A horde of 2 000 running east, shot westwards along its rows from just before its front, 30 darts, two on a
+        // sped-up tick. Node, Chrome 145, Firefox 132 and JavaScriptCore give this number and these kills.
+        const thick = horde({ count: 2000, durationMs: 180_000 });
+        const aiming = new ZombieCrowd(thick);
+        const darts: ZombieLogEntry[] = [];
+        for (let k = 0; k < 30; k++) {
+            const shotStep = 150 + k * 7;
+            while (aiming.steps < shotStep) aiming.step();
+            let front = -1;
+            for (let zombie = 0; zombie < aiming.count; zombie++) {
+                if (aiming.state[zombie] !== ZOMBIE_WALKING || aiming.x[zombie] > 1700) continue;
+                if (front < 0 || aiming.x[zombie] > aiming.x[front]) front = zombie;
+            }
+            if (front < 0) continue;
+            const fromX = Math.round(aiming.x[front] + 20);
+            const fromY = Math.round(aiming.y[front] - 12 + (k % 5) * 6 - 12);
+            const toY = fromY + (k % 3) * 20 - 20;
+            darts.push(dartEntry({ fromX, fromY, toX: fromX - 384, toY, shotStep, stride: k % 10 === 4 ? 2 : 1 }));
+        }
+        darts.sort((a, b) => a.applyStep - b.applyStep);
+        const pierced = new ZombieCrowd({ ...thick, avatars: encodeZombieLog(darts) });
+        for (let step = 0; step < 600; step++) pierced.step();
+        expect(Array.from(pierced.hitStep).filter((step) => step < 1_000_000)).toHaveLength(98);
+        expect(pierced.checksum()).toBe(1035516661);
     });
 
     it("leaves alone a dart the log could not apply: its flight not over, or shot too long before", () => {

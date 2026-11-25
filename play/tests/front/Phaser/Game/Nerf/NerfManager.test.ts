@@ -311,9 +311,8 @@ describe("NerfManager", () => {
         expect(sound.play.mock.calls).toEqual([]);
     });
 
-    it("sends its dart into a horde of zombies and stops it where the log of the horde says it met one", () => {
-        const dart = { fromX: 115, fromY: 105, toX: 499, toY: 105, shotStep: 120 };
-        scene.shootZombieDart.mockReturnValue(dart);
+    it("sends its dart into a horde of zombies, and it flies on through them to its range", () => {
+        scene.shootZombieDart.mockReturnValue({ fromX: 115, fromY: 105, toX: 499, toY: 105, shotStep: 120 });
         manager.toggleEquipment();
         manager.fire();
         // From the muzzle, the way it fires.
@@ -321,33 +320,19 @@ describe("NerfManager", () => {
         const [x, y, dx, dy] = scene.shootZombieDart.mock.calls[0];
         expect([x, y, dx]).toEqual([115, 105, 1]);
         expect(dy).toBeCloseTo(0);
-        // The colleagues are told the dart sent, to stop it where it met a zombie too.
-        expect(connection.emitScriptableEvent.mock.calls[0][1]).toMatchObject({ zombieDart: dart });
-        // Not known yet: it flies on.
-        manager.update(1100);
-        expect(graphics[0].x).toBeCloseTo(147);
-        // The log of the horde says it met a zombie 50 px from the barrel: it flies to there, and stops with a burst.
-        scene.zombieDartStop.mockImplementation((told) => (told === dart ? 50 : undefined));
-        manager.update(1150);
-        expect(graphics[0].scene).toBeDefined();
-        manager.update(1200);
-        expect(graphics[0].scene).toBeUndefined();
-        expect(graphics[1].x).toBeCloseTo(165);
-    });
-
-    it("stops a colleague's dart where the log of the horde says it met a zombie, and sends none of its own", () => {
-        const dart = { fromX: 155, fromY: 185, toX: 539, toY: 185, shotStep: 80 };
-        stream.next({
-            name: NERF_SHOT_EVENT,
-            data: { x: 140, y: 180, direction: PositionMessage_Direction.RIGHT, zombieDart: dart },
-            senderId: 2,
+        // The colleagues are told the shot as before: every browser finds the zombies it goes through in the horde.
+        expect(connection.emitScriptableEvent.mock.calls[0][1]).toEqual({
+            x: 100,
+            y: 100,
+            direction: PositionMessage_Direction.RIGHT,
+            seated: false,
+            heading: 6,
         });
-        expect(graphics).toHaveLength(1);
-        scene.zombieDartStop.mockReturnValue(30);
-        manager.update(1100);
-        expect(scene.zombieDartStop.mock.calls[0]).toEqual([dart]);
+        // Not stopped by the zombies it kills: as far as a dart flies.
+        manager.update(2000);
+        expect(graphics[0].scene).toBeDefined();
+        manager.update(2300);
         expect(graphics[0].scene).toBeUndefined();
-        expect(scene.shootZombieDart.mock.calls).toEqual([]);
     });
 
     it("stops at a blocked tile even when a slow frame would move past it", () => {

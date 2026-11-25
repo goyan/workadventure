@@ -4,20 +4,20 @@ import { zombieGroundBlocks } from "./ZombieGrenade";
 import type { ZombieGrenadeGround } from "./ZombieGrenade";
 
 /**
- * A dart of the Nerf shot into a horde of zombies: it flies straight from the barrel, as far as a dart flies, and the
- * first zombie it meets on its way is killed. It stops there; a wall, a collision of the map or the edge of the map
- * stops it before. Its flight is a pure function of where it was shot from and to, of the step it was shot at and of
- * where the zombies were at each step of its flight: the server and every browser kill the same zombie at the same step.
+ * A dart of the Nerf shot into a horde of zombies: it flies straight from the barrel, as far as a dart flies, through
+ * every zombie on its way, and kills them all (a choice of the user); a wall, a collision of the map or the edge of the
+ * map stops it. Its flight is a pure function of where it was shot from and to, of the step it was shot at and of where
+ * the zombies were at each step of its flight: the server and every browser kill the same zombies at the same step.
  *
  * - A dart flies NERF_DART_SPEED_PX_S, NERF_DART_RANGE_PX at most, as the Nerf of the players shoots it (NerfProtocol):
  *   ZOMBIE_DART_TICKS steps of the horde at the speed of reality. On a map sped up, the steps of the horde are closer:
  *   a tick of its flight takes `stride` steps (the speed of the map when it was shot, whole), so that it flies as fast
  *   to the eye as everywhere.
  * - At each tick, the part of its way it covers then is checked against the bodies of the zombies walking at that
- *   step, as they are drawn (a box on their feet, ZOMBIE_DART_BODY_PX high): the one it enters first is hit.
+ *   step, as they are drawn (a box on their feet, ZOMBIE_DART_BODY_PX high): each it enters is hit.
  * - The log of the horde applies it once its flight is over (and after the step every browser could have it by): the
- *   zombie hit is killed then, laid where the dart met it, a little further along the dart. Until then its browser
- *   draws it falling already (ZombieCrowd.dartsSeen), from the step it was hit at.
+ *   zombies hit are killed then, each laid where the dart met it, a little further along the dart. Until then a
+ *   browser draws them falling already (ZombieCrowd.dartsSeen), each from the step it was hit at.
  *
  * Computed with + - * / and Math.sqrt only, over whole numbers told by the server and positions kept in half pixels:
  * the same in every engine.

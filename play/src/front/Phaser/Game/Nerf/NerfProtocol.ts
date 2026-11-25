@@ -38,19 +38,6 @@ const shotSchema = z.object({
      * along `heading` (the nearest of its eight directions) instead.
      */
     angle: z.number().finite().min(-Math.PI).max(Math.PI).optional(),
-    /**
-     * The dart this shot sent into the horde of zombies, as the server was told it (whole map pixels, the step of the
-     * horde): the browsers stop it where the log says it met a zombie. Absent when none was sent.
-     */
-    zombieDart: z
-        .object({
-            fromX: z.number().int(),
-            fromY: z.number().int(),
-            toX: z.number().int(),
-            toY: z.number().int(),
-            shotStep: z.number().int().min(0),
-        })
-        .optional(),
     direction: z.union([
         z.literal(PositionMessage_Direction.UP),
         z.literal(PositionMessage_Direction.RIGHT),

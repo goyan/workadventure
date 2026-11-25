@@ -59,8 +59,6 @@ interface Projectile {
     /** Where the shooter stood: a shot fired from the prison hurts nobody. */
     originX: number;
     originY: number;
-    /** The dart it sent into the horde of zombies: it stops where the log of the horde says it met one. */
-    zombieDart: NerfShot["zombieDart"];
 }
 
 /**
@@ -135,15 +133,9 @@ export class NerfManager {
         const projectile = shot && this.spawn(shot, connection.getUserId());
         if (!shot || !projectile) return;
         if (aim) player.faceDirection(aim.direction);
-        // Into the horde of zombies too, when one crosses the map: the colleagues stop it where it met a zombie.
-        projectile.zombieDart = this.scene.shootZombieDart(
-            projectile.startX,
-            projectile.startY,
-            projectile.dx,
-            projectile.dy,
-        );
-        const told = projectile.zombieDart ? { ...shot, zombieDart: projectile.zombieDart } : shot;
-        connection.emitScriptableEvent(NERF_SHOT_EVENT, told, undefined).catch((error: unknown) => {
+        // Into the horde of zombies too, when one crosses the map: it goes through them, every one it meets falls.
+        this.scene.shootZombieDart(projectile.startX, projectile.startY, projectile.dx, projectile.dy);
+        connection.emitScriptableEvent(NERF_SHOT_EVENT, shot, undefined).catch((error: unknown) => {
             debug("Could not send a shot", { error });
         });
     }
@@ -207,11 +199,7 @@ export class NerfManager {
                 continue;
             }
             projectile.lastAt = time;
-            const flown = Math.min(NERF_RANGE, (Math.max(0, time - projectile.bornAt) * NERF_SPEED) / 1000);
-            // Where it met a zombie of the horde, once the log of the horde tells it: it stops there.
-            const zombieStop = projectile.zombieDart && this.scene.zombieDartStop(projectile.zombieDart);
-            const metZombie = zombieStop !== undefined && flown >= zombieStop;
-            const distance = metZombie ? Math.max(0, zombieStop) : flown;
+            const distance = Math.min(NERF_RANGE, (Math.max(0, time - projectile.bornAt) * NERF_SPEED) / 1000);
             const next = {
                 x: projectile.startX + projectile.dx * distance,
                 y: projectile.startY + projectile.dy * distance,
@@ -250,7 +238,6 @@ export class NerfManager {
                 previous = point;
             }
             if (hitId !== undefined && hitId === ownId) this.receiveDart(projectile, prison, time);
-            if (!impactPoint && metZombie) impactPoint = next;
             if (impactPoint || distance >= NERF_RANGE) {
                 if (impactPoint && this.impacts.size < MAX_PROJECTILES) {
                     this.impacts.add(new NerfImpactEffect(this.scene, impactPoint.x, impactPoint.y, time));
@@ -315,7 +302,6 @@ export class NerfManager {
             z,
             originX: shot.x,
             originY: shot.y,
-            zombieDart: shot.zombieDart,
         };
         this.projectiles.add(projectile);
         this.scene.markDirty();
