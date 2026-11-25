@@ -198,8 +198,9 @@ interface DartRecord extends ZombieDartSeen {
     tick: number;
     reach: number;
     length: number;
-    /** The zombies it may meet (dartCandidates), once read. */
+    /** The zombies it may meet (dartCandidates) and the first still waiting to come in when it was shot, once read. */
     candidates: Int32Array | undefined;
+    cameIn: number;
 }
 
 /**
@@ -749,7 +750,8 @@ export class ZombieCrowd {
                 const hits: ZombieDartHit[] = [];
                 const candidates = this.dartCandidates(dart, way);
                 const passed = (zombie: number, step: number): boolean => this.claimedAt[zombie] <= step;
-                this.meet(dart, way, candidates, 0, ZOMBIE_DART_TICKS, passed, hits);
+                const cameIn = this.pastIn[dart.shotStep % ZOMBIE_DART_HISTORY_STEPS];
+                this.meet(dart, way, candidates, cameIn, 0, ZOMBIE_DART_TICKS, passed, hits);
                 for (const hit of hits) this.shoot(hit, way.ux, way.uy);
             }
             this.logAt++;
@@ -804,6 +806,7 @@ export class ZombieCrowd {
         dart: ZombieDart,
         way: { ux: number; uy: number; length: number; reach: number },
         candidates: Int32Array,
+        cameIn: number,
         from: number,
         to: number,
         passed: (zombie: number, step: number) => boolean,
@@ -812,7 +815,6 @@ export class ZombieCrowd {
         const { count, pastX, pastY, pastIn } = this;
         const mine = new Set<number>();
         for (const hit of hits) mine.add(hit.zombie);
-        const cameIn = pastIn[dart.shotStep % ZOMBIE_DART_HISTORY_STEPS];
         for (let tick = from; tick < to; tick++) {
             const near = (way.length * tick) / ZOMBIE_DART_TICKS;
             if (near >= way.reach) return true;
@@ -922,6 +924,7 @@ export class ZombieCrowd {
                         reach: way.reach,
                         length: way.length,
                         candidates: undefined,
+                        cameIn: 0,
                     });
                 }
             }
@@ -951,16 +954,21 @@ export class ZombieCrowd {
                         // Too long ago for this crowd to know: its zombie is drawn by its state once applied.
                         record.over = true;
                     } else if (last > record.tick) {
-                        record.candidates ??= this.dartCandidates(record.dart, record);
+                        if (!record.candidates) {
+                            record.candidates = this.dartCandidates(record.dart, record);
+                            record.cameIn = this.pastIn[record.dart.shotStep % ZOMBIE_DART_HISTORY_STEPS];
+                        }
                         record.over = this.meet(
                             record.dart,
                             record,
                             record.candidates,
+                            record.cameIn,
                             record.tick,
                             last,
                             passed,
                             record.hits,
                         );
+                        if (record.over) record.candidates = undefined;
                         record.tick = last;
                     }
                 }

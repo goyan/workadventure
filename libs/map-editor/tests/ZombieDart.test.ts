@@ -101,7 +101,7 @@ function shotZombies(crowd: ZombieCrowd): number[] {
  * flight, the part of its way it covers then (up to a wall), against the body of each zombie walking at that step, where
  * the crowd keeps it (half pixels). Each once, in the order met.
  */
-function crossedBy(told: ZombieHorde, dart: ZombieDart, terrain = new Uint8Array(120 * 80)): number[] {
+function crossedBy(told: ZombieHorde, dart: ZombieDart, terrain: Uint8Array = new Uint8Array(120 * 80)): number[] {
     const plain = new ZombieCrowd(told);
     const { ux, uy, length } = zombieDartWay(dart);
     const reach = zombieDartReach(dart, { width: 120, height: 80, terrain });
@@ -208,6 +208,13 @@ describe("a dart of the Nerf in a horde", () => {
         const crowd = new ZombieCrowd(horde({ count: 600, avatars: encodeZombieLog([one]) }));
         while (crowd.steps <= one.applyStep) crowd.step();
         expect(shotZombies(crowd)).toEqual([...crossed].sort((a, b) => a - b));
+        // A browser that looks at it at every step of its flight sees the same zombies fall, in the same order.
+        const watched = new ZombieCrowd(horde({ count: 600, avatars: encodeZombieLog([one]) }));
+        while (watched.steps < one.applyStep) {
+            watched.step();
+            watched.dartsSeen();
+        }
+        expect(watched.dartsSeen()[0].hits.map((hit) => hit.zombie)).toEqual(crossed);
         for (const zombie of crossed) expect(crowd.hitStep[zombie]).toBeGreaterThanOrEqual(crowd.hitStep[first]);
         // The same dart shot again a step later, the fallen lying on its way: it kills none of them again.
         const again = dartEntry({ ...aim, shotStep: shotStep + 1 });
@@ -224,24 +231,31 @@ describe("a dart of the Nerf in a horde", () => {
         const fromX = Math.round(plain.x[target] + 100);
         const fromY = Math.round(plain.y[target] - 10);
         const entry = dartEntry({ fromX, fromY, toX: fromX - NERF_DART_RANGE_PX, toY: fromY, shotStep });
-        // A wall across the map 50 px west of the shooter.
-        const walls = { east: new Set<string>(), south: new Set<string>() };
-        const wallCell = Math.floor((fromX - 50) / TERRAIN_CELL);
-        for (let y = 0; y < 80; y++) walls.east.add(cellKey(wallCell, y));
-        const walled = zombieTerrainOf(120, 80, () => 0, undefined, walls);
-        expect(
-            zombieDartReach(
-                { fromX, fromY, toX: fromX - 384, toY: fromY },
-                { width: 120, height: 80, terrain: walled },
-            ),
-        ).toBeLessThan(60);
-        // Without the wall it kills; behind it, nothing (the zombies there live). The ground of a horde is frozen when
-        // it begins: the wall is there from the start.
         const open = new ZombieCrowd(horde({ avatars: encodeZombieLog([entry]) }));
         while (open.steps <= entry.applyStep) open.step();
         expect(shotZombies(open)).toContain(target);
-        const behindWall = new ZombieCrowd(horde({ avatars: encodeZombieLog([entry]) }, walled));
-        while (behindWall.steps <= entry.applyStep) behindWall.step();
+        // A wall of 20 cells north to south in the middle of the map (x = 976 px), which the horde runs round: shot
+        // westwards from 30 px east of it at zombies that ran west of it, as the rules have it the dart would go through
+        // some of them; the wall stops it, and they all live.
+        const walls = { east: new Set<string>(), south: new Set<string>() };
+        for (let y = 30; y < 50; y++) walls.east.add(cellKey(60, y));
+        const walled = zombieTerrainOf(120, 80, () => 0, undefined, walls);
+        const ranRound = crowdAt(horde({}, walled), shotStep);
+        let beyond: ZombieDart | undefined;
+        for (let zombie = 0; zombie < ranRound.count && !beyond; zombie++) {
+            const { x, y } = { x: ranRound.x[zombie], y: ranRound.y[zombie] };
+            if (ranRound.state[zombie] !== ZOMBIE_WALKING || x < 700 || x > 940 || y < 32 * 16 || y > 48 * 16) continue;
+            const aim = zombieDartAim({ fromX: 1006, fromY: y - 10, toX: x, toY: y - 10 });
+            if (!aim) continue;
+            const dart = { ...aim, shotStep, stride: 1 };
+            if (crossedBy(horde({}, walled), dart).length > 0) beyond = dart;
+        }
+        if (!beyond) throw new Error("no zombie west of the wall on a line");
+        expect(zombieDartReach(beyond, { width: 120, height: 80, terrain: walled })).toBeLessThan(40);
+        expect(crossedBy(horde({}, walled), beyond, walled)).toEqual([]);
+        const spared = dartEntry(beyond);
+        const behindWall = new ZombieCrowd(horde({ avatars: encodeZombieLog([spared]) }, walled));
+        while (behindWall.steps <= spared.applyStep) behindWall.step();
         expect(shotZombies(behindWall)).toEqual([]);
         // Out of its range: shot from 500 px away, it falls short.
         const far = dartEntry({
