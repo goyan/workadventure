@@ -28,4 +28,17 @@ describe("zombieGrenadeShotOf", () => {
         expect(aheadOf(5)).toEqual({ x: 14, y: -14 });
         expect(aheadOf(7)).toEqual({ x: 14, y: 14 });
     });
+
+    it("lobs it not as far facing an edge of the map, on the same line, never off the map", () => {
+        const map = { width: 1200, height: 900 };
+        // 200 px from the east edge, facing east: to its last pixel.
+        expect(zombieGrenadeShotOf(1000, 800, 6, map)).toMatchObject({ toX: 1199, toY: 800 });
+        // Facing north-east from near the corner: shortened along the diagonal, inside.
+        const corner = zombieGrenadeShotOf(1100, 100, 5, map);
+        expect(corner.toX).toBeLessThanOrEqual(1199);
+        expect(corner.toY).toBeGreaterThanOrEqual(0);
+        expect(corner.toX - 1100).toBe(100 - corner.toY);
+        // Far from the edges: as far as ever.
+        expect(zombieGrenadeShotOf(600, 450, 6, map)).toEqual(zombieGrenadeShotOf(600, 450, 6));
+    });
 });

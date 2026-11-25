@@ -161,6 +161,8 @@ export class CatastropheManager {
     private horde: ZombieHorde | undefined;
     private hordeTimer: ReturnType<typeof setInterval> | undefined;
     private hordeTerrainToldAt = Number.NEGATIVE_INFINITY;
+    /** The hash of the ground of the horde, computed once: each message carries it, and a message goes at each shot. */
+    private hordeTerrainHash = 0;
     /** The ground of each cell of the map as a horde reads it when it begins (zombieTerrainOf): given by the room. */
     private zombieTerrain: (
         solid: (tileX: number, tileY: number) => boolean,
@@ -827,6 +829,7 @@ export class CatastropheManager {
         this.hordeSlots = new Map();
         this.hordeTiles = [];
         this.hordeTerrainToldAt = Number.NEGATIVE_INFINITY;
+        this.hordeTerrainHash = zombieTerrainHash(this.horde.terrain);
         this.speedUpZombies();
         this.readAvatars();
         this.tellZombies();
@@ -1032,7 +1035,7 @@ export class CatastropheManager {
                         widthCells: horde.widthCells,
                         heightCells: horde.heightCells,
                         terrain: withTerrain ? horde.terrain : "",
-                        terrainHash: zombieTerrainHash(horde.terrain),
+                        terrainHash: this.hordeTerrainHash,
                         collisions: "",
                         collisionsWidth: 0,
                         collisionsHeight: 0,

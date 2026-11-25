@@ -63,6 +63,8 @@ describe("ZombieBlastView", () => {
         ]);
         const [shadowOnDeck, onDeck, shadowOnGround, onGround] = images;
         expect(shadowOnDeck.depth).toBeGreaterThan(SLABS_20);
+        // Its shadow under whatever stands on the deck, even at the top of the map.
+        expect(shadowOnDeck.depth).toBeLessThan(floorDepth(20, 1));
         expect(onDeck.depth).toBeGreaterThan(SLABS_20);
         expect(shadowOnDeck.y).toBe(280);
         expect(onDeck.y).toBe(276);

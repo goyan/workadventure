@@ -80,20 +80,24 @@ export class ZombieReceiver {
      * The whole log of the horde with the entries a message tells (from its `logFrom` on): the text of it, undefined
      * when entries before those were missed (a lost message).
      */
-    private readLog(id: number, told: ZombieHordeMessage): string | undefined {
-        const from = told.logFrom ?? 0;
-        if (this.log?.id !== id || this.log.startedAt !== told.startedAt) {
-            this.log = { id, startedAt: told.startedAt, entries: [], text: "" };
+    private readLog(id: number, message: ZombieHordeMessage): string | undefined {
+        const from = message.logFrom ?? 0;
+        if (this.log?.id !== id || this.log.startedAt !== message.startedAt) {
+            this.log = { id, startedAt: message.startedAt, entries: [], text: "" };
         }
         const log = this.log;
         if (from > log.entries.length) return undefined;
-        // Nothing new: the same text, which the crowd reads as nothing new.
-        if (from === log.entries.length && told.avatars === "") return log.text;
+        const entries = message.avatars === "" ? [] : decodeZombieLog(message.avatars);
+        // Nothing new (entries known already: the same text, which the crowd reads as nothing new), or an old
+        // message: told in order, the log is never shortened.
+        const known =
+            from + entries.length < log.entries.length || (from > 0 && from + entries.length === log.entries.length);
+        if (known || (entries.length === 0 && from === log.entries.length)) return log.text;
         if (from === 0) {
-            log.entries = decodeZombieLog(told.avatars);
-            log.text = told.avatars;
+            log.entries = entries;
+            log.text = message.avatars;
         } else {
-            log.entries = log.entries.slice(0, from).concat(decodeZombieLog(told.avatars));
+            log.entries = log.entries.slice(0, from).concat(entries);
             log.text = encodeZombieLog(log.entries);
         }
         return log.text;

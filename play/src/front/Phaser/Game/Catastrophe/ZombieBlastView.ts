@@ -56,11 +56,11 @@ export class ZombieBlastView {
     /**
      * The depth of what is drawn `lift` px over the ground, `depth` the one it has on the ground: unchanged there; on
      * a deck, over its slabs, sorted as on the ground (floorDepth); what lies flat on the ground (`flat`: a shadow, a
-     * scorch, the shock wave) just over the slabs.
+     * scorch, the shock wave) just over the slabs, under everything that stands on them, in the same order.
      */
     private depthOn(lift: number, depth: number, flat = false): number {
         if (lift <= 0) return depth;
-        return flat ? floorDepth(lift, 0) + (depth - DEPTH_SEASONAL_GROUND_INDEX) : floorDepth(lift, depth);
+        return floorDepth(lift, flat ? depth - DEPTH_SEASONAL_GROUND_INDEX : depth);
     }
 
     private makeTextures(): void {

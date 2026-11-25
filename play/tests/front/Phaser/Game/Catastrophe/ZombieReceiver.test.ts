@@ -106,6 +106,9 @@ describe("ZombieReceiver", () => {
         receiver.report(message(164_000, true, 0, [10, 20, 30, 40, 50, 60]));
         expect(stepsOf(receiver.current())).toEqual([10, 20, 30, 40, 50, 60]);
         expect(receiver.current()?.safeStep).toBe(185);
+        // An old whole log never shortens what is known.
+        receiver.report(message(163_000, true, 0, [10, 20, 30]));
+        expect(stepsOf(receiver.current())).toEqual([10, 20, 30, 40, 50, 60]);
         receiver.destroy();
     });
 

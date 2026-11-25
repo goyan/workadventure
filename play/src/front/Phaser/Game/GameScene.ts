@@ -3976,7 +3976,10 @@ export class GameScene extends DirtyScene {
         const player = this.CurrentPlayer;
         // On the deck of a bridge, its avatar is drawn that much north of the ground under it, where the horde runs.
         const floorZ = player.isFlying() ? 0 : player.getFloorZ();
-        const aim = zombieGrenadeShotOf(player.x, player.y + floorZ, player.getNerfHeading());
+        const aim = zombieGrenadeShotOf(player.x, player.y + floorZ, player.getNerfHeading(), {
+            width: this.Map.widthInPixels,
+            height: this.Map.heightInPixels,
+        });
         this.connection?.emitLaunchZombies(
             {
                 count: 0,
