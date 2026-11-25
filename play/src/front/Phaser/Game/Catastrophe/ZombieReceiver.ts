@@ -1,4 +1,4 @@
-import { decodeZombieLog, encodeZombieLog, zombieAsk } from "@workadventure/map-editor";
+import { ZOMBIE_ASK_WHOLE_MS, decodeZombieLog, encodeZombieLog, zombieAsk } from "@workadventure/map-editor";
 import type { ZombieHorde, ZombieLogEntry } from "@workadventure/map-editor";
 import type { CatastropheMessage, ZombieHordeMessage } from "@workadventure/messages";
 
@@ -27,6 +27,35 @@ export function zombieHordeOf(id: number, told: ZombieHordeMessage, terrain: str
     };
 }
 
+/** What a browser sends to ask the server for the whole horde (its ground and its whole log), answered to it alone. */
+export function zombieWholeAsked(): ZombieHordeMessage {
+    return {
+        count: 0,
+        minutes: 0,
+        heading: 0,
+        seed: 0,
+        startedAt: 0,
+        durationMs: 0,
+        dirX: 0,
+        dirY: 0,
+        anchorX: 0,
+        anchorY: 0,
+        widthCells: 0,
+        heightCells: 0,
+        terrain: "",
+        terrainHash: 0,
+        collisions: "",
+        collisionsWidth: 0,
+        collisionsHeight: 0,
+        anchorStep: 0,
+        anchorAt: 0,
+        msPerStep: 0,
+        avatars: "",
+        safeStep: 0,
+        askWhole: true,
+    };
+}
+
 /**
  * The server tells its horde once a second: past this without a word (a lost connection), it is forgotten, so that
  * nobody keeps a horde the room no longer has.
@@ -50,7 +79,26 @@ export class ZombieReceiver {
     private log: { id: number; startedAt: number; entries: ZombieLogEntry[]; text: string } | undefined;
     private silence: ReturnType<typeof setTimeout> | undefined;
 
-    constructor(private readonly tell: (horde: ZombieHorde | undefined) => void) {}
+    /** When this browser last asked for the whole horde (ms, `now`). */
+    private askedAt = Number.NEGATIVE_INFINITY;
+
+    constructor(
+        private readonly tell: (horde: ZombieHorde | undefined) => void,
+        /**
+         * Asks the server for the whole horde, its ground and its whole log (zombieWholeAsked): it joined while the
+         * horde went on, or lost a message. Once in ZOMBIE_ASK_WHOLE_MS at most.
+         */
+        private readonly askWhole: () => void = () => {},
+        private readonly now: () => number = () => Date.now(),
+    ) {}
+
+    /** Asks for the whole horde, not too often: the server tells its ground and its whole log every 30 s anyway. */
+    private ask(): void {
+        const now = this.now();
+        if (now - this.askedAt < ZOMBIE_ASK_WHOLE_MS) return;
+        this.askedAt = now;
+        this.askWhole();
+    }
 
     public report(message: CatastropheMessage): void {
         const told = message.zombies;
@@ -62,6 +110,8 @@ export class ZombieReceiver {
         if (this.silence) clearTimeout(this.silence);
         this.silence = setTimeout(() => this.forget(), SILENCE_MS);
         const log = this.readLog(message.id, told);
+        // Joined while it goes on, or entries of its log missed: the whole of it is asked for.
+        if (!this.terrain || this.terrain.hash !== told.terrainHash || log === undefined) this.ask();
         if (!this.terrain || this.terrain.hash !== told.terrainHash) return;
         const horde = zombieHordeOf(message.id, told, this.terrain.text);
         const same = this.horde?.id === horde.id && this.horde.startedAt === horde.startedAt;

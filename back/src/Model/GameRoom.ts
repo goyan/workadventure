@@ -1427,11 +1427,16 @@ export class GameRoom implements BrothersFinder {
 
     /** A player sends a horde of zombies across the map, or stops the one crossing it (`release`). */
     public launchZombies(
-        user: Pick<User, "uuid" | "getVariables">,
+        user: Pick<User, "uuid" | "getVariables" | "emitInBatch">,
         zombies: ZombieHordeMessage | undefined,
         release = false,
     ): void {
         if (release) this.catastrophes?.stopZombies();
+        // A browser that misses the ground or entries of the log of the horde: answered alone.
+        else if (zombies?.askWhole) {
+            const whole = this.catastrophes?.wholeZombies(user.uuid);
+            if (whole) user.emitInBatch({ message: { $case: "catastropheMessage", catastropheMessage: whole } });
+        }
         // A grenade shot into the horde (never by a player in Basique, for whom it does not exist), or a new horde.
         else if (zombies?.grenade) {
             if (!playsBasic(user.getVariables().getVariables())) {

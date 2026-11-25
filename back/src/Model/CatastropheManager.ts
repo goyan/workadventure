@@ -48,6 +48,7 @@ import {
     ZOMBIE_STEP_MS,
     ZOMBIE_TELL_MS,
     ZOMBIE_TERRAIN_TELL_MS,
+    ZOMBIE_ASK_WHOLE_MS,
 } from "@workadventure/map-editor";
 import type {
     Ball,
@@ -63,6 +64,7 @@ import { CatastropheKind } from "@workadventure/messages";
 import type {
     HurricaneTrackMessage,
     TsunamiMessage,
+    CatastropheMessage,
     ZombieGrenadeMessage,
     ZombieHordeMessage,
 } from "@workadventure/messages";
@@ -194,6 +196,8 @@ export class CatastropheManager {
      */
     private readonly grenadeShots = new Map<string, number>();
     private grenadesInFlight: number[] = [];
+    /** When each player last asked for the whole horde, by their uuid. */
+    private readonly wholeAsked = new Map<string, number>();
 
     constructor(
         private readonly room: Pick<GameRoom, "sendSubMessageToRoom">,
@@ -842,6 +846,7 @@ export class CatastropheManager {
         this.hordeLogAt = [];
         this.grenadeShots.clear();
         this.grenadesInFlight = [];
+        this.wholeAsked.clear();
         this.hordeSlots = new Map();
         this.hordeTiles = [];
         this.hordeTerrainToldAt = Number.NEGATIVE_INFINITY;
@@ -1034,8 +1039,8 @@ export class CatastropheManager {
         if (!horde) return this.endZombies();
         const now = this.now();
         const left = lastsMs ?? zombieMsLeft(horde, now);
-        // Its ground at once, then every few seconds, for those who join: the other messages carry its hash only.
-        // Those who join need its whole log too: it comes with it.
+        // Its ground and its whole log at once, then every 30 s in case a browser lost a message: the other messages
+        // carry the hash of the ground and the last entries of the log only. Who joins asks for them (wholeZombies).
         const withTerrain = left > 0 && now - this.hordeTerrainToldAt >= ZOMBIE_TERRAIN_TELL_MS;
         if (withTerrain) this.hordeTerrainToldAt = now;
         let logFrom = 0;
@@ -1049,46 +1054,70 @@ export class CatastropheManager {
         this.room.sendSubMessageToRoom({
             message: {
                 $case: "catastropheMessage",
-                catastropheMessage: {
-                    id: horde.id,
-                    kind: CatastropheKind.CATASTROPHE_ZOMBIES,
-                    x: 0,
-                    y: 0,
-                    impactInMs: Math.round(left),
-                    radiusTiles: 0,
-                    wholeMap: true,
-                    zombies: {
-                        count: horde.count,
-                        minutes: Math.round(horde.durationMs / 60_000),
-                        heading: horde.heading,
-                        seed: horde.seed,
-                        startedAt: horde.startedAt,
-                        durationMs: horde.durationMs,
-                        dirX: horde.dirX,
-                        dirY: horde.dirY,
-                        anchorX: horde.anchorX,
-                        anchorY: horde.anchorY,
-                        widthCells: horde.widthCells,
-                        heightCells: horde.heightCells,
-                        terrain: withTerrain ? horde.terrain : "",
-                        terrainHash: this.hordeTerrainHash,
-                        collisions: "",
-                        collisionsWidth: 0,
-                        collisionsHeight: 0,
-                        anchorStep: horde.anchorStep,
-                        anchorAt: horde.anchorAt,
-                        msPerStep: horde.msPerStep,
-                        avatars:
-                            logFrom > 0
-                                ? encodeZombieLog(this.hordeLog.slice(logFrom))
-                                : (this.wholeHorde()?.avatars ?? horde.avatars),
-                        logFrom,
-                        safeStep: horde.safeStep,
-                    },
-                },
+                catastropheMessage: this.zombiesMessage(horde, left, withTerrain, logFrom),
             },
         });
         if (left <= 0) this.endZombies();
+    }
+
+    /**
+     * The whole horde, its ground and its whole log, for a player whose browser asks for it (it joined, or lost a
+     * message): once in ZOMBIE_ASK_WHOLE_MS at most for a player (`asker`, their uuid). Undefined when there is none,
+     * or too soon.
+     */
+    public wholeZombies(asker: string): CatastropheMessage | undefined {
+        const horde = this.goingHorde();
+        if (!horde || this.stopped) return undefined;
+        const now = this.now();
+        if (now - (this.wholeAsked.get(asker) ?? Number.NEGATIVE_INFINITY) < ZOMBIE_ASK_WHOLE_MS) return undefined;
+        this.wholeAsked.set(asker, now);
+        return this.zombiesMessage(horde, zombieMsLeft(horde, now), true, 0);
+    }
+
+    /** The message of the horde: its ground or only its hash, its log from the entry `logFrom` on (the whole by 0). */
+    private zombiesMessage(
+        horde: ZombieHorde,
+        left: number,
+        withTerrain: boolean,
+        logFrom: number,
+    ): CatastropheMessage {
+        return {
+            id: horde.id,
+            kind: CatastropheKind.CATASTROPHE_ZOMBIES,
+            x: 0,
+            y: 0,
+            impactInMs: Math.round(left),
+            radiusTiles: 0,
+            wholeMap: true,
+            zombies: {
+                count: horde.count,
+                minutes: Math.round(horde.durationMs / 60_000),
+                heading: horde.heading,
+                seed: horde.seed,
+                startedAt: horde.startedAt,
+                durationMs: horde.durationMs,
+                dirX: horde.dirX,
+                dirY: horde.dirY,
+                anchorX: horde.anchorX,
+                anchorY: horde.anchorY,
+                widthCells: horde.widthCells,
+                heightCells: horde.heightCells,
+                terrain: withTerrain ? horde.terrain : "",
+                terrainHash: this.hordeTerrainHash,
+                collisions: "",
+                collisionsWidth: 0,
+                collisionsHeight: 0,
+                anchorStep: horde.anchorStep,
+                anchorAt: horde.anchorAt,
+                msPerStep: horde.msPerStep,
+                avatars:
+                    logFrom > 0
+                        ? encodeZombieLog(this.hordeLog.slice(logFrom))
+                        : (this.wholeHorde()?.avatars ?? horde.avatars),
+                logFrom,
+                safeStep: horde.safeStep,
+            },
+        };
     }
 
     /** What a player asks for: the downpour, the drain or the ball that follows them, or a catastrophe thrown once. */

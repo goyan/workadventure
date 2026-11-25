@@ -33,8 +33,13 @@ export const ZOMBIE_DEFAULT_HEADING = 270;
 export const ZOMBIE_STEP_MS = 100;
 /** The horde of a room is told this often, so that a player who joins sees it soon. */
 export const ZOMBIE_TELL_MS = 1000;
-/** The ground the server froze is told with the horde this often (and at once): a player who joins waits that long. */
-export const ZOMBIE_TERRAIN_TELL_MS = 5000;
+/**
+ * The ground the server froze is told to the room with the horde and its whole log this often (and at once), in case
+ * a browser lost a message: a player who joins, or misses entries of the log, asks for them (`askWhole`) at once.
+ */
+export const ZOMBIE_TERRAIN_TELL_MS = 30_000;
+/** A browser asks for the whole horde once in this long at most; the server answers a player once in this long. */
+export const ZOMBIE_ASK_WHOLE_MS = 2000;
 /**
  * Where the avatars are is applied this long (ms of reality) after the server read it: every browser has had it by
  * then, and steps the crowd with it at the same step as the server.

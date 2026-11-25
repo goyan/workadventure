@@ -522,7 +522,7 @@ import { HurricaneReceiver } from "./Catastrophe/HurricaneReceiver";
 import { TsunamiReceiver } from "./Catastrophe/TsunamiReceiver";
 import { HurricaneDebris } from "./Catastrophe/HurricaneDebris";
 import { HurricaneView, seaHurricaneOf } from "./Catastrophe/HurricaneView";
-import { ZombieReceiver } from "./Catastrophe/ZombieReceiver";
+import { ZombieReceiver, zombieWholeAsked } from "./Catastrophe/ZombieReceiver";
 import { ZombieView } from "./Catastrophe/ZombieView";
 import { zombieShoveOf, zombieShownOf } from "./Catastrophe/ZombieShown";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
@@ -5558,15 +5558,18 @@ export class GameScene extends DirtyScene {
             },
         );
         this.zombieView = zombieView;
-        const zombieReceiver = new ZombieReceiver((horde) => {
-            zombieView.setHorde(horde, this.time.now);
-            if (!horde) {
-                zombieShownStore.set(undefined);
-                // The launcher exists for the horde only.
-                grenadeLauncherEquippedStore.set(false);
-            }
-            this.markDirty();
-        });
+        const zombieReceiver = new ZombieReceiver(
+            (horde) => {
+                zombieView.setHorde(horde, this.time.now);
+                if (!horde) {
+                    zombieShownStore.set(undefined);
+                    // The launcher exists for the horde only.
+                    grenadeLauncherEquippedStore.set(false);
+                }
+                this.markDirty();
+            },
+            () => this.connection?.emitLaunchZombies(zombieWholeAsked(), false),
+        );
         this.zombieReceiver = zombieReceiver;
         this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {
             // The water of this player, when it is their own, lives the catastrophes of the room too.

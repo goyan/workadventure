@@ -112,6 +112,44 @@ describe("ZombieReceiver", () => {
         receiver.destroy();
     });
 
+    it("asks the server for the whole horde when it joins or misses entries, once in 2 s at most", () => {
+        let clock = 0;
+        const asked: number[] = [];
+        const receiver = new ZombieReceiver(
+            () => {},
+            () => asked.push(clock),
+            () => clock,
+        );
+        const withLog = (impactInMs: number, withTerrain: boolean, logFrom: number, steps: number[]) => {
+            const base = told(impactInMs, withTerrain);
+            if (!base.zombies) throw new Error("A horde is told");
+            base.zombies.avatars = encodeZombieLog(steps.map((applyStep) => ({ applyStep, changes: [] })));
+            base.zombies.logFrom = logFrom;
+            return base;
+        };
+        // Joined while it goes on: the end of its log, without its ground.
+        receiver.report(withLog(170_000, false, 3, [40]));
+        expect(asked).toEqual([0]);
+        clock = 1_000;
+        receiver.report(withLog(169_000, false, 3, [40, 50]));
+        expect(asked).toEqual([0]);
+        clock = 2_000;
+        receiver.report(withLog(168_000, false, 3, [40, 50, 60]));
+        expect(asked).toEqual([0, 2_000]);
+        // Answered: up to date, it asks no more.
+        clock = 2_500;
+        receiver.report(withLog(167_500, true, 0, [10, 20, 30, 40, 50, 60]));
+        clock = 5_000;
+        receiver.report(withLog(167_000, false, 5, [60, 70]));
+        expect(asked).toEqual([0, 2_000]);
+        expect(receiver.current()).toBeDefined();
+        // A message lost: it asks again.
+        clock = 7_000;
+        receiver.report(withLog(165_000, false, 9, [90]));
+        expect(asked).toEqual([0, 2_000, 7_000]);
+        receiver.destroy();
+    });
+
     it("forgets the horde when it is stopped, or when the server says nothing more", () => {
         vi.useFakeTimers();
         const heard: (ZombieHorde | undefined)[] = [];
