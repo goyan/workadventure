@@ -187,4 +187,40 @@ describe("ZombieView", () => {
         expect(crossed).toBe(true);
         expect(view.walking()).toBe(1);
     });
+
+    it("draws a zombie the water caught after the horde began (a flood) over the water, at every image, and out of it", () => {
+        // Its ground was dry when it began; the water rose afterwards over the tiles 28 to 31, in a hollow of the
+        // relief drawn 12 px lower.
+        const flooded = (x: number): boolean => x >= 28 * TILE_PX && x < 32 * TILE_PX;
+        const told = hordeOver(new Uint8Array(WIDTH_CELLS * HEIGHT_CELLS));
+        const { scene, blitters } = createScene();
+        const view = new ZombieView(scene, (x) => (flooded(x) ? 12 : 0));
+        view.setHorde(told, START);
+        const twin = new ZombieCrowd(told);
+        let inWater = 0;
+        let crossed = false;
+        for (let image = 1; image < twin.lastStep - 2 && !crossed; image++) {
+            const epoch = START + image * 100 + 50;
+            view.update(epoch, epoch, true, false);
+            const target = twin.stepFor(epoch);
+            while (twin.steps < target) twin.step();
+            if (twin.state[0] !== ZOMBIE_WALKING) continue;
+            const between = twin.between(epoch);
+            const x = twin.lastX[0] + (twin.x[0] - twin.lastX[0]) * between;
+            expect(view.walking()).toBe(1);
+            const shown = blitters.flatMap((blitter) =>
+                blitter.bobs.filter((bob) => bob.visible).map((bob) => ({ bob, depth: blitter.depth })),
+            );
+            expect(shown).toHaveLength(1);
+            if (flooded(x)) {
+                inWater++;
+                // The water and what is drawn on it (TerrainView, WaterFlowView, WaterGlints) are under the depth 1.
+                expect(shown[0].depth).toBeGreaterThan(1);
+            }
+            crossed = x > 34 * TILE_PX;
+        }
+        expect(inWater).toBeGreaterThanOrEqual(5);
+        expect(crossed).toBe(true);
+        expect(view.walking()).toBe(1);
+    });
 });
