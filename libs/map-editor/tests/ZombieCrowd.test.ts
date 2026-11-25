@@ -353,6 +353,34 @@ describe("a crowd of zombies", () => {
         expect(crossed / crowd.count).toBeGreaterThan(0.9);
     });
 
+    it("never drowns: the water that rises after it began (a flood, a tsunami) does not stop it, it walks on and out", () => {
+        // Its ground is frozen when it begins (dry here): the water that floods the cells 50 to 70 afterwards is not
+        // in it. Nothing takes a zombie off the crowd there, it runs through and out by the far side.
+        const told = horde({ count: 200 });
+        const crowd = new ZombieCrowd(told);
+        const widthPx = 120 * TERRAIN_CELL;
+        const flooded = (x: number): boolean => x >= 50 * TERRAIN_CELL && x < 70 * TERRAIN_CELL;
+        const wet = new Uint8Array(crowd.count);
+        const through = new Uint8Array(crowd.count);
+        for (let step = 0; step < crowd.lastStep - 1; step++) {
+            const before = new Uint8Array(crowd.state);
+            crowd.step();
+            for (let zombie = 0; zombie < crowd.count; zombie++) {
+                if (before[zombie] === ZOMBIE_WALKING && crowd.state[zombie] !== ZOMBIE_WALKING) {
+                    // Gone only by the far side (east), never in the water.
+                    expect(crowd.state[zombie]).toBe(ZOMBIE_GONE);
+                    expect(crowd.x[zombie]).toBeGreaterThan(widthPx - 2 * TERRAIN_CELL);
+                }
+                if (crowd.state[zombie] !== ZOMBIE_WALKING) continue;
+                if (flooded(crowd.x[zombie])) wet[zombie] = 1;
+                else if (wet[zombie] === 1 && crowd.x[zombie] >= 70 * TERRAIN_CELL) through[zombie] = 1;
+            }
+        }
+        const caught = wet.reduce((sum, value) => sum + value, 0);
+        expect(caught).toBeGreaterThan(150);
+        expect(through.reduce((sum, value) => sum + value, 0)).toBe(caught);
+    });
+
     it("comes in by the shore when its edge is half sea, not from the water", () => {
         const width = 120;
         const height = 80;
