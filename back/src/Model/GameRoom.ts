@@ -1438,7 +1438,6 @@ export class GameRoom implements BrothersFinder {
                 this.catastrophes?.zombieGrenade(user.id, zombies.grenade);
             }
         } else if (zombies) this.catastrophes?.startZombies(zombies);
-        else if (zombies) this.catastrophes?.startZombies(zombies);
     }
 
     /**
