@@ -245,4 +245,31 @@ describe("ZombieView", () => {
         expect(crossed).toBe(true);
         expect(view.walking()).toBe(1);
     });
+    it("never steps past the step its log is complete to: it waits there, still drawn, then goes on", () => {
+        const dry = new Uint8Array(WIDTH_CELLS * HEIGHT_CELLS);
+        const visible = (blitters: { bobs: { visible: boolean; x: number; y: number }[] }[]) =>
+            blitters.flatMap((blitter) => blitter.bobs.filter((bob) => bob.visible).map(({ x, y }) => ({ x, y })));
+        // Its log complete to the step 30 only (a message lost), the time of the server at the step 100.
+        const waiting = createScene();
+        const stalled = new ZombieView(waiting.scene);
+        stalled.setHorde({ ...hordeOver(dry), safeStep: 30 }, START);
+        for (let image = 1; image <= 100; image++)
+            stalled.update(START + image * 100, START + image * 100, true, false);
+        // The same horde stepped to the step 31 and drawn there, as it waits.
+        const reference = createScene();
+        const stepped = new ZombieView(reference.scene);
+        stepped.setHorde(hordeOver(dry), START);
+        for (let image = 1; image <= 30; image++) stepped.update(START + image * 100, START + image * 100, true, false);
+        // At the end of the step 31, where the waiting one is drawn.
+        stepped.update(START + 3100 - 0.001, START + 3100, true, false);
+        expect(visible(waiting.blitters)).toHaveLength(1);
+        expect(visible(waiting.blitters)).toEqual(visible(reference.blitters));
+        // The log comes: it catches up.
+        stalled.setHorde({ ...hordeOver(dry), safeStep: 1_000_000 }, START);
+        for (let image = 101; image <= 110; image++) {
+            stalled.update(START + image * 100, START + image * 100, true, false);
+        }
+        expect(visible(waiting.blitters)).toHaveLength(1);
+        expect(visible(waiting.blitters)).not.toEqual(visible(reference.blitters));
+    });
 });

@@ -33,5 +33,7 @@ describe("zombieAvatarsOf", () => {
     it("tells an avatar on the deck of a bridge at the ground under it, where the horde runs", () => {
         // 20 px up, it is drawn 20 px further north than the ground it stands over.
         expect(zombieAvatarsOf([user(5, undefined, false, 20)])).toEqual([{ key: 5, x: 50, y: 120 }]);
+        // A plane in flight publishes 2000: it is where it is drawn.
+        expect(zombieAvatarsOf([user(5, undefined, false, 2000)])).toEqual([{ key: 5, x: 50, y: 100 }]);
     });
 });
