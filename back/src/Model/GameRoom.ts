@@ -1427,7 +1427,7 @@ export class GameRoom implements BrothersFinder {
 
     /** A player sends a horde of zombies across the map, or stops the one crossing it (`release`). */
     public launchZombies(
-        user: Pick<User, "id" | "getVariables">,
+        user: Pick<User, "uuid" | "getVariables">,
         zombies: ZombieHordeMessage | undefined,
         release = false,
     ): void {
@@ -1435,7 +1435,8 @@ export class GameRoom implements BrothersFinder {
         // A grenade shot into the horde (never by a player in Basique, for whom it does not exist), or a new horde.
         else if (zombies?.grenade) {
             if (!playsBasic(user.getVariables().getVariables())) {
-                this.catastrophes?.zombieGrenade(user.id, zombies.grenade);
+                // By the player, not by the connection: two tabs of theirs shoot no faster than one.
+                this.catastrophes?.zombieGrenade(user.uuid, zombies.grenade);
             }
         } else if (zombies) this.catastrophes?.startZombies(zombies);
     }
