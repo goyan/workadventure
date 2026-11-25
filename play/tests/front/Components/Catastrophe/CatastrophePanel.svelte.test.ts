@@ -101,7 +101,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 tsunamiPhase: {
                     front: label("the bore comes in"),
                     ebb: label("the sea goes down"),
-                    backwash: label("backwash to the sea"),
+                    backwash: label("backwash to the sea, the water it left taken away"),
                 },
                 ball: label("Ball"),
                 ballSizeLabel: label("Size of the ball: its diameter"),

@@ -7,6 +7,7 @@ import {
     TILE_PX,
 } from "../types";
 import type { TerrainData, WaveSettings } from "../types";
+import { TSUNAMI_BACKWASH_MS } from "../Catastrophe/Tsunami";
 import { CELL_AREA_M2, LITRES_PER_M3, metresOf } from "./Scale";
 import { DEFAULT_SOIL_ROUGHNESS, soilDrinks, soilRoughness } from "./Soils";
 import { cellInMap, cellKey, cellOf, heightAt, reliefCells, soilAt } from "./TerrainGrid";
@@ -338,6 +339,46 @@ export function steadyFlowSpeed(
 const USUAL_INERTIA_MOVES = 3;
 const MOST_INERTIA_MOVES = 8;
 
+/**
+ * How long the water a tsunami left on a map is taken away once its sea is down, in seconds of the time of the water:
+ * the backwash of the tsunami (TSUNAMI_BACKWASH_MS). A backwash crosses a map of a couple of hundred metres in under
+ * a minute (outflows of 2 to 5 m/s on land at Banda Aceh in 2004, Fritz et al. 2006, GRL 33, L24605; up to 11 m/s
+ * at Kesennuma in 2011, Fritz et al. 2012, GRL 39, L00G23), and the flood of the map goes in that time.
+ *
+ * What the backwash alone takes back by the coast is only part of it: on the map of Antoine, a fifth of the water
+ * left by a tsunami of 8 m in a minute, three eighths in three (measured; a thin sheet on land runs slowly, held back
+ * by the ground). In reality what stays in the low land stays for weeks: in 2011 the plain of Sendai was drained by
+ * pumps, from nine days after the tsunami on (MLIT, "Sendai Airport Drainage", 27 March 2011). Here the rest goes as
+ * those pumps took it, in the time of a backwash instead of weeks: a game's shortcut, not physics. Nothing of the
+ * water the map held before the tsunami goes with it (see WaterGrid.ebbSea).
+ */
+export const SEA_EBB_SECONDS = TSUNAMI_BACKWASH_MS / 1000;
+
+/**
+ * Over how long the way the water of a map changes by itself (a river filling a hollow, a rain, a lake losing by an
+ * edge) is averaged, in seconds of its time: what it would have gone on doing had no tsunami come (SeaFlood).
+ */
+const REST_RATE_SECONDS = 30;
+
+/**
+ * What a tsunami brought to a map, followed from the first step of its sea (WaterGrid.setSea): the depths before it
+ * and their total (pixels), how fast that total changed by itself then (pixels a second) and the seconds of the
+ * water since, what came in by the coast and went back out by it, what was taken away after it, and where its sea
+ * is: rising (a crest coming in), ebbing (down to rest or gone, what it left being taken away, for `secondsLeft`
+ * more), or ebbed (all taken, the sea still at rest at the coast).
+ */
+interface SeaFlood {
+    before: Float32Array;
+    beforePx: number;
+    ratePx: number;
+    seconds: number;
+    inPx: number;
+    outPx: number;
+    takenPx: number;
+    ebb: "rising" | "ebbing" | "ebbed";
+    secondsLeft: number;
+}
+
 /** The cells a water grid covers, in cells of the relief. */
 export interface WaterGridBounds {
     x: number;
@@ -623,6 +664,15 @@ export class WaterGrid implements WaterView {
     /** The sea at the east edge (setSea), and the ceiling of the water it raised, which comes down after it. */
     private sea: { levelPx: number; topPx: number } | undefined;
     private seaTop = 0;
+    /** What the sea of a tsunami brought, from its first step until it was taken back (see setSea, ebbSea). */
+    private flood: SeaFlood | undefined;
+    /**
+     * How fast all the water of the grid changed by itself over the last REST_RATE_SECONDS while no sea stood
+     * (pixels a second): what came in less what went, from the tallies of its steps.
+     */
+    private restRate = 0;
+    /** Over how many seconds that rate is averaged yet: REST_RATE_SECONDS once the grid has stepped that long. */
+    private restSeconds = 0;
     /**
      * The moves the water with inertia made at its last step, and the share of the real speed of its fastest waves
      * they bore (1: all of it): fewer moves than the depth asks for bear the waves of `pulled` pixels of water only.
@@ -902,14 +952,158 @@ export class WaterGrid implements WaterView {
      * next step. Once the sea is gone, the higher ceiling comes down with the water that stands over the usual one,
      * never under it: nothing is cut that the sea brought.
      */
-    public setSea(sea: { levelPx: number; topPx: number } | undefined): void {
+    public setSea(sea: { levelPx: number; topPx: number; ebbing?: boolean } | undefined): void {
         if (sea && Number.isFinite(sea.levelPx) && Number.isFinite(sea.topPx)) {
             this.sea = { levelPx: sea.levelPx, topPx: Math.max(0, sea.topPx) };
             this.seaTop = Math.max(this.seaTop, this.sea.topPx);
         } else this.sea = undefined;
+        this.followFlood(sea !== undefined && this.sea !== undefined, sea?.ebbing === true);
     }
 
-    /** Whether the sea stands at the east edge (setSea). */
+    /**
+     * What the sea brought and what it takes back. Its first step keeps the water of the map as it stands (its
+     * lakes, its pools, its rivers): what the map goes back to. While the sea rises, a new crest included, nothing
+     * is taken; once it is down (its backwash, `ebbing`) or gone (a tsunami stopped), the water it left is taken
+     * away over SEA_EBB_SECONDS (ebbSea), and the state before is then forgotten once the sea is gone.
+     */
+    private followFlood(standing: boolean, ebbing: boolean): void {
+        const flood = this.flood;
+        if (standing && !ebbing) {
+            if (!flood || flood.before.length !== this.depth.length) this.flood = this.floodFromNow();
+            // A new crest over what the last one left: nothing is taken while it rises, the state before is kept.
+            else flood.ebb = "rising";
+            return;
+        }
+        if (!flood) return;
+        if (flood.ebb === "rising") {
+            flood.ebb = "ebbing";
+            flood.secondsLeft = SEA_EBB_SECONDS;
+        } else if (flood.ebb === "ebbed" && !standing) this.flood = undefined;
+    }
+
+    /** The water of the map before the sea came: what it goes back to (see SeaFlood). */
+    private floodFromNow(): SeaFlood {
+        const before = Float32Array.from(this.depth);
+        let beforePx = 0;
+        for (let index = 0; index < before.length; index++) beforePx += before[index];
+        return {
+            before,
+            beforePx,
+            ratePx: this.restRate,
+            seconds: 0,
+            inPx: 0,
+            outPx: 0,
+            takenPx: 0,
+            ebb: "rising",
+            secondsLeft: 0,
+        };
+    }
+
+    /**
+     * The water a map that had no tsunami would hold now (pixels): what it held before the sea came, going on as it
+     * went then (a river filling a hollow, a rain, a lake losing by an edge). What an ebb brings the map back to.
+     */
+    private floodExpectedPx(flood: SeaFlood): number {
+        return flood.beforePx + flood.ratePx * flood.seconds;
+    }
+
+    /**
+     * After each step, how the water changed by itself, while no sea stands; with a sea, the time it has stood.
+     * `tally` absent: a step the grid was not moved, at rest (WaterSimulation does not step a still grid).
+     */
+    private followRate(seconds: number, tally?: WaterTally): void {
+        if (this.flood) {
+            this.flood.seconds += seconds;
+            return;
+        }
+        const net = tally
+            ? tally.rainPx + tally.sourcesPx - tally.sinksPx - tally.evaporationPx - tally.absorptionPx - tally.lostPx
+            : 0;
+        // The mean over what the grid lived yet, then over the last REST_RATE_SECONDS.
+        this.restSeconds = Math.min(REST_RATE_SECONDS, this.restSeconds + seconds);
+        this.restRate += (net / seconds - this.restRate) * Math.min(1, seconds / this.restSeconds);
+    }
+
+    /** A step of the water left out because it is at rest (see followRate): nothing changed for `seconds`. */
+    public stillFor(seconds: number): void {
+        if (Number.isFinite(seconds) && seconds > 0) this.followRate(seconds);
+    }
+
+    /**
+     * What the sea of the last tsunami brought, while it is followed (from its first step until what it left is
+     * taken away, its sea gone): in by the coast, back out by it, and taken away after it (pixels of water over a
+     * cell); whether it is being taken away. Undefined otherwise.
+     */
+    public seaFlood():
+        | { inPx: number; outPx: number; takenPx: number; beforePx: number; expectedPx: number; ebbing: boolean }
+        | undefined {
+        const flood = this.flood;
+        if (!flood) return undefined;
+        const { inPx, outPx, takenPx, beforePx } = flood;
+        return {
+            inPx,
+            outPx,
+            takenPx,
+            beforePx,
+            expectedPx: this.floodExpectedPx(flood),
+            ebbing: flood.ebb === "ebbing",
+        };
+    }
+
+    /** Whether the water a tsunami left is being taken away: the grid keeps stepping while it is. */
+    public seaEbbing(): boolean {
+        return this.flood?.ebb === "ebbing";
+    }
+
+    /**
+     * After a step, a share of what the sea left: the water over what each cell held before it came, never more
+     * than what the sea brought and did not take back, nor more than the map holds over what it would hold without
+     * it (floodExpectedPx: what the ground drank, the drains took or an edge lost of it is gone already; what a river
+     * or a rain brought meanwhile stays). Each cell over its depth before gives
+     * by the share of its excess: the water of a lake, a pool or a river is never taken, and a hollow the sea
+     * filled is emptied with the land. The share is what the time left of the ebb asks: what remains goes evenly
+     * over it, the last of it at its last step. Returns what it took.
+     */
+    private ebbSea(seconds: number): number {
+        const flood = this.flood;
+        if (!flood || flood.ebb !== "ebbing") return 0;
+        const depth = this.depth;
+        const before = flood.before;
+        if (before.length !== depth.length) {
+            this.flood = undefined;
+            return 0;
+        }
+        let excess = 0;
+        let total = 0;
+        for (let index = 0; index < depth.length; index++) {
+            const held = depth[index];
+            total += held;
+            if (held > before[index]) excess += held - before[index];
+        }
+        const left = Math.min(flood.inPx - flood.outPx - flood.takenPx, total - this.floodExpectedPx(flood));
+        const last = flood.secondsLeft <= seconds;
+        const asked = last ? left : (left * seconds) / flood.secondsLeft;
+        const share = asked > 0 && excess > 0 ? Math.min(1, asked / excess) : 0;
+        let taken = 0;
+        if (share > 0) {
+            for (let index = 0; index < depth.length; index++) {
+                const held = depth[index];
+                const over = held - before[index];
+                if (over <= 0) continue;
+                depth[index] = share >= 1 ? before[index] : held - over * share;
+                taken += held - depth[index];
+            }
+        }
+        flood.takenPx += taken;
+        flood.secondsLeft -= seconds;
+        if (last) {
+            flood.ebb = "ebbed";
+            // The sea gone, nothing is followed any more; while it stands at rest, a new crest is told apart.
+            if (!this.sea) this.flood = undefined;
+        }
+        return taken;
+    }
+
     /** The moves the water with inertia made at its last step: 0 when it made none. */
     public movesMade(): number {
         return this.lastMoves;
@@ -931,6 +1125,7 @@ export class WaterGrid implements WaterView {
         return Math.max(this.highest, MAX_WATER_MAX_SURFACE, this.seaTop);
     }
 
+    /** Whether the sea stands at the east edge (setSea). */
     public hasSea(): boolean {
         return this.sea !== undefined;
     }
@@ -1461,6 +1656,17 @@ export class WaterGrid implements WaterView {
         // (down to the level the drain holds, if it holds one).
         for (const { area, level } of floorDrains) {
             const taken = this.dryFloor(area, level);
+            tally.sinksPx += taken;
+            if (taken > 0) tally.moved = true;
+        }
+        const seconds =
+            input.seconds !== undefined && Number.isFinite(input.seconds) && input.seconds > 0
+                ? Math.min(input.seconds, 1)
+                : 0.1;
+        this.followRate(seconds, tally);
+        // Once the sea of a tsunami is down, what it left goes, a share a step: counted with the sinks.
+        if (this.flood?.ebb === "ebbing") {
+            const taken = this.ebbSea(seconds);
             tally.sinksPx += taken;
             if (taken > 0) tally.moved = true;
         }
@@ -2326,6 +2532,11 @@ export class WaterGrid implements WaterView {
         const given = laid.givenPx - toSea;
         if (given > 0) tally.sourcesPx += given;
         else tally.sinksPx -= given;
+        // What the sea brought, and what went back to it: what is taken away once it is down (ebbSea).
+        if (this.flood) {
+            if (given > 0) this.flood.inPx += given;
+            else this.flood.outPx -= given;
+        }
     }
 
     /**

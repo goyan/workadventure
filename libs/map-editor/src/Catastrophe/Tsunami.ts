@@ -44,7 +44,8 @@ export const TSUNAMI_DEFAULT_MINUTES = 3;
 export const TSUNAMI_FRONT_SECONDS = 10;
 /**
  * Once the crest has gone by, the sea stays at its rest level at the coast for this long (ms): the water the
- * tsunami left on the land runs back to it there (the backwash), instead of creeping off the edge of the map.
+ * tsunami left on the land runs back to it there (the backwash), instead of creeping off the edge of the map, and
+ * what would not run back in that time is taken away with it (WaterGrid, SEA_EBB_SECONDS): the map is as before.
  */
 export const TSUNAMI_BACKWASH_MS = 60_000;
 /**
@@ -137,10 +138,19 @@ export function tsunamiTopPx(tsunami: Pick<Tsunami, "metres"> | undefined, usual
 
 /**
  * The sea a tsunami holds at the coast of a map at a time of the server (WaterGrid.setSea): its level over the
- * altitude 0 of the map, the rest level of the sea, and the ceiling of the water while it goes on. None before it
- * comes and once its backwash is over.
+ * altitude 0 of the map, the rest level of the sea, and the ceiling of the water while it goes on; `ebbing` once it is
+ * back at rest (its backwash): the water it left on the map is then taken away (WaterGrid, SEA_EBB_SECONDS). None
+ * before it comes and once its backwash is over.
  */
-export function tsunamiSea(tsunami: Tsunami | undefined, now: number): { levelPx: number; topPx: number } | undefined {
-    if (!tsunami || now < tsunami.startedAt || tsunamiPhase(tsunami, now) === "over") return undefined;
-    return { levelPx: tsunamiRisePx(tsunami, now), topPx: tsunamiTopPx(tsunami, MAX_WATER_MAX_SURFACE) };
+export function tsunamiSea(
+    tsunami: Tsunami | undefined,
+    now: number,
+): { levelPx: number; topPx: number; ebbing: boolean } | undefined {
+    const phase = tsunamiPhase(tsunami, now);
+    if (!tsunami || now < tsunami.startedAt || phase === "over") return undefined;
+    return {
+        levelPx: tsunamiRisePx(tsunami, now),
+        topPx: tsunamiTopPx(tsunami, MAX_WATER_MAX_SURFACE),
+        ebbing: phase === "backwash",
+    };
 }

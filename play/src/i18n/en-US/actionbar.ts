@@ -534,13 +534,13 @@ const actionbar = {
         tsunamiStart: "Launch the tsunami",
         tsunamiStop: "Stop the tsunami",
         tsunamiHelp:
-            "The sea comes in by the east edge of the map: it jumps there to the height chosen (the bore of a tsunami that broke before the coast), then goes back down over the time chosen. The water of the map does the rest, at the scale of reality: the flood front, the wave across the lakes, the run-up on the slopes, then the backwash to the sea. It fills the hollows of the map, which stay full. Any player can stop it.",
+            "The sea comes in by the east edge of the map: it jumps there to the height chosen (the bore of a tsunami that broke before the coast), then goes back down over the time chosen. The water of the map does the rest, at the scale of reality: the flood front, the wave across the lakes, the run-up on the slopes, then the backwash to the sea. During the backwash, the water it left goes too, as pumps would take it in weeks: the map is back to its water before, its lakes, pools and rivers keeping theirs. Any player can stop it; the water that came in then goes the same way.",
         tsunamiGoing: "{metres} m tsunami: {phase}, the sea at {level} m at the coast, {left} left",
         tsunamiCelerity: "speed limited by the server: {percent} % of the real one",
         tsunamiPhase: {
             front: "the bore comes in",
             ebb: "the sea goes down",
-            backwash: "backwash to the sea",
+            backwash: "backwash to the sea, the water it left taken away",
         },
         zombies: "Zombies",
         zombiesHelp:
