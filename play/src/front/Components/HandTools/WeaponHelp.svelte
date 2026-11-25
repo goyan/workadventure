@@ -38,16 +38,13 @@
     });
 </script>
 
-<!-- How to fire the weapon just taken, a few seconds, with the look of the fishing cards; never in the way of a click. -->
-{#if shown}
-    <div
-        class="pointer-events-none absolute left-1/2 top-40 z-[300] -translate-x-1/2 select-none"
-        aria-live="polite"
-        data-testid="weapon-help"
-    >
-        <div class="fishing-card">
+<!-- How to fire the weapon just taken, a few seconds, with the look of the fishing cards; never in the way of a click.
+     The live region stays in place so that screen readers tell the help that appears in it. -->
+<div class="pointer-events-none absolute left-1/2 top-40 z-[300] -translate-x-1/2 select-none" aria-live="polite">
+    {#if shown}
+        <div class="fishing-card" data-testid="weapon-help">
             <span class="fishing-badge" aria-hidden="true"><PixelIcon name={shown} size={18} /></span>
             {shown === "nerf" ? $LL.actionbar.nerf.help() : $LL.actionbar.grenadeLauncher.help()}
         </div>
-    </div>
-{/if}
+    {/if}
+</div>
