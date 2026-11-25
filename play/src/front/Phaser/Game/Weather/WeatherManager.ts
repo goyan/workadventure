@@ -52,12 +52,18 @@ import {
     rainDrops,
     rainFineness,
     rainIntensity,
+    RAIN_FALL_SPEEDS,
+    rainPlanes,
     followWind,
     rainSplashes,
     rainUnderCloud,
     rainVeilAlpha,
 } from "./Rain";
 import type { RainLocal, RainWind } from "./Rain";
+import { cellCopies, MAX_DRAWN_COPIES, seenAmount } from "./ParticleDensity";
+import { fallSeconds } from "./FallHash";
+import { offMapRects, PrecipitationLayer } from "./PrecipitationLayer";
+import type { CloudLevels, OutdoorSource } from "./PrecipitationLayer";
 import { mapGroundWetness, PUDDLE_ROW, puddleRows, puddlesIn } from "./Puddles";
 import {
     cloudAlpha,
@@ -90,8 +96,24 @@ import type { CloudSky } from "./CloudLayer";
 import { screenScale, seenFromFar } from "./ScreenScale";
 import type { BlockCanvasArea, BlockSurface } from "./BlockSurface";
 import { WeatherSounds } from "./WeatherSounds";
-import { drawFlake, FLAKE_KINDS, flakeMix, groundWind, snowflakes, snowLevel, snowTones } from "./Snowfall";
-import { perspectiveCamera, perspectiveDrops, perspectiveFlakes } from "./PerspectiveFall";
+import {
+    drawFlake,
+    FLAKE_KINDS,
+    flakeMix,
+    groundWind,
+    PX_PER_METRE,
+    snowflakes,
+    snowLevel,
+    snowPlanes,
+    snowTones,
+} from "./Snowfall";
+import {
+    perspectiveCamera,
+    perspectiveDropPlanes,
+    perspectiveDrops,
+    perspectiveFlakePlanes,
+    perspectiveFlakes,
+} from "./PerspectiveFall";
 import type { SnowFall } from "./Snowfall";
 
 /** The system asks for less motion: the fog patches stand still. */
@@ -174,12 +196,21 @@ export interface WeatherManagerOptions {
      * ones near 0 °C, fine crystals in a hard frost. A usual snow just under 0 °C when not given.
      */
     precipitationAir?: () => PrecipitationAir | undefined;
+    /**
+     * How high the view is (map pixels): the altitude of the plane the player flies, 0 on foot. The personal amount of
+     * the rain is bounded lower on the ground than from the air (seenAmount).
+     */
+    viewAltitude?: () => number;
     /** Overrides the system "reduced motion" setting (read once from matchMedia otherwise). Used by tests. */
     reducedMotion?: boolean;
 }
 
 export class WeatherManager {
     private readonly graphics: Phaser.GameObjects.Graphics;
+    /** The drops and flakes drawn by the graphics card, as many as the personal amount asks; undefined without WebGL. */
+    private readonly particles: PrecipitationLayer | undefined;
+    /** The most drops or flakes a cell holds when the processor draws them (no WebGL); changed by the measures only. */
+    private readonly drawnCopies: number = MAX_DRAWN_COPIES;
     /** Fog, clouds and their shadows: one image over the veils and the falling weather. */
     private readonly blocks: BlockSurface;
     /** Seen from far, the fog over the buildings: over the lights of the lamps, so that they do not pierce it. */
@@ -288,6 +319,8 @@ export class WeatherManager {
             .graphics()
             .setDepth(DEPTH_NIGHT_INDEX + 1)
             .setVisible(false);
+        // After the graphics (their splashes and lightning under the drops), under the clouds of the blocks.
+        this.particles = PrecipitationLayer.create(scene, DEPTH_NIGHT_INDEX + 1);
         // Added after the graphics, at the same depth: above them.
         this.blocks = createBlockSurface(scene, DEPTH_NIGHT_INDEX + 1);
         this.farFog = createBlockSurface(scene, DEPTH_FAR_FOG_INDEX);
@@ -342,6 +375,7 @@ export class WeatherManager {
         if (!showWeather && !showClouds) {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
+                this.particles?.hide();
                 this.blocks.hide();
                 this.cloudLayer?.hide();
                 this.setRainbowSpot(undefined);
@@ -414,12 +448,13 @@ export class WeatherManager {
         }
         const grid = this.options.outdoorGrid?.();
         // Veils cover the outdoor runs of the view only, so rooms stay as they are.
-        const cover = grid ? this.options.raisedCover?.() : undefined;
-        const veil = grid ? this.veilOver(view, grid, cover) : [view];
+        const raisedCover = grid ? this.options.raisedCover?.() : undefined;
+        const veil = grid ? this.veilOver(view, grid, raisedCover) : [view];
         if (veil.length === 0) {
             // Nothing outside on the screen: nothing to draw, and no reason to draw the map again.
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
+                this.particles?.hide();
                 this.blocks.hide();
                 this.cloudLayer?.hide();
                 this.setRainbowSpot(undefined);
@@ -432,9 +467,10 @@ export class WeatherManager {
         }
         this.visible = true;
         const isOutdoor = grid
-            ? (x: number, y: number): boolean => grid.isOutdoorAt(x, y) && cover?.has(x, y) !== true
+            ? (x: number, y: number): boolean => grid.isOutdoorAt(x, y) && raisedCover?.has(x, y) !== true
             : undefined;
         this.graphics.clear().setVisible(true);
+        this.particles?.hide();
         // Cells of the clouds at this zoom, never finer than the fog's 16 px when there is fog (powers of two).
         const cloudBlock = cloudBlockSize(this.scene.cameras.main.zoom);
         const foggy = showWeather && weather === WeatherType.Fog;
@@ -557,6 +593,11 @@ export class WeatherManager {
                     };
                 }
             }
+            this.particles?.begin(
+                view,
+                grid ? outdoorSource(grid, raisedCover) : undefined,
+                underClouds ? this.cloudLevels(canvas, size) : undefined,
+            );
             // The drops go with the wind near the ground, as the flakes do: the same way in a sleet.
             const wind = this.rainWindAt(
                 now,
@@ -566,7 +607,8 @@ export class WeatherManager {
             if (snow < 1) this.drawRain(epoch, view, rain * (1 - snow), wind, isOutdoor, underClouds);
             const fall: SnowFall = {
                 // The snow of the winter theme under a dry sky falls as it says, whatever the rate of the map.
-                level: Math.min(1, (flakes ?? snowLevel(settings?.rainRate, snow, storm)) * this.rainSettings.amount),
+                // How hard it snows, as the air says: the personal amount adds flakes (drawSnow), not intensity.
+                level: Math.min(1, flakes ?? snowLevel(settings?.rainRate, snow, storm)),
                 mix: flakeMix(this.options.precipitationAir?.()),
             };
             if (fall.level > 0) {
@@ -583,6 +625,7 @@ export class WeatherManager {
                 );
             }
             if (storm && serverDate) this.drawLightning(epoch, view, veil, isOutdoor);
+            this.particles?.end();
         }
         if (showClouds) {
             const zoom = this.screenScale();
@@ -965,9 +1008,8 @@ export class WeatherManager {
         isOutdoor: ((x: number, y: number) => boolean) | undefined,
         local: RainLocal | undefined,
     ): void {
-        const amount = intensity * this.rainSettings.amount;
         if (this.perspective) {
-            this.drawRainInPerspective(epoch, view, amount, wind, isOutdoor, local);
+            this.drawRainInPerspective(epoch, view, intensity, wind, isOutdoor, local);
             this.drawSplashes(epoch, view, 1, intensity, isOutdoor, local);
             return;
         }
@@ -979,8 +1021,37 @@ export class WeatherManager {
                 ? view
                 : { x: view.x * fine, y: view.y * fine, width: view.width * fine, height: view.height * fine };
         const localFine: RainLocal | undefined = local && fine !== 1 ? (x, y) => local(x / fine, y / fine) : local;
+        const particles = this.gpuParticles();
+        if (particles) {
+            // The personal amount adds drops to the rain as it is (the same sizes, the same wind), it does not make it
+            // heavier: the intensity stays what the air says.
+            const copies = cellCopies(this.seenAmount());
+            particles.rain(rainPlanes(finer, intensity, wind, local !== undefined, copies), {
+                seconds: fallSeconds(epoch),
+                copies,
+                intensity,
+                fine,
+                color: RAIN_COLOR,
+            });
+        } else {
+            this.drawRainOnProcessor(epoch, finer, fine, intensity, wind, isOutdoor, localFine);
+        }
+        this.drawSplashes(epoch, finer, fine, intensity, isOutdoor, localFine);
+    }
+
+    /** The drops of the flat rain drawn in the graphics without WebGL: at most MAX_DRAWN_COPIES a cell. */
+    private drawRainOnProcessor(
+        epoch: number,
+        finer: WeatherView,
+        fine: number,
+        intensity: number,
+        wind: RainWind,
+        isOutdoor: ((x: number, y: number) => boolean) | undefined,
+        localFine: RainLocal | undefined,
+    ): void {
+        const copies = cellCopies(this.seenAmount(), this.drawnCopies);
         // A drop shows where its whole streak is outdoors (head, middle and tail): no trail over the edge of a roof.
-        const drops = rainDrops(epoch, finer, amount, wind, localFine)
+        const drops = rainDrops(epoch, finer, intensity, wind, localFine, copies)
             .map((drop) =>
                 fine === 1 ? drop : { ...drop, x: drop.x / fine, y: drop.y / fine, length: drop.length / fine },
             )
@@ -1010,7 +1081,32 @@ export class WeatherManager {
                 this.graphics.strokePath();
             }
         }
-        this.drawSplashes(epoch, finer, fine, intensity, isOutdoor, localFine);
+    }
+
+    /** The personal amount of the rain as drawn from where the view is (seenAmount): ×4 at most on the ground. */
+    private seenAmount(): number {
+        return seenAmount(this.rainSettings.amount, this.options.viewAltitude?.() ?? 0);
+    }
+
+    /** The layer of the graphics card while its shaders work here; undefined: the processor draws (thinner). */
+    private gpuParticles(): PrecipitationLayer | undefined {
+        return this.particles?.usable() ? this.particles : undefined;
+    }
+
+    /** The levels of the clouds of the rain as last painted (blockFrame), for the graphics card. */
+    private cloudLevels(canvas: BlockCanvasArea, size: number): CloudLevels | undefined {
+        const levels = this.blockFrame?.rainLevels;
+        if (!levels) return undefined;
+        return {
+            x: canvas.x,
+            y: canvas.y,
+            columns: canvas.columns,
+            rows: canvas.rows,
+            size,
+            levels,
+            most: FOG_LEVELS,
+            effect: this.rainSettings.clouds,
+        };
     }
 
     /** The splashes of the drops reaching the ground (none when motion is reduced), worked out on a grid `fine` times
@@ -1083,8 +1179,25 @@ export class WeatherManager {
             this.drawSnowInPerspective(epoch, view, fall, air, tones, isOutdoor, local);
             return;
         }
+        const still = this.reducedMotion;
+        const particles = this.gpuParticles();
+        if (particles) {
+            // The personal amount adds flakes to the snow as it is, it does not make it heavier (see drawRain).
+            const copies = cellCopies(this.seenAmount());
+            const planes = snowPlanes(finer, fall, air, still ? 0 : epoch / 1000, local !== undefined, still, copies);
+            particles.snow(planes, {
+                seconds: still ? 0 : fallSeconds(epoch),
+                copies,
+                view: finer,
+                fine,
+                still,
+                tones,
+            });
+            return;
+        }
+        const copies = cellCopies(this.seenAmount(), this.drawnCopies);
         const pixel = 1 / fine;
-        for (const flake of snowflakes(epoch, finer, fall, air, localFine, this.reducedMotion)) {
+        for (const flake of snowflakes(epoch, finer, fall, air, localFine, still, copies)) {
             const x = flake.x / fine;
             const y = flake.y / fine;
             if (isOutdoor && !isOutdoor(x, y)) continue;
@@ -1100,7 +1213,7 @@ export class WeatherManager {
     private drawRainInPerspective(
         epoch: number,
         view: WeatherView,
-        amount: number,
+        intensity: number,
         wind: RainWind,
         isOutdoor: ((x: number, y: number) => boolean) | undefined,
         local: RainLocal | undefined,
@@ -1108,11 +1221,33 @@ export class WeatherManager {
         const camera = perspectiveCamera(this.screenView());
         const still = this.reducedMotion;
         const air = { shift: still ? { x: 0, y: 0 } : this.rainDrift.at(epoch, wind), wind };
-        const drops = perspectiveDrops(still ? 0 : epoch, view, camera, amount, air, local).filter(
-            (drop) => !isOutdoor || isOutdoor(drop.landX, drop.landY),
-        );
         // Screen pixels a map pixel: the widths are set on the screen.
         const pixel = 1 / this.screenScale();
+        const particles = this.gpuParticles();
+        if (particles) {
+            const copies = cellCopies(this.seenAmount());
+            particles.rainInPerspective(
+                perspectiveDropPlanes(view, camera, intensity, air.shift, local !== undefined, copies),
+                {
+                    seconds: still ? 0 : fallSeconds(epoch),
+                    copies,
+                    view,
+                    camera,
+                    air,
+                    speeds: RAIN_FALL_SPEEDS.map((speed) => speed * PX_PER_METRE),
+                    widths: PERSPECTIVE_DROP_WIDTHS,
+                    alphas: PERSPECTIVE_DROP_ALPHAS,
+                    widest: PERSPECTIVE_DROP_WIDEST,
+                    pixel,
+                    color: RAIN_COLOR,
+                },
+            );
+            return;
+        }
+        const copies = cellCopies(this.seenAmount(), this.drawnCopies);
+        const drops = perspectiveDrops(still ? 0 : epoch, view, camera, intensity, air, local, copies).filter(
+            (drop) => !isOutdoor || isOutdoor(drop.landX, drop.landY),
+        );
         // Grouped by how they are drawn: a few lines styles for the whole rain.
         const groups = new Map<string, { width: number; alpha: number; drops: typeof drops }>();
         for (const drop of drops) {
@@ -1159,7 +1294,25 @@ export class WeatherManager {
         const camera = perspectiveCamera(this.screenView());
         // The pixel of a flake on the ground, as the flat snow draws it (finer seen from very close).
         const pixel = 1 / rainFineness(this.screenScale());
-        for (const flake of perspectiveFlakes(epoch, view, camera, fall, air, local, this.reducedMotion)) {
+        const still = this.reducedMotion;
+        const particles = this.gpuParticles();
+        if (particles) {
+            const copies = cellCopies(this.seenAmount());
+            particles.snowInPerspective(perspectiveFlakePlanes(view, fall, air.shift, local !== undefined, copies), {
+                seconds: still ? 0 : fallSeconds(epoch),
+                copies,
+                view,
+                camera,
+                air,
+                pixel,
+                biggest: PERSPECTIVE_FLAKE_BIGGEST,
+                still,
+                tones,
+            });
+            return;
+        }
+        const copies = cellCopies(this.seenAmount(), this.drawnCopies);
+        for (const flake of perspectiveFlakes(epoch, view, camera, fall, air, local, still, copies)) {
             if (isOutdoor && !isOutdoor(flake.landX, flake.landY)) continue;
             const kind = FLAKE_KINDS[flake.kind];
             // The shape of the flake as on the ground, its pixels as many times bigger as the flake is near.
@@ -1285,12 +1438,30 @@ export class WeatherManager {
         this.sounds.destroy();
         this.snowGround.destroy();
         this.graphics.destroy();
+        this.particles?.destroy();
         this.puddleGraphics.destroy();
         this.blocks.destroy();
         this.farFog.destroy();
         this.cloudLayer?.destroy();
         this.setRainbowSpot(undefined);
     }
+}
+
+/**
+ * The outdoors for the graphics card: those of isOutdoor (the outdoor cells without what a raised floor covers), and
+ * what is off the map, outdoors as OutdoorGrid.isOutdoorCell says.
+ */
+function outdoorSource(grid: OutdoorGrid, cover: RaisedCover | undefined): OutdoorSource {
+    return {
+        owners: [grid, cover],
+        rectsIn: (area) => {
+            const runs = grid.outdoorRunsInView(area);
+            return [
+                ...(cover ? cover.uncovered(runs) : runs),
+                ...offMapRects(area, grid.cols * grid.cellSize, grid.rows * grid.cellSize),
+            ];
+        },
+    };
 }
 
 /** The colour of the sky the water reflects: blue by fine weather, grey under a covered or rainy sky. */

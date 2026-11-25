@@ -4670,6 +4670,11 @@ export class GameScene extends DirtyScene {
                             : undefined;
                     },
                     seasonalTheme: () => this.getSeasonalTheme(),
+                    // From a plane the rain may be thicker than seen on foot (seenAmount).
+                    viewAltitude: () => {
+                        const player = this.CurrentPlayer;
+                        return player ? player.shownFlightAltitude() : 0;
+                    },
                     snowShare: () => this.getSnowShare(),
                     precipitationAir: () =>
                         precipitationAirNow(

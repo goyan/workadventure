@@ -68,7 +68,7 @@ const menu: DeepPartial<Translation["menu"]> = {
         rain: {
             title: "Pluie (réglages pour moi)",
             perspective: "Pluie et neige vues de dessus, en perspective (grosses près de l’œil, plus fines au sol)",
-            amount: "Quantité de gouttes",
+            amount: "Quantité de pluie et de neige (×1 : comme le ciel, ×32 : 32 fois plus de gouttes et de flocons)",
             lean: "Inclinaison avec le vent",
             splashes: "Éclaboussures au sol (0 % : aucune)",
             puddles: "Flaques (0 % : aucune)",

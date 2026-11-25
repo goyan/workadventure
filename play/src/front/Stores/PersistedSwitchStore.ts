@@ -2,10 +2,18 @@ import { get, writable, type Writable } from "svelte/store";
 
 /**
  * A personal number kept in the browser under `key`, from `min` to `max` (`fallback` until chosen, or when what is kept
- * is not a number). When the browser refuses the storage, the choice lasts until the page is closed.
+ * is not a number). When the browser refuses the storage, the choice lasts until the page is closed. `snap` brings a
+ * value to one the setting can take (a step of a slider), what is kept by an older version included.
  */
-export function createPersistedNumberStore(key: string, fallback: number, min: number, max: number): Writable<number> {
-    const clamp = (value: number): number => (Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback);
+export function createPersistedNumberStore(
+    key: string,
+    fallback: number,
+    min: number,
+    max: number,
+    snap: (value: number) => number = (value) => value,
+): Writable<number> {
+    const clamp = (value: number): number =>
+        Number.isFinite(value) ? snap(Math.min(max, Math.max(min, value))) : fallback;
     let stored: string | null = null;
     try {
         stored = localStorage.getItem(key);
