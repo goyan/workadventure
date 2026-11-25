@@ -28,7 +28,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     grenadeLauncher: {
         equip: "Prendre le lance-grenades",
         unequip: "Ranger le lance-grenades",
-        help: "ESPACE : tirer une grenade vers le pointeur.",
+        help: "ESPACE : lancer une grenade à 20 m devant soi, dans la direction du déplacement, diagonales incluses, ou du regard à l'arrêt. Une par seconde, à volonté.",
     },
     rod: {
         equip: "Équiper la canne à pêche",

@@ -1,6 +1,6 @@
 import { CatastropheKind } from "@workadventure/messages";
 import type { CatastropheMessage } from "@workadventure/messages";
-import { encodeZombieTerrain, zombieTerrainHash } from "@workadventure/map-editor";
+import { decodeZombieLog, encodeZombieLog, encodeZombieTerrain, zombieTerrainHash } from "@workadventure/map-editor";
 import type { ZombieHorde } from "@workadventure/map-editor";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ZombieReceiver } from "../../../../../src/front/Phaser/Game/Catastrophe/ZombieReceiver";
@@ -75,6 +75,37 @@ describe("ZombieReceiver", () => {
         expect(heard).toHaveLength(2);
         expect(heard[1]).toMatchObject({ id: 9, terrain: TERRAIN, safeStep: 145 });
         expect(receiver.current()).toBe(heard[1]);
+        receiver.destroy();
+    });
+
+    it("glues the last entries each message tells to its log, and waits for the whole log after a lost message", () => {
+        const heard: (ZombieHorde | undefined)[] = [];
+        const receiver = new ZombieReceiver((horde) => heard.push(horde));
+        const entry = (applyStep: number) => ({ applyStep, changes: [{ slot: 0, tile: applyStep }] });
+        const message = (impactInMs: number, withTerrain: boolean, logFrom: number, steps: number[]) => {
+            const base = told(impactInMs, withTerrain);
+            if (!base.zombies) throw new Error("A horde is told");
+            base.zombies.avatars = encodeZombieLog(steps.map(entry));
+            base.zombies.logFrom = logFrom;
+            return base;
+        };
+        const stepsOf = (horde: ZombieHorde | undefined) =>
+            decodeZombieLog(horde?.avatars ?? "").map((told) => told.applyStep);
+        // The whole log with the ground, then the entries from the third on, then from the fourth on.
+        receiver.report(message(169_000, true, 0, [10, 20, 30]));
+        receiver.report(message(168_000, false, 2, [30, 40]));
+        expect(stepsOf(receiver.current())).toEqual([10, 20, 30, 40]);
+        expect(receiver.current()?.safeStep).toBe(145);
+        receiver.report(message(167_000, false, 4, []));
+        expect(stepsOf(receiver.current())).toEqual([10, 20, 30, 40]);
+        // A message lost (the entry 50): the next one starts past what is known. The clock goes on, the log and the
+        // step it is complete to stay, until the whole log comes with the ground.
+        receiver.report(message(165_000, false, 5, [60]));
+        expect(stepsOf(receiver.current())).toEqual([10, 20, 30, 40]);
+        expect(receiver.current()?.safeStep).toBe(155);
+        receiver.report(message(164_000, true, 0, [10, 20, 30, 40, 50, 60]));
+        expect(stepsOf(receiver.current())).toEqual([10, 20, 30, 40, 50, 60]);
+        expect(receiver.current()?.safeStep).toBe(185);
         receiver.destroy();
     });
 

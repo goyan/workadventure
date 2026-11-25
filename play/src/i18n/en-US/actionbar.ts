@@ -26,7 +26,7 @@ const actionbar = {
     grenadeLauncher: {
         equip: "Take the grenade launcher",
         unequip: "Put the grenade launcher away",
-        help: "SPACE: shoot a grenade toward the pointer.",
+        help: "SPACE: lob a grenade 20 m ahead, in the direction you move, including diagonals, or the direction you face when stopped. One a second, as many as you like.",
     },
     rod: {
         equip: "Equip the fishing rod",

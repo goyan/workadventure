@@ -58,7 +58,6 @@ import {
     pavedTilesOf,
 } from "@workadventure/map-editor";
 import type { Bridges, ColdMass, TerrainData, WeatherLocation } from "@workadventure/map-editor";
-import { ZOMBIE_GRENADES_A_PLAYER, zombieGrenadeAim } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
 import { asError } from "catch-unknown";
@@ -524,6 +523,7 @@ import { HurricaneDebris } from "./Catastrophe/HurricaneDebris";
 import { HurricaneView, seaHurricaneOf } from "./Catastrophe/HurricaneView";
 import { ZombieReceiver } from "./Catastrophe/ZombieReceiver";
 import { ZombieView } from "./Catastrophe/ZombieView";
+import { zombieGrenadeShotOf } from "./Catastrophe/ZombieGrenadeAim";
 import { zombieShoveOf, zombieShownOf } from "./Catastrophe/ZombieShown";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
@@ -788,10 +788,8 @@ export class GameScene extends DirtyScene {
     private hurricaneFlood: HurricaneFloodView | undefined;
     /** The horde of zombies of the room: what the server tells of it, and its crowd drawn. */
     private zombieReceiver: ZombieReceiver | undefined;
-    /** When this player shot their last grenade (scene time, ms). */
+    /** When this player shot their last grenade (scene time, ms): as many as they like, one a second. */
     private zombieGrenadeShotAt = -Infinity;
-    /** The grenades this player shot into the horde it shoots at; the launcher is put away once they are all shot. */
-    private zombieGrenadesShot = { horde: -1, shot: 0 };
     private zombieView: ZombieView | undefined;
     /** When the panel was last told the horde (ms, the clock of the game). */
     private zombieToldAt = 0;
@@ -3961,12 +3959,8 @@ export class GameScene extends DirtyScene {
     }
 
     /**
-     * At each image, the horde of zombies of the room: stepped to the time of the server and drawn, and told to the
-     * panel once a second. Nothing while there is none.
-     */
-    /**
-     * Shoots a grenade of the launcher from the feet of this player to the pointer, within its range. The server puts
-     * it in the horde; at most one a second for a player.
+     * Shoots a grenade of the launcher from the feet of this player, ahead the way its avatar moves or faces
+     * (zombieGrenadeShotOf). The server puts it in the horde; at most one a second for a player, as many as they like.
      */
     public fireZombieGrenade(): void {
         if (
@@ -3979,18 +3973,10 @@ export class GameScene extends DirtyScene {
             return;
         }
         this.zombieGrenadeShotAt = this.time.now;
-        const horde = this.zombieReceiver.current()?.id ?? -1;
-        if (this.zombieGrenadesShot.horde !== horde) this.zombieGrenadesShot = { horde, shot: 0 };
-        this.zombieGrenadesShot.shot++;
-        if (this.zombieGrenadesShot.shot >= ZOMBIE_GRENADES_A_PLAYER) grenadeLauncherEquippedStore.set(false);
-        const pointer = new Phaser.Math.Vector2();
-        this.input.activePointer.positionToCamera(this.cameras.main, pointer);
-        const aim = zombieGrenadeAim({
-            fromX: this.CurrentPlayer.x,
-            fromY: this.CurrentPlayer.y,
-            toX: pointer.x,
-            toY: pointer.y,
-        });
+        const player = this.CurrentPlayer;
+        // On the deck of a bridge, its avatar is drawn that much north of the ground under it, where the horde runs.
+        const floorZ = player.isFlying() ? 0 : player.getFloorZ();
+        const aim = zombieGrenadeShotOf(player.x, player.y + floorZ, player.getNerfHeading());
         this.connection?.emitLaunchZombies(
             {
                 count: 0,
@@ -4026,6 +4012,10 @@ export class GameScene extends DirtyScene {
         );
     }
 
+    /**
+     * At each image, the horde of zombies of the room: stepped to the time of the server and drawn, and told to the
+     * panel once a second. Nothing while there is none.
+     */
     private updateZombies(time: number, epoch: number | undefined): void {
         const view = this.zombieView;
         if (!view?.active()) return;

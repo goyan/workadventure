@@ -169,6 +169,11 @@ const BODY_BOUNCE = 0.25;
 const BODY_SLIDE_BRAKE = 6;
 const G_PX_S2 = 9.81 * ZOMBIE_PX_PER_METRE;
 
+/** A grenade of the log, by the step it goes off at and its points: the same in every message that tells it. */
+function shotKey(explodeStep: number, shot: ZombieGrenadeShot): string {
+    return `${explodeStep}:${shot.fromX}:${shot.fromY}:${shot.toX}:${shot.toY}`;
+}
+
 function mulberry32(seed: number): () => number {
     let state = seed >>> 0;
     return () => {
@@ -264,12 +269,17 @@ export class ZombieCrowd {
     private ways: Uint8Array | undefined;
     /** The buckets of the Dijkstra, by distance modulo 16 (a step adds 10 or 14): kept from one making to the next. */
     private readonly buckets: number[][] = Array.from({ length: 16 }, () => []);
-    /** The grenades told, by the step they go off at, with their paths once computed; the blasts not yet taken. */
-    private shots: { explodeStep: number; shot: ZombieGrenadeShot; path?: ZombieGrenadePath }[] = [];
+    /**
+     * The grenades told that have not gone off yet (and those of the last step, drawn until it), by their entry
+     * (shotKey), with their paths once computed; the blasts not yet taken.
+     */
+    private shots = new Map<string, { explodeStep: number; shot: ZombieGrenadeShot; path?: ZombieGrenadePath }>();
     private explosions: { x: number; y: number; step: number; killed: number }[] = [];
     /** The log of the avatars, the next entry to apply, and the last step it is complete to. */
     private log: ZombieLogEntry[] = [];
     private logAt = 0;
+    /** The text of the log last read: told again (the server reads it ten times a second), it is nothing new. */
+    private logText: string | undefined;
     private safeStep: number;
     private atX = 0;
     private atY = 0;
@@ -339,25 +349,27 @@ export class ZombieCrowd {
      * last step it is complete to. A log that disagrees with what was applied already is not taken.
      */
     public setLog(text: string, safeStep: number): void {
+        if (text === this.logText) {
+            if (Number.isFinite(safeStep) && safeStep > this.safeStep) this.safeStep = safeStep;
+            return;
+        }
         const entries = zombieLogInOrder(decodeZombieLog(text));
         for (let at = 0; at < this.logAt; at++) {
             if (at >= entries.length || entries[at].applyStep !== this.log[at].applyStep) return;
         }
         this.log = entries;
+        this.logText = text;
         if (Number.isFinite(safeStep) && safeStep > this.safeStep) this.safeStep = safeStep;
-        // The grenades told: their paths, made when first asked for.
-        const shots: { explodeStep: number; shot: ZombieGrenadeShot; path?: ZombieGrenadePath }[] = [];
-        for (const entry of entries) {
+        // The grenades not gone off yet (and those of the last step, still drawn): their paths, made when first asked
+        // for, kept from the log read before. Those gone off long ago are not looked at again.
+        const shots = new Map<string, { explodeStep: number; shot: ZombieGrenadeShot; path?: ZombieGrenadePath }>();
+        let from = entries.length;
+        while (from > 0 && entries[from - 1].applyStep >= this.steps - 1) from--;
+        for (let at = from; at < entries.length; at++) {
+            const entry = entries[at];
             for (const shot of entry.grenades ?? []) {
-                const known = this.shots.find(
-                    (other) =>
-                        other.explodeStep === entry.applyStep &&
-                        other.shot.fromX === shot.fromX &&
-                        other.shot.fromY === shot.fromY &&
-                        other.shot.toX === shot.toX &&
-                        other.shot.toY === shot.toY,
-                );
-                shots.push(known ?? { explodeStep: entry.applyStep, shot });
+                const key = shotKey(entry.applyStep, shot);
+                shots.set(key, this.shots.get(key) ?? { explodeStep: entry.applyStep, shot });
             }
         }
         this.shots = shots;
@@ -379,7 +391,7 @@ export class ZombieCrowd {
      */
     public grenadesAt(step: number): { x: number; y: number; z: number; explodeStep: number }[] {
         const flying: { x: number; y: number; z: number; explodeStep: number }[] = [];
-        for (const grenade of this.shots) {
+        for (const grenade of this.shots.values()) {
             const since = step - (grenade.explodeStep - ZOMBIE_GRENADE_FUSE_STEPS);
             if (since < 0 || since >= ZOMBIE_GRENADE_FUSE_STEPS) continue;
             const path = this.pathOf(grenade);
@@ -566,14 +578,7 @@ export class ZombieCrowd {
                 this.avatarTile[slot] = told;
             }
             for (const shot of entry.grenades ?? []) {
-                const grenade = this.shots.find(
-                    (other) =>
-                        other.explodeStep === entry.applyStep &&
-                        other.shot.fromX === shot.fromX &&
-                        other.shot.fromY === shot.fromY &&
-                        other.shot.toX === shot.toX &&
-                        other.shot.toY === shot.toY,
-                ) ?? { shot };
+                const grenade = this.shots.get(shotKey(entry.applyStep, shot)) ?? { shot };
                 const path = this.pathOf(grenade);
                 this.explode(path.x[ZOMBIE_GRENADE_FUSE_STEPS], path.y[ZOMBIE_GRENADE_FUSE_STEPS]);
             }

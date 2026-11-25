@@ -16,12 +16,20 @@ import {
     zombieTerrainHash,
     zombieTerrainOf,
     ZOMBIE_EAST,
+    ZOMBIE_PX_PER_METRE,
     ZOMBIE_SOLID,
     ZOMBIE_SOUTH,
     ZOMBIE_WATER,
 } from "../src/Catastrophe/ZombieHorde";
 import type { ZombieHorde, ZombieLogEntry } from "../src/Catastrophe/ZombieHorde";
-import { ZOMBIE_GRENADE_FUSE_STEPS, zombieGrenadePath } from "../src/Catastrophe/ZombieGrenade";
+import {
+    ZOMBIE_GRENADE_AHEAD_M,
+    ZOMBIE_GRENADE_BLAST_M,
+    ZOMBIE_GRENADE_FUSE_STEPS,
+    ZOMBIE_GRENADE_RANGE_M,
+    zombieGrenadeAhead,
+    zombieGrenadePath,
+} from "../src/Catastrophe/ZombieGrenade";
 import { RAISED_FLOOR_COLLECTION, bridgeTilesOf, bridgesOf, dryOnBridges } from "../src/Terrain/Bridges";
 import type { Bridges } from "../src/Terrain/Bridges";
 import { Meadow, ZOMBIE_TRAMPLE_HALF_PASSES } from "../src/Terrain/Meadow";
@@ -630,6 +638,28 @@ describe("the shove of a horde on an avatar", () => {
 });
 
 describe("a grenade in the horde", () => {
+    it("is lobbed 20 m ahead the way the avatar goes, diagonals included, and nowhere when it goes nowhere", () => {
+        const metres = (shot: { fromX: number; fromY: number; toX: number; toY: number }): number =>
+            Math.sqrt((shot.toX - shot.fromX) ** 2 + (shot.toY - shot.fromY) ** 2) / ZOMBIE_PX_PER_METRE;
+        expect(ZOMBIE_GRENADE_AHEAD_M).toBe(20);
+        const east = zombieGrenadeAhead(1000.4, 800.6, 1, 0);
+        expect(east).toMatchObject({ fromX: 1000, fromY: 801, toY: 801 });
+        expect(east.toX).toBeGreaterThan(1000);
+        expect(metres(east)).toBeCloseTo(20, 1);
+        const north = zombieGrenadeAhead(1000, 800, 0, -3);
+        expect(north.toX).toBe(1000);
+        expect(north.toY).toBeLessThan(800);
+        expect(metres(north)).toBeCloseTo(20, 1);
+        // Diagonally as far: not 20 m on each axis.
+        const southWest = zombieGrenadeAhead(1000, 800, -1, 1);
+        expect(southWest.toX - 1000).toBe(-(southWest.toY - 800));
+        expect(metres(southWest)).toBeCloseTo(20, 0);
+        expect(zombieGrenadeAhead(1000, 800, 0, 0)).toEqual({ fromX: 1000, fromY: 800, toX: 1000, toY: 800 });
+        // Within the range of the launcher.
+        expect(ZOMBIE_GRENADE_AHEAD_M).toBeLessThan(ZOMBIE_GRENADE_RANGE_M);
+        expect(ZOMBIE_GRENADE_AHEAD_M).toBeGreaterThan(ZOMBIE_GRENADE_BLAST_M);
+    });
+
     it("flies to where it is aimed, bounces, rolls, never through a wall, and goes off after its fuse", () => {
         const width = 120;
         const height = 80;
