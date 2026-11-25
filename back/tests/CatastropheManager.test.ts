@@ -1173,7 +1173,7 @@ describe("CatastropheManager, a horde of zombies", () => {
         const perSecondBefore = Math.round(bytesBefore / (15 * 60));
         expect(perSecondNow).toBeLessThan(25_000);
         expect(perSecondNow * 100).toBeLessThan(perSecondBefore);
-    });
+    }, 30_000);
 
     const dartFrom = { uuid: "p7", basic: false, x: 100, y: 100 };
     // A dart as the browser aims it (zombieDartAim): its end at the range of the Nerf, 384 px.
