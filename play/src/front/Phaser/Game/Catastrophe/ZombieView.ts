@@ -300,7 +300,9 @@ export class ZombieView {
         }
         const target = crowd.stepFor(epoch);
         const started = performance.now();
-        while (crowd.steps < target && performance.now() - started < CATCH_UP_MS) {
+        // Never past the step the log of the avatars is complete to (a message lost): it waits there, drawn still,
+        // until the log comes, as on the server (ZombieCrowd.advanceTo). Stepped further, it would differ.
+        while (crowd.steps < target && !crowd.stalled(epoch) && performance.now() - started < CATCH_UP_MS) {
             // Its last step takes everyone off the map: those still on it fall to dust instead.
             if (crowd.steps + 1 >= crowd.lastStep) {
                 this.fallToDust(crowd, now);
@@ -310,7 +312,7 @@ export class ZombieView {
             this.shamble(crowd);
         }
         this.walkingNow = crowd.walking;
-        if (target - crowd.steps > SHOWN_BEHIND_STEPS || crowd.over()) {
+        if ((target - crowd.steps > SHOWN_BEHIND_STEPS && !crowd.stalled(epoch)) || crowd.over()) {
             this.shown = false;
             this.hideAll();
             return;
