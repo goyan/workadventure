@@ -14,6 +14,7 @@ import {
 import type { WAMFileFormat, ZombieHorde } from "@workadventure/map-editor";
 import { describe, expect, it, vi } from "vitest";
 import { ZombieView } from "../../../../../src/front/Phaser/Game/Catastrophe/ZombieView";
+import { ZOMBIE_SHEET_COLUMNS, ZOMBIE_SHEETS } from "../../../../../src/front/Phaser/Game/Catastrophe/ZombieSheets";
 import { FLOOR_LEVEL_DEPTH, floorDepth } from "../../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorDepth";
 
 vi.mock("phaser", () => ({ Textures: { FilterMode: { LINEAR: 1 } } }));
@@ -23,6 +24,7 @@ const WIDTH_CELLS = 120;
 const HEIGHT_CELLS = 80;
 
 interface FakeBob {
+    frame: number;
     x: number;
     y: number;
     visible: boolean;
@@ -57,12 +59,16 @@ function createScene() {
                     },
                     create: () => {
                         const bob: FakeBob = {
+                            frame: -1,
                             x: 0,
                             y: 0,
                             visible: true,
                             flipX: false,
                             tint: 0,
-                            setFrame: () => bob,
+                            setFrame: (frame: number) => {
+                                bob.frame = frame;
+                                return bob;
+                            },
                             setAlpha: () => bob,
                             setVisible: (visible: boolean) => {
                                 bob.visible = visible;
@@ -188,17 +194,25 @@ describe("ZombieView", () => {
         expect(view.walking()).toBe(1);
     });
 
-    it("draws a zombie the water caught after the horde began (a flood) over the water, at every image, and out of it", () => {
-        // Its ground was dry when it began; the water rose afterwards over the tiles 28 to 31, in a hollow of the
-        // relief drawn 12 px lower.
+    it("draws a zombie the water caught after the horde began (a flood) half under it, never hidden, and out of it", () => {
+        // Its ground was dry when it began; the water rose afterwards over the tiles 28 to 31, 30 px deep (one swims
+        // in it), in a hollow of the relief drawn 12 px lower.
         const flooded = (x: number): boolean => x >= 28 * TILE_PX && x < 32 * TILE_PX;
+        // The images cut at the water line follow all the others (two scales of every sheet).
+        const wadingFrames = 2 * ZOMBIE_SHEETS.length * 5 * ZOMBIE_SHEET_COLUMNS;
         const told = hordeOver(new Uint8Array(WIDTH_CELLS * HEIGHT_CELLS));
         const { scene, blitters } = createScene();
-        const view = new ZombieView(scene, (x) => (flooded(x) ? 12 : 0));
+        const view = new ZombieView(
+            scene,
+            (x) => (flooded(x) ? 12 : 0),
+            () => 0,
+            (x) => (flooded(x) ? 30 : 0),
+        );
         view.setHorde(told, START);
         const twin = new ZombieCrowd(told);
         let inWater = 0;
         let crossed = false;
+        let dryOffset: number | undefined;
         for (let image = 1; image < twin.lastStep - 2 && !crossed; image++) {
             const epoch = START + image * 100 + 50;
             view.update(epoch, epoch, true, false);
@@ -207,15 +221,23 @@ describe("ZombieView", () => {
             if (twin.state[0] !== ZOMBIE_WALKING) continue;
             const between = twin.between(epoch);
             const x = twin.lastX[0] + (twin.x[0] - twin.lastX[0]) * between;
+            const y = twin.lastY[0] + (twin.y[0] - twin.lastY[0]) * between;
             expect(view.walking()).toBe(1);
             const shown = blitters.flatMap((blitter) =>
                 blitter.bobs.filter((bob) => bob.visible).map((bob) => ({ bob, depth: blitter.depth })),
             );
             expect(shown).toHaveLength(1);
+            const { bob, depth } = shown[0];
             if (flooded(x)) {
                 inWater++;
                 // The water and what is drawn on it (TerrainView, WaterFlowView, WaterGlints) are under the depth 1.
-                expect(shown[0].depth).toBeGreaterThan(1);
+                expect(depth).toBeGreaterThan(1);
+                // Half under: its image cut at the water line, drawn lower (the hollow, and sunk a little).
+                expect(bob.frame).toBeGreaterThanOrEqual(wadingFrames);
+                expect(bob.y - Math.round(y)).toBeGreaterThan((dryOffset ?? 0) + 12);
+            } else {
+                expect(bob.frame).toBeLessThan(wadingFrames);
+                if (x < 28 * TILE_PX) dryOffset ??= bob.y - Math.round(y);
             }
             crossed = x > 34 * TILE_PX;
         }

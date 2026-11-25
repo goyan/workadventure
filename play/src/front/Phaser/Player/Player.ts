@@ -1159,7 +1159,7 @@ export class Player extends Character {
             !this.isSeated() &&
             (ZOMBIES_SHOVE_IN_CONVERSATION || !get(isInActiveConversationStore))
         ) {
-            const shove = this.scene?.zombiePushAt?.(this.x, this.y + BODY_CENTER_OFFSET_Y);
+            const shove = this.scene?.zombiePushAt?.(this.x, this.y + BODY_CENTER_OFFSET_Y, this.getFloorZ());
             if (shove) {
                 x += shove.x;
                 y += shove.y;

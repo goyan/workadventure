@@ -2,6 +2,7 @@ import * as Phaser from "phaser";
 import { ZOMBIE_BURN_STEPS, ZOMBIE_DYING, ZOMBIE_WALKING, ZombieCrowd } from "@workadventure/map-editor";
 import type { ZombieHorde } from "@workadventure/map-editor";
 import { floorDepth } from "../MapEditor/MapLayer/FloorDepth";
+import { SWIM_DEPTH_PX } from "../Terrain/Pixel/TerrainUnits";
 import {
     ZOMBIE_DEAD,
     ZOMBIE_HURT,
@@ -33,6 +34,14 @@ const SCALES: readonly number[] = [0.44, 0.5];
 const FRAME_GAP = 2;
 /** The frames of the atlas at one scale; those of the next scale follow. */
 const FRAMES_A_SCALE = ZOMBIE_SHEETS.length * 5 * ZOMBIE_SHEET_COLUMNS;
+/**
+ * In water one swims in (SWIM_DEPTH_PX), a zombie wades on, half under: the same images cut at this share of their
+ * height (the frames after all the others), drawn this share of it lower. As an avatar swims (SwimEffect: 20 rows of
+ * 32 above the water, sunk by 5).
+ */
+const WADING_FRAMES = SCALES.length * FRAMES_A_SCALE;
+const WADING_SHOWN = 20 / 32;
+const WADING_SINK = 5 / 32;
 /** An image of the walk every this many pixels of the map walked: a stride of some 3 m runs over its 8 images. */
 const STRIDE_PX = 10;
 /** Under this speed (px/s) a zombie stands, and sways in its idle images, this many a second. */
@@ -80,6 +89,8 @@ export class ZombieView {
     private drawX = new Float32Array(0);
     /** How high over the ground each zombie seen is drawn (px): on the deck of a bridge, or up its ramp. */
     private liftOf = new Int16Array(0);
+    /** Whether each zombie seen wades in water one swims in: drawn half under. */
+    private wading = new Uint8Array(0);
     /** A horde stopped or over: its last zombies (those walking then), fading. */
     private dust: { until: number; walking: Uint8Array } | undefined;
     private walkingNow = 0;
@@ -101,6 +112,11 @@ export class ZombieView {
          * (GameScene.getBridgeElevationAt). None when absent.
          */
         private readonly liftAt: (x: number, y: number) => number = () => 0,
+        /**
+         * How deep the water of the relief is at a point of the ground now (px): the water as it is now, a flood or a
+         * tsunami included, not the one the horde began on. None when absent.
+         */
+        private readonly waterAt: (x: number, y: number) => number = () => 0,
         /** Where each sheet is fetched from: the resources of the game by default. */
         private readonly urlOf: (sheet: (typeof ZOMBIE_SHEETS)[number]) => string = (sheet) => sheet.url,
     ) {}
@@ -132,6 +148,7 @@ export class ZombieView {
         this.drawX = new Float32Array(made.count);
         this.drawY = new Float32Array(made.count);
         this.liftOf = new Int16Array(made.count);
+        this.wading = new Uint8Array(made.count);
         for (let zombie = 0; zombie < made.count; zombie++) {
             // Tinted, a crowd, not copies.
             this.tint[zombie] = TINTS[(Math.imul(zombie, 2654435761) >>> 0) % TINTS.length];
@@ -253,14 +270,10 @@ export class ZombieView {
                             frameWidth,
                             frameHeight,
                         );
-                        canvas.add(
-                            size * FRAMES_A_SCALE + zombieAtlasFrame(index, row, column),
-                            0,
-                            x,
-                            y,
-                            frameWidth,
-                            frameHeight,
-                        );
+                        const frame = size * FRAMES_A_SCALE + zombieAtlasFrame(index, row, column);
+                        canvas.add(frame, 0, x, y, frameWidth, frameHeight);
+                        // Its top only, for a zombie wading.
+                        canvas.add(WADING_FRAMES + frame, 0, x, y, frameWidth, Math.round(frameHeight * WADING_SHOWN));
                     }
                 });
             });
@@ -395,6 +408,9 @@ export class ZombieView {
             this.drawX[zombie] = px;
             this.drawY[zombie] = dy - lift;
             this.liftOf[zombie] = lift;
+            // Nothing drowns it (the crowd walks on its ground as it was when the horde began): in deep water it
+            // wades on, half under, never hidden.
+            this.wading[zombie] = lift === 0 && this.waterAt(px, py) >= SWIM_DEPTH_PX ? 1 : 0;
             this.bandOf[zombie] = slot;
             counts[slot + 1]++;
             seen++;
@@ -456,10 +472,13 @@ export class ZombieView {
                         image = still ? 0 : Math.floor(this.stride[zombie]) % sheet.counts[ZOMBIE_WALK];
                     }
                 }
-                bob.setFrame(size * FRAMES_A_SCALE + zombieAtlasFrame(look, row, image));
+                // Thrown up by a blast, it is out of the water.
+                const wading = this.wading[zombie] === 1 && lift < 1;
+                bob.setFrame((wading ? WADING_FRAMES : 0) + size * FRAMES_A_SCALE + zombieAtlasFrame(look, row, image));
                 bob.flipX = this.facing[zombie] === 1;
                 bob.x = Math.round(this.drawX[zombie] - this.frameWidthOf(sheet, size) / 2);
-                bob.y = Math.round(this.drawY[zombie] - lift - this.frameHeightOf(sheet, size) + 1);
+                const height = this.frameHeightOf(sheet, size);
+                bob.y = Math.round(this.drawY[zombie] - lift - height + 1 + (wading ? height * WADING_SINK : 0));
                 bob.tint = tint;
                 bob.setAlpha((this.dust ? Math.min(1, alpha * 2) : 1) * fade);
                 bob.setVisible(true);

@@ -377,7 +377,7 @@ import type { RaisedCharacter } from "./Floors/UpperDoors";
 import { wallBarriers } from "./MapEditor/MapLayer/MapLayerBarriers";
 import { readMapLayerEntityStates } from "./MapEditor/MapLayer/MapLayerSync";
 import { autumnProgress } from "./Nature/TreeLeafFall";
-import { isGroundUnderWater } from "./Water/WaterZones";
+import { SWIM_DEPTH_PX, isGroundUnderWater } from "./Water/WaterZones";
 import {
     followsServerGround,
     meadowHoldsSnow,
@@ -3931,14 +3931,20 @@ export class GameScene extends DirtyScene {
     /**
      * How the horde of zombies shoves the avatar of this player whose body is at (x, y), px/s, added to what its keys
      * ask for (Player): the walls and the collisions of the map hold it as always; never into deep water.
+     * On a raised floor (`floorZ` px up) its body is drawn that much further north than the ground under it, where
+     * the horde runs: read there. Only on the deck of a bridge, where the horde runs too; not on an upper storey.
      */
-    public zombiePushAt(x: number, y: number): { x: number; y: number } | undefined {
+    public zombiePushAt(x: number, y: number, floorZ = 0): { x: number; y: number } | undefined {
+        const raised = floorZ >= 2;
+        const groundY = y + floorZ;
+        if (raised && Math.abs(this.getBridgeElevationAt(x, groundY) - floorZ) >= 2) return undefined;
         return zombieShoveOf(
             this.zombieView,
             get(basicModeStore),
             x,
-            y,
-            (atX, atY) => this.terrainWater.depthAt(atX, atY, this.time.now),
+            groundY,
+            // On a deck, the water under it is no water.
+            (atX, atY) => (raised ? 0 : this.terrainWater.depthAt(atX, atY, this.time.now)),
             LIFE_DEPTHS_PX.deep,
         );
     }
@@ -5551,6 +5557,11 @@ export class GameScene extends DirtyScene {
             (x, y) => this.groundDropAt(x, y),
             // Asked for every zombie seen at each image: nothing to read on a map without bridges.
             (x, y) => (this.bridges?.tiles.size ? this.getBridgeElevationAt(x, y) : 0),
+            // The water now, read only where it is deep: a frozen lake is walked on.
+            (x, y) => {
+                const depth = this.terrainWater.depthAt(x, y, this.time.now);
+                return depth >= SWIM_DEPTH_PX && this.isFrozenWaterAt(x, y) ? 0 : depth;
+            },
         );
         this.zombieView = zombieView;
         const zombieReceiver = new ZombieReceiver((horde) => {
