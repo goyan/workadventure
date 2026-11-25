@@ -54,6 +54,13 @@ export function iceCurrentShare(metresPerSecond: number): number {
     return (ICE_CURRENT_OPEN_MS - metresPerSecond) / (ICE_CURRENT_OPEN_MS - ICE_CURRENT_SHEET_MS);
 }
 
+/**
+ * Under this rise of its water over what it held before a tsunami came (mm), a tile is not counted as lifted by the
+ * tsunami (Meadow.stepIce): the ripples of a water the sea did not reach. Over it, the ice the sea lifts by more
+ * than its own thickness breaks, and the snow on it goes into the flood.
+ */
+export const ICE_LIFTED_MM = 10;
+
 /** The thickest ice a tile holds, in mm. */
 export const ICE_MAX_MM = 1000;
 

@@ -16,6 +16,7 @@ import type { SnowWeather } from "./Snow";
 import {
     ICE_EXACT_FROM_HOURS,
     ICE_GROWTH_TIMES,
+    ICE_LIFTED_MM,
     ICE_MAX_MM,
     ICE_SLIPS_MM,
     iceByte,
@@ -971,9 +972,14 @@ export class Meadow {
             heat[index] -= burnt;
             // Open water takes the snow as it falls, unless it freezes; elsewhere the heat melts it first, then the
             // wind takes its share.
-            // The hot water of a pool melts the snow whatever the cold.
+            // The hot water of a pool melts the snow whatever the cold. A tsunami that breaks the ice of a tile
+            // (stepIce) takes the snow lying on it into its flood, as open water does.
             const open =
-                water[index] >= SOAKED_WATER_PX && (hotPool[index] === 1 || (!freezing && ice[index] < ICE_SLIPS_MM));
+                water[index] >= SOAKED_WATER_PX &&
+                (hotPool[index] === 1 ||
+                    (!freezing && ice[index] < ICE_SLIPS_MM) ||
+                    (input.liftAt !== undefined &&
+                        input.liftAt(index % width, Math.floor(index / width)) > Math.max(ice[index], ICE_LIFTED_MM)));
             const thaw = open ? lying : Math.min(lying, melting);
             lying -= thaw;
             lying = Math.max(0, lying - going);
@@ -1047,7 +1053,7 @@ export class Meadow {
                 if (
                     thick > 0 &&
                     input.liftAt &&
-                    input.liftAt(index % this.width, Math.floor(index / this.width)) > thick
+                    input.liftAt(index % this.width, Math.floor(index / this.width)) > Math.max(thick, ICE_LIFTED_MM)
                 ) {
                     thick = 0;
                 }

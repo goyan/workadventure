@@ -115,6 +115,7 @@ function frozenCoast() {
             Array.from({ length: LAKE_TILES.to - LAKE_TILES.from }, (_, at) => iceAt(LAKE_TILES.from + at, tileY)),
         );
     return {
+        ground,
         live,
         iceAt,
         lakeIce,
@@ -151,5 +152,36 @@ describe("a tsunami over a frozen lake", () => {
         live(2);
         // What froze again since the ebb is the first ice of a new cover, by its law: not the cover that was broken.
         expect(Math.max(...lakeIce())).toBeLessThan(before / 2);
+        expect(Math.min(...lakeIce())).toBeGreaterThan(0);
+    });
+
+    it("measures the lift in millimetres of the water of the tile: a few centimetres keep a thick ice, more break it", () => {
+        const { ground, live, iceAt } = frozenCoast();
+        live(120);
+        const grid = ground.water.getGrid();
+        if (!grid) throw new Error("no grid");
+        const thick = iceAt(25, 2);
+        expect(thick).toBeGreaterThan(ICE_BEARS_MM);
+        // The sea at rest at the coast: what the map holds now is the state before. The meadow alone steps from here.
+        grid.setSea({ levelPx: 0, topPx: 256 });
+        const raise = (px: number): void => {
+            const bytes = grid.writeDepths(true);
+            // One cell of the tile (25, 2): cells (50, 4) to (51, 5).
+            const index = 4 * WIDTH + 50;
+            const eighths = (64 + px) * 8;
+            bytes[index * 2] = eighths & 255;
+            bytes[index * 2 + 1] = eighths >> 8;
+            grid.readDepths(bytes);
+        };
+        // 1 px of water is 34 mm: under the ice, which stays.
+        raise(1);
+        expect(grid.seaRiseAt(50, 4)).toBeCloseTo(1, 3);
+        ground.meadow.step();
+        expect(iceAt(25, 2)).toBeGreaterThan(ICE_BEARS_MM);
+        // 8 px is some 27 cm, more than the ice: it breaks; the tile beside it, not lifted, keeps its own.
+        raise(8);
+        ground.meadow.step();
+        expect(iceAt(25, 2)).toBe(0);
+        expect(iceAt(27, 2)).toBeGreaterThan(ICE_BEARS_MM);
     });
 });

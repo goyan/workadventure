@@ -137,6 +137,11 @@ describe("the ice, the snow and the fire", () => {
         expect(meadow.iceAt(4, 4)).toBeGreaterThan(0);
         run(meadow, 5, under(frost, { liftAt: () => 1000 }));
         expect(meadow.iceAt(10, 10)).toBe(0);
+        // The snow lying on a frozen lake the tsunami lifts goes into its flood, as on open water: its water melts in.
+        meadow.snowOn(4, 4, 0, 20);
+        const melted = meadow.step(under(frost, { liftAt: (tileX, tileY) => (tileX === 4 && tileY === 4 ? 1000 : 0) }));
+        expect(meadow.snowAt(4, 4)).toBe(0);
+        expect(melted?.meltedMm[4 * size.width + 4] ?? 0).toBeGreaterThan(19);
         // The flood gone, the water freezes again by its law, from nothing.
         meadow.step(under(frost));
         expect(meadow.iceAt(10, 10)).toBeGreaterThan(0);
