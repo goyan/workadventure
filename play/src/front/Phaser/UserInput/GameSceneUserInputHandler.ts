@@ -280,7 +280,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         // tool is put aside while a catastrophe is armed.
         if (get(armedCatastropheStore) !== undefined && (pointer.wasTouch || pointer.leftButtonReleased())) {
             // A press released before it was held is a click: thrown once, unless a second click comes.
-            if (this.pendingPress) this.clickPendingPress();
+            if (this.pendingPress) this.clickPendingPress(pointer.getDuration());
             // The downpour rained, the fire was painted, while the click was held: releasing it only ends it.
             else if (this.heldCatastrophe() !== undefined) this.stopDownpour();
             else this.launchArmedCatastrophe(pointer);
@@ -498,16 +498,22 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         if (press.pointer.isDown) this.startDownpour(press.pointer);
     }
 
-    /** The press was released before it was held: a click, which throws once where it was pressed, as a short hold. */
-    private clickPendingPress(): void {
+    /**
+     * The press was released before it was held: a click, thrown where it was pressed as the short hold it was, held
+     * as long as the click was (a ball is seen there that long, then let go and the server told so).
+     */
+    private clickPendingPress(pressedMs: number): void {
         const press = this.pendingPress;
         if (!press) return;
         this.cancelPendingPress();
         this.deferClick(() => {
+            this.stopDownpour();
             this.heldKind = press.kind;
             this.reportHeld(press.kind, press.point);
-            // A ball is let go at once, and the server is told so.
-            this.stopDownpour();
+            this.downpourReports = this.gameScene.time.addEvent({
+                delay: Math.min(Math.max(pressedMs, 0), ARMED_CLICK_WAIT_MS),
+                callback: () => this.stopDownpour(),
+            });
         });
     }
 

@@ -999,10 +999,10 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 },
             };
         }
-        /** ARMED_CLICK_WAIT_MS passes: what waited for it runs. */
+        /** ARMED_CLICK_WAIT_MS passes: what waited for it runs (no wait is longer). */
         function elapseWait(): void {
             for (const pending of waits.splice(0)) {
-                expect(pending.delay).toBe(ARMED_CLICK_WAIT_MS);
+                expect(pending.delay).toBeLessThanOrEqual(ARMED_CLICK_WAIT_MS);
                 if (!pending.removed) pending.callback();
             }
         }
@@ -1445,11 +1445,16 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 expect(launch).not.toHaveBeenCalled();
                 expect(get(heldBallStore)).toBeUndefined();
 
-                elapseWait();
-                expect(launch.mock.calls).toEqual([
-                    [CatastropheKind.CATASTROPHE_BALL, 480, 640, 6],
-                    [CatastropheKind.CATASTROPHE_BALL, 480, 640, 6, false, true],
+                expect(waits.filter(({ removed }) => !removed).map(({ delay }) => delay)).toEqual([
+                    ARMED_CLICK_WAIT_MS,
                 ]);
+                elapseWait();
+                // Held there as long as the click was (50 ms), as before the wait: then let go.
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_BALL, 480, 640, 6]]);
+                expect(get(heldBallStore)).toEqual({ x: 480, y: 640, radiusPx: 96 });
+                expect(waits.filter(({ removed }) => !removed).map(({ delay }) => delay)).toEqual([50]);
+                elapseWait();
+                expect(launch.mock.calls[1]).toEqual([CatastropheKind.CATASTROPHE_BALL, 480, 640, 6, false, true]);
                 expect(get(heldBallStore)).toBeUndefined();
                 ballDiameterTilesStore.set(4);
             });
