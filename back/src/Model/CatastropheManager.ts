@@ -1,5 +1,6 @@
 import {
     BALL_LASTS_MS,
+    ballIceDiscs,
     COLD_LASTS_MS,
     coldCelsius,
     COLDS_PER_ROOM,
@@ -60,6 +61,7 @@ import {
 } from "@workadventure/map-editor";
 import type {
     Ball,
+    BallIceMark,
     ColdMass,
     Downpour,
     Drain,
@@ -159,6 +161,8 @@ interface LiveBall extends Ball {
     /** Until when it stands if its player says nothing more. */
     until: number;
     toldAt: number;
+    /** Where the ice under it was last broken (see ballIceDiscs). */
+    iced?: BallIceMark;
 }
 
 export class CatastropheManager {
@@ -447,7 +451,27 @@ export class CatastropheManager {
         };
         this.holding.set(userId, ball);
         this.tellBall(userId, ball, tiles, BALL_LASTS_MS);
+        this.breakIceUnder(ball, held?.iced, now);
         return true;
+    }
+
+    /**
+     * The ball cuts the surface of the water in a disc as wide as itself: the ice there is broken, along its way when
+     * it moved (the meadow tells the room, as for the ice that gives way under a player). Only where the ice was not
+     * broken already (ballIceDiscs).
+     */
+    private breakIceUnder(ball: LiveBall, last: BallIceMark | undefined, now: number): void {
+        const discs = ballIceDiscs(last, ball, now);
+        if (discs.length === 0) {
+            ball.iced = last;
+            return;
+        }
+        ball.iced = { x: ball.x, y: ball.y, radiusPx: ball.radiusPx, at: now };
+        try {
+            for (const disc of discs) this.breakIce(disc.x, disc.y, ball.radiusPx / TILE_PX);
+        } catch (error) {
+            console.error("The ice under a ball could not be broken", error);
+        }
     }
 
     /** What says the level a ball is held at is made after the catastrophes of a room: it is given here. */
