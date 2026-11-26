@@ -61,8 +61,9 @@ export interface DoorRect {
 
 /**
  * A crowd too large to be told character by character (a horde of zombies, ZombieView): those of it about to go through
- * a rectangle of the map, asked for door by door. They open the doors as the players do, heard as theirs are, but never
- * a locked one: they carry no identity.
+ * a rectangle of the map, asked for door by door. They open the doors as the players do, heard as theirs are. The crowd
+ * knows which doors it keeps out of (the doors of the desks and of the locked areas, as it steps them): it never tells
+ * one of its own running into those, so that a door opens exactly where and when it goes through.
  */
 export interface DoorCrowd {
     doorOpenersIn(rect: DoorRect): readonly DoorCharacter[];
@@ -427,8 +428,9 @@ export class DoorAnimator {
     }
 
     /**
-     * The character near the door that is the closest to its middle, if any; else the closest of the crowd near it,
-     * unless the door is locked.
+     * The character near the door that is the closest to its middle, if any; else the closest of the crowd near it (as
+     * the crowd goes, whatever the locks of this browser: it keeps out of a locked door itself, from the step the
+     * server tells it, the same everywhere).
      */
     private nearestCharacter(
         state: DoorPieceState,
@@ -458,7 +460,7 @@ export class DoorAnimator {
                 bestDistance = distance;
             }
         }
-        if (best || !crowd || (lockedZones && lockedZones.length > 0)) {
+        if (best || !crowd) {
             return best;
         }
         const passage = this.passageRect(state);

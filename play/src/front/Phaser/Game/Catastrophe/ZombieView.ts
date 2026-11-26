@@ -253,8 +253,10 @@ export class ZombieView implements DoorCrowd {
 
     /**
      * The zombies that will be in a rectangle of the map in a moment (DOOR_LOOKAHEAD_S), where they run, as they were
-     * drawn at the last image: those walking, not felled by a dart. None while they are not drawn (Basique, falling to
-     * dust, catching up): every browser opens the same doors from the same crowd, the server knows nothing of it.
+     * drawn at the last image: those walking, not felled by a dart. Not one running into a door it keeps out of (of a
+     * desk, of a locked area: it stops before it), unless it is in it already (walking out of an area made round it).
+     * None while they are not drawn (Basique, falling to dust, catching up): every browser opens the same doors from
+     * the same crowd, the server knows nothing of it.
      */
     public doorOpenersIn(rect: DoorRect): DoorCharacter[] {
         const crowd = this.crowd;
@@ -274,9 +276,12 @@ export class ZombieView implements DoorCrowd {
                 const tile = tileY * tilesWide + tileX;
                 for (let at = this.doorStart[tile]; at < this.doorStart[tile + 1]; at++) {
                     const zombie = this.doorList[at];
-                    const px = lastX[zombie] + (x[zombie] - lastX[zombie]) * between + vx[zombie] * DOOR_LOOKAHEAD_S;
-                    const py = lastY[zombie] + (y[zombie] - lastY[zombie]) * between + vy[zombie] * DOOR_LOOKAHEAD_S;
+                    const atX = lastX[zombie] + (x[zombie] - lastX[zombie]) * between;
+                    const atY = lastY[zombie] + (y[zombie] - lastY[zombie]) * between;
+                    const px = atX + vx[zombie] * DOOR_LOOKAHEAD_S;
+                    const py = atY + vy[zombie] * DOOR_LOOKAHEAD_S;
                     if (px < rect.left || px > rect.right || py < rect.top || py > rect.bottom) continue;
+                    if (crowd.forbiddenAt(px, py) && !crowd.forbiddenAt(atX, atY)) continue;
                     openers.push({ x: px, y: py, facingSideways: Math.abs(vx[zombie]) > Math.abs(vy[zombie]) });
                 }
             }

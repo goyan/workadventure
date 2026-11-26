@@ -384,4 +384,44 @@ describe("ZombieView", () => {
         view.update(START + 4100, START + 4100, false, false);
         expect(view.doorOpenersIn({ left: 0, top: 0, right: 10_000, bottom: 10_000 })).toEqual([]);
     });
+
+    it("tells no door a zombie runs into but keeps out of (a desk's, a locked area's): it stops before it", () => {
+        const dry = new Uint8Array(WIDTH_CELLS * HEIGHT_CELLS);
+        const tilesWide = (WIDTH_CELLS * TERRAIN_CELL) / TILE_PX;
+        // Where the single zombie runs (east, along its row) at 4 s, without a desk.
+        const { scene: freeScene } = createScene();
+        const free = new ZombieView(freeScene);
+        free.setHorde(hordeOver(dry), START);
+        for (let image = 1; image <= 40; image++) free.update(START + image * 100, START + image * 100, true, false);
+        const [ahead] = free.doorOpenersIn({ left: 0, top: 0, right: 10_000, bottom: 10_000 });
+        const tileX = Math.floor(ahead.x / TILE_PX) + 1;
+        const tileY = Math.floor(ahead.y / TILE_PX);
+        // The same horde, a column of door tiles kept out of across its way, one tile further than it is at 4 s.
+        const door = Array.from({ length: HEIGHT_CELLS / 2 }, (_, row) => row * tilesWide + tileX);
+        const { scene } = createScene();
+        const view = new ZombieView(scene);
+        view.setHorde(
+            { ...hordeOver(dry), avatars: encodeZombieLog([{ applyStep: 0, changes: [], forbidOn: door }]) },
+            START,
+        );
+        const rect = {
+            left: tileX * TILE_PX,
+            top: tileY * TILE_PX,
+            right: (tileX + 1) * TILE_PX,
+            bottom: (tileY + 1) * TILE_PX,
+        };
+        let told = 0;
+        for (let image = 1; image <= 80; image++) {
+            view.update(START + image * 100, START + image * 100, true, false);
+            told += view.doorOpenersIn(rect).length;
+        }
+        expect(told).toBe(0);
+        // Without the tiles kept out of, it is told there as it comes.
+        let toldFree = 0;
+        for (let image = 41; image <= 80; image++) {
+            free.update(START + image * 100, START + image * 100, true, false);
+            toldFree += free.doorOpenersIn(rect).length;
+        }
+        expect(toldFree).toBeGreaterThan(0);
+    });
 });

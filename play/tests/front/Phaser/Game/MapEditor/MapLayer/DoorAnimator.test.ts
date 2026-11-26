@@ -572,8 +572,9 @@ describe("DoorAnimator and a crowd", () => {
         expect(result.everOpen).toBe(false);
     });
 
-    it("a zombie never opens the door of a locked area", () => {
-        const { animator, playSound } = makeAnimator();
+    it("opens a door the crowd goes through whatever the locks of this browser: the crowd keeps out of them itself", () => {
+        // Locked here, the crowd not told yet (2.5 s later): it goes through, and the door opens as it does.
+        const { animator } = makeAnimator();
         const zone = { areaId: "z", x: 96, y: 192, width: 128, height: 128 };
         const result = walkCrowd(
             animator,
@@ -581,13 +582,15 @@ describe("DoorAnimator and a crowd", () => {
             { ...AWAY },
             {
                 zones: [zone],
-                hasPass: () => true,
+                hasPass: () => false,
             },
         );
-        expect(result.everOpen).toBe(false);
-        expect(playSound).not.toHaveBeenCalled();
-        // Not even asked for: a locked door is closed to the whole horde.
-        expect(result.asked).toHaveLength(0);
+        expect(result.everOpen).toBe(true);
+        // A crowd that keeps out of it tells none of its own there: the door stays closed.
+        const { animator: closed } = makeAnimator();
+        expect(walkCrowd(closed, () => undefined, { ...AWAY }, { zones: [zone], hasPass: () => false }).everOpen).toBe(
+            false,
+        );
     });
 
     it("is not asked for a door a player opens", () => {
