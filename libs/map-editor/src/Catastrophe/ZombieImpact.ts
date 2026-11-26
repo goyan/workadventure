@@ -11,7 +11,8 @@ import type { ZombieHorde } from "./ZombieHorde";
  *
  * While a horde goes on, a meteor falls until a step every browser can still be told: the log is promised complete
  * ZOMBIE_INPUT_DELAY_MS ahead (safeStep), so it falls that long (about 2.5 s) instead of METEOR_FALL_MS, its water,
- * its fire and its drawing with it.
+ * its fire and its drawing with it. Its fall follows the time of reality: should the speed of the map change while it
+ * falls, the zombies fall a little before or after it lands (the same everywhere still).
  */
 export interface ZombieImpact {
     /** Where it lands, map pixels (whole), and the radius of its crater in tiles (meteorShape). */
@@ -35,16 +36,24 @@ export function zombieImpactRadii(impact: Pick<ZombieImpact, "radiusTiles">): { 
 }
 
 /**
+ * The longest a meteor falls into a horde (ms): the log is promised further only for a while after the map was slowed
+ * down (the steps promised at ten times the speed of reality then last ten times longer).
+ */
+export const ZOMBIE_IMPACT_LONGEST_FALL_MS = ZOMBIE_INPUT_DELAY_MS + 1000;
+
+/**
  * When a meteor launched at `now` (ms, the time of the server) lands in a horde: the step of the log it is applied
  * at, never one already promised (after safeStep), and how long it falls (ms), to the time of that step. A step is
- * applied when its time comes (ZombieCrowd.step), so the zombies fall as the meteor lands.
+ * applied when its time comes (ZombieCrowd.step), so the zombies fall as the meteor lands. Undefined when it would
+ * fall longer than ZOMBIE_IMPACT_LONGEST_FALL_MS: it then falls as usual, and kills no zombie.
  */
 export function zombieImpactFall(
     horde: Pick<ZombieHorde, "anchorStep" | "anchorAt" | "msPerStep" | "safeStep">,
     now: number,
-): { applyStep: number; fallMs: number } {
+): { applyStep: number; fallMs: number } | undefined {
     const landsAt = now + Math.max(METEOR_FALL_MS, ZOMBIE_INPUT_DELAY_MS);
     const applyStep = Math.max(Math.ceil(zombieStepAt(horde, landsAt)), horde.safeStep + 1);
     const at = horde.anchorAt + (applyStep - horde.anchorStep) * horde.msPerStep;
-    return { applyStep, fallMs: Math.max(METEOR_FALL_MS, Math.ceil(at - now)) };
+    const fallMs = Math.max(METEOR_FALL_MS, Math.ceil(at - now));
+    return fallMs <= ZOMBIE_IMPACT_LONGEST_FALL_MS ? { applyStep, fallMs } : undefined;
 }

@@ -114,7 +114,12 @@ describe("when a meteor lands in a horde", () => {
         // A map ten times faster: as long, in more steps; a clock anchored between two steps lands on the next.
         const sped = { anchorStep: 100.5, anchorAt: START, msPerStep: 10, safeStep: 300 };
         expect(zombieImpactFall(sped, START)).toEqual({ applyStep: 351, fallMs: 2505 });
-        expect(zombieImpactFall(sped, START).fallMs).toBeGreaterThan(METEOR_FALL_MS);
+        expect(zombieImpactFall(sped, START)?.fallMs).toBeGreaterThan(METEOR_FALL_MS);
+        // The map slowed down from ten times: the steps promised then last ten times longer. Not into the horde.
+        expect(zombieImpactFall({ anchorStep: 100, anchorAt: START, msPerStep: 100, safeStep: 350 }, START)).toBe(
+            undefined,
+        );
+        expect(zombieImpactFall({ ...told, safeStep: 44 }, START + 1000)).toEqual({ applyStep: 45, fallMs: 3500 });
     });
 
     it("kills the zombies in its crater, throws them burning, shoves those around, and is no grenade", () => {
@@ -170,25 +175,45 @@ describe("when a meteor lands in a horde", () => {
         const plain = new ZombieCrowd(told);
         plain.advanceTo(START + 20_000);
         const at = middleOf(plain);
-        const entries: ZombieLogEntry[] = [
+        // As the server tells them, in that order: each entry at the second it is told, after the step the log is
+        // then complete to (second * 10 + 24): the avatars 2.5 s ahead, a comet as it is launched (2.5 s ahead), a
+        // grenade 4 s ahead, so that a comet told after a grenade may land before it.
+        const tellings: { second: number; entry: ZombieLogEntry }[] = [
             {
-                applyStep: 30,
-                changes: [{ slot: 0, tile: Math.floor(600 / TILE_PX) * 60 + Math.floor(1500 / TILE_PX) }],
+                second: 0,
+                entry: {
+                    applyStep: 30,
+                    changes: [{ slot: 0, tile: Math.floor(600 / TILE_PX) * 60 + Math.floor(1500 / TILE_PX) }],
+                },
             },
-            { applyStep: 201, changes: [], impacts: [zombieImpactOf(at.x, at.y, 4)] },
-            { applyStep: 230, changes: [], impacts: [zombieImpactOf(at.x - 200, at.y - 100, 2)] },
-            { applyStep: 260, changes: [{ slot: 0, tile: -1 }] },
+            { second: 18, entry: { applyStep: 205, changes: [], impacts: [zombieImpactOf(at.x, at.y, 6)] } },
+            {
+                second: 19,
+                entry: {
+                    applyStep: 230,
+                    changes: [],
+                    grenades: [{ fromX: at.x + 300, fromY: at.y, toX: at.x - 100, toY: at.y + 50 }],
+                },
+            },
+            {
+                second: 20,
+                entry: { applyStep: 225, changes: [], impacts: [zombieImpactOf(at.x - 200, at.y - 100, 2)] },
+            },
+            { second: 26, entry: { applyStep: 285, changes: [{ slot: 0, tile: -1 }] } },
         ];
+        const entries = tellings.map(({ entry }) => entry);
         const log = encodeZombieLog(entries);
         const whole = new ZombieCrowd({ ...told, avatars: log });
         whole.advanceTo(START + 40_000);
         expect(whole.killedByImpacts).toBeGreaterThan(10);
-        // A browser told the impact once it is launched, the log complete to 2.5 s ahead each second.
+        // A browser told each second the entries of that second, the log complete to 2.5 s ahead.
         const bitByBit = new ZombieCrowd({ ...told, avatars: "", safeStep: -1 });
         const writer = new ZombieLogWriter();
         for (let second = 0; second < 40; second++) {
             const safe = second * 10 + 24;
-            writer.append(entries.slice(writer.entries.length).filter((entry) => entry.applyStep <= safe));
+            const now = tellings.filter((one) => one.second === second).map(({ entry }) => entry);
+            for (const entry of now) expect(entry.applyStep).toBeGreaterThan(safe);
+            writer.append(now);
             bitByBit.setLog(writer.text, safe);
             for (let image = 1; image <= 6; image++) bitByBit.advanceTo(START + second * 1000 + image * 166, 3);
         }
@@ -200,7 +225,7 @@ describe("when a meteor lands in a horde", () => {
         joined.advanceTo(START + 40_000);
         expect(joined.checksum()).toBe(whole.checksum());
         // Without them, another crowd.
-        const none = new ZombieCrowd({ ...told, avatars: encodeZombieLog([entries[0], entries[3]]) });
+        const none = new ZombieCrowd({ ...told, avatars: encodeZombieLog([entries[0], entries[2], entries[4]]) });
         none.advanceTo(START + 40_000);
         expect(none.checksum()).not.toBe(whole.checksum());
     });

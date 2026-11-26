@@ -331,7 +331,7 @@ export class ZombieCrowd {
     private shots = new Map<string, { explodeStep: number; shot: ZombieGrenadeShot; path?: ZombieGrenadePath }>();
     private explosions: { x: number; y: number; step: number; killed: number }[] = [];
     /** How many zombies the comets and the burning meteors that landed in the horde killed (ZombieImpact). */
-    public killedByImpacts = 0;
+    private impactKills = 0;
     /**
      * Where each zombie walked at each of the last ZOMBIE_DART_HISTORY_STEPS steps (in half pixels, PAST_NONE where it
      * did not walk), a step after the other in a ring: where the darts the log applies met them. Written at one place,
@@ -551,6 +551,11 @@ export class ZombieCrowd {
         return flying;
     }
 
+    /** How many zombies the comets and the burning meteors that landed in the horde killed so far. */
+    public get killedByImpacts(): number {
+        return this.impactKills;
+    }
+
     /** The blasts since this was last asked: where, and how many zombies each killed. */
     public takeExplosions(): { x: number; y: number; step: number; killed: number }[] {
         const taken = this.explosions;
@@ -765,7 +770,7 @@ export class ZombieCrowd {
             // by the server; they are not blasts of grenades.
             for (const impact of entry.impacts ?? []) {
                 const { lethal, blast } = zombieImpactRadii(impact);
-                this.killedByImpacts += this.blow(impact.x, impact.y, lethal, blast);
+                this.impactKills += this.blow(impact.x, impact.y, lethal, blast);
             }
             this.logAt++;
         }

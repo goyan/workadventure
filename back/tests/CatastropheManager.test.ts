@@ -1423,6 +1423,26 @@ describe("CatastropheManager, a horde of zombies", () => {
         expect(strike).toHaveBeenCalledTimes(2);
     });
 
+    it("lets a meteor fall as usual, killing no zombie, while the log is promised far ahead after the map slowed down", () => {
+        const { manager, sent, speed } = zombieHarness();
+        manager.startZombies(ask);
+        speed(10);
+        vi.advanceTimersByTime(3_000);
+        speed(1);
+        vi.advanceTimersByTime(ZOMBIE_TELL_MS);
+        const before = sent.length;
+        manager.launch(METEOR, 320, 160, 4);
+        expect(sent).toHaveLength(before + 1);
+        expect(sent[before]).toMatchObject({ kind: METEOR, impactInMs: METEOR_FALL_MS });
+        // Some 25 s later at the speed of reality, the log is promised close ahead again: into the horde.
+        vi.advanceTimersByTime(25_000);
+        const again = sent.length;
+        manager.launch(METEOR, 320, 160, 4);
+        expect(sent).toHaveLength(again + 2);
+        expect(sent[again + 1].impactInMs).toBeLessThanOrEqual(3_500);
+        expect(decodeZombieLog(manager.zombies()?.avatars ?? "").filter((entry) => entry.impacts)).toHaveLength(1);
+    });
+
     it("keeps its log within bounds over a horde of 15 minutes with comets launched as fast as a room may", () => {
         const { manager, sent } = zombieHarness();
         manager.startZombies({ ...ask, minutes: 15 });

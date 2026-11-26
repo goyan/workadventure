@@ -1303,15 +1303,17 @@ export class CatastropheManager {
     /**
      * A meteor launched now at a point (pixels), its crater that wide (tiles), into the horde going on: written in its
      * log at the step it lands at, and told to the room at once. How long it falls (ms): METEOR_FALL_MS without a
-     * horde, or when the horde is over before it lands. METEORS_PER_ROOM falling at once for some 2.5 s each: 8 a
-     * second at most, some 7 200 over a horde of 15 minutes, 11 bytes or so each in its log.
+     * horde, when the horde is over before it lands, or when the log is promised too far ahead (just after the map
+     * was slowed down, zombieImpactFall). METEORS_PER_ROOM falling at once for some 2.5 s each: 8 a second at most,
+     * some 7 200 over a horde of 15 minutes, 11 bytes or so each in its log.
      */
     private landInHorde(x: number, y: number, radiusTiles: number): number {
         const horde = this.goingHorde();
         if (!horde) return METEOR_FALL_MS;
         const now = this.now();
-        const { applyStep, fallMs } = zombieImpactFall(horde, now);
-        if (applyStep >= zombieLastStep(horde)) return METEOR_FALL_MS;
+        const fall = zombieImpactFall(horde, now);
+        if (!fall || fall.applyStep >= zombieLastStep(horde)) return METEOR_FALL_MS;
+        const { applyStep, fallMs } = fall;
         this.hordeLog.push({ applyStep, changes: [], impacts: [zombieImpactOf(x, y, radiusTiles)] });
         this.hordeLogAt.push(now);
         this.hordeLogStale = true;
