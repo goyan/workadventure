@@ -318,6 +318,13 @@ export interface ZombieLogEntry {
      * thrown and burning, those around shoved. Absent when there is none.
      */
     impacts?: ZombieImpact[];
+    /**
+     * The tiles (of the map, 32 px, row by row) that take fire at this step, and those whose fire went out: a zombie
+     * in a tile on fire burns and is gone (the fire of the meadow, of its trees, of a patch a player holds, as the
+     * server reads it). In growing order. Absent when there is none.
+     */
+    fireOn?: number[];
+    fireOff?: number[];
 }
 
 /** A whole number that may be negative, as a variable number of bytes: 0, -1, 1, -2, 2… as 0, 1, 2, 3, 4… */
@@ -333,8 +340,9 @@ function unzigzag(value: number): number {
 /**
  * The log of the avatars, as it is told: for each entry its step, its changes, its grenades, then its darts (where
  * each is shot from, the way to its end, how many steps before the entry it was shot, the steps of a tick), then its
- * impacts (where each lands, the radius of its crater doubled, one more for a burning meteor). The count of the darts is told doubled, one more when impacts
- * follow: an entry without impacts takes as many bytes as before there were any.
+ * impacts (where each lands, the radius of its crater doubled, one more for a burning meteor), then the tiles that take
+ * fire and those whose fire went out (each the gap from the one before). The count of the darts is told four times,
+ * one more when impacts follow, two more when fires do: an entry without them takes as many bytes as before.
  */
 export function encodeZombieLog(entries: readonly ZombieLogEntry[]): string {
     const bytes: number[] = [];
@@ -359,7 +367,10 @@ function pushEntry(bytes: number[], entry: ZombieLogEntry): void {
     }
     const darts = entry.darts ?? [];
     const impacts = entry.impacts ?? [];
-    pushVarint(bytes, darts.length * 2 + (impacts.length > 0 ? 1 : 0));
+    const fireOn = entry.fireOn ?? [];
+    const fireOff = entry.fireOff ?? [];
+    const fires = fireOn.length > 0 || fireOff.length > 0;
+    pushVarint(bytes, darts.length * 4 + (impacts.length > 0 ? 1 : 0) + (fires ? 2 : 0));
     for (const dart of darts) {
         pushVarint(bytes, dart.fromX);
         pushVarint(bytes, dart.fromY);
@@ -368,12 +379,22 @@ function pushEntry(bytes: number[], entry: ZombieLogEntry): void {
         pushVarint(bytes, entry.applyStep - dart.shotStep);
         pushVarint(bytes, dart.stride);
     }
-    if (impacts.length === 0) return;
-    pushVarint(bytes, impacts.length);
-    for (const impact of impacts) {
-        pushVarint(bytes, impact.x);
-        pushVarint(bytes, impact.y);
-        pushVarint(bytes, impact.radiusTiles * 2 + (impact.burning ? 1 : 0));
+    if (impacts.length > 0) {
+        pushVarint(bytes, impacts.length);
+        for (const impact of impacts) {
+            pushVarint(bytes, impact.x);
+            pushVarint(bytes, impact.y);
+            pushVarint(bytes, impact.radiusTiles * 2 + (impact.burning ? 1 : 0));
+        }
+    }
+    if (!fires) return;
+    for (const tiles of [fireOn, fireOff]) {
+        pushVarint(bytes, tiles.length);
+        let before = -1;
+        for (const tile of tiles) {
+            pushVarint(bytes, tile - before - 1);
+            before = tile;
+        }
     }
 }
 
@@ -481,8 +502,8 @@ function readEntries(bytes: readonly number[], from: number): ZombieLogEntry[] {
             const toX = readVarint(bytes, at);
             grenades.push({ fromX, fromY, toX, toY: readVarint(bytes, at) });
         }
-        const dartsAndImpacts = readVarint(bytes, at);
-        const thrown = Math.floor(dartsAndImpacts / 2);
+        const dartsAndMore = readVarint(bytes, at);
+        const thrown = Math.floor(dartsAndMore / 4);
         const darts: ZombieDart[] = [];
         for (let dart = 0; dart < thrown && at.read < bytes.length; dart++) {
             const fromX = readVarint(bytes, at);
@@ -493,12 +514,24 @@ function readEntries(bytes: readonly number[], from: number): ZombieLogEntry[] {
             darts.push({ fromX, fromY, toX, toY, shotStep, stride: readVarint(bytes, at) });
         }
         const impacts: ZombieImpact[] = [];
-        const landed = dartsAndImpacts % 2 === 1 ? readVarint(bytes, at) : 0;
+        const landed = dartsAndMore % 2 === 1 ? readVarint(bytes, at) : 0;
         for (let impact = 0; impact < landed && at.read < bytes.length; impact++) {
             const x = readVarint(bytes, at);
             const y = readVarint(bytes, at);
             const size = readVarint(bytes, at);
             impacts.push({ x, y, radiusTiles: Math.floor(size / 2), burning: size % 2 === 1 });
+        }
+        const fireOn: number[] = [];
+        const fireOff: number[] = [];
+        if (dartsAndMore % 4 >= 2) {
+            for (const tiles of [fireOn, fireOff]) {
+                const told = readVarint(bytes, at);
+                let before = -1;
+                for (let tile = 0; tile < told && at.read < bytes.length; tile++) {
+                    before += readVarint(bytes, at) + 1;
+                    tiles.push(before);
+                }
+            }
         }
         entries.push({
             applyStep: step,
@@ -506,6 +539,8 @@ function readEntries(bytes: readonly number[], from: number): ZombieLogEntry[] {
             ...(grenades.length > 0 ? { grenades } : {}),
             ...(darts.length > 0 ? { darts } : {}),
             ...(impacts.length > 0 ? { impacts } : {}),
+            ...(fireOn.length > 0 ? { fireOn } : {}),
+            ...(fireOff.length > 0 ? { fireOff } : {}),
         });
     }
     return entries;

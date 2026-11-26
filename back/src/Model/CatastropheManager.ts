@@ -83,6 +83,14 @@ import type {
  * user): with a fuse of 4 s, four of theirs at most are in the air.
  */
 const ZOMBIE_GRENADE_PACE_MS = 1000;
+
+/** What burns on the map, as the room reads it: its tiles of meadow on fire (row by row), and its trees on fire. */
+export interface ZombieFireRead {
+    width: number;
+    height: number;
+    burning: Uint8Array;
+    trees: readonly { x: number; y: number }[];
+}
 /**
  * A player is answered the whole horde once in this long at most: a little less than the browser waits between two
  * asks (ZOMBIE_ASK_WHOLE_MS), so that a second ask that comes a little early, by the network, is not refused.
@@ -211,6 +219,11 @@ export class CatastropheManager {
     ) => { widthCells: number; heightCells: number; cells: Uint8Array } | undefined = () => undefined;
     /** Where the avatars stand, by a key of their own: given by the room. */
     private zombieAvatars: () => readonly { key: number; x: number; y: number }[] = () => [];
+    /** The fire of the meadow and of its trees, as the room reads it: given by the room. */
+    private zombieFire: () => ZombieFireRead | undefined = () => undefined;
+    /** The tiles (of the horde) the log says are on fire, and the patches of fire players hold, until when. */
+    private hordeFire = new Set<number>();
+    private readonly heldFires: { tiles: number[]; until: number }[] = [];
     private zombieTimes: () => number = () => 1;
     /**
      * The log of where the avatars stood and of the grenades shot, when each entry was written (ms), their slots by
@@ -623,7 +636,30 @@ export class CatastropheManager {
         } catch (error) {
             console.error("A patch of fire could not be set on the meadow of the map", error);
         }
+        this.holdFireOnHorde(x, y, tiles, now);
         return true;
+    }
+
+    /**
+     * A patch of fire held over the horde burns the zombies under it, whatever takes fire there: its tiles stay on fire
+     * for the horde until the next reading of the fire at least (ZOMBIE_TELL_MS), or the patch lasts.
+     */
+    private holdFireOnHorde(x: number, y: number, radiusTiles: number, now: number): void {
+        const horde = this.goingHorde();
+        if (!horde) return;
+        const tilesWide = Math.ceil((horde.widthCells * TERRAIN_CELL) / TILE_PX);
+        const centreX = Math.floor(x / TILE_PX);
+        const centreY = Math.floor(y / TILE_PX);
+        const tiles: number[] = [];
+        for (let dy = -radiusTiles; dy <= radiusTiles; dy++) {
+            for (let dx = -radiusTiles; dx <= radiusTiles; dx++) {
+                if (dx * dx + dy * dy > radiusTiles * radiusTiles || centreX + dx < 0 || centreX + dx >= tilesWide) {
+                    continue;
+                }
+                tiles.push((centreY + dy) * tilesWide + centreX + dx);
+            }
+        }
+        this.heldFires.push({ tiles, until: now + Math.max(FIRE_PATCH_LASTS_MS, ZOMBIE_TELL_MS) });
     }
 
     /** The speed of the map is read from its settings, made with the room: it is given here. */
@@ -844,6 +880,11 @@ export class CatastropheManager {
     }
 
     /** How many times faster the horde goes (the speed of the map): given by the room, as for the hurricane. */
+    /** What burns on the map now (tiles of the meadow, trees on fire): what a zombie that walks into it dies of. */
+    public zombieFireWith(fire: () => ZombieFireRead | undefined): void {
+        this.zombieFire = fire;
+    }
+
     public zombieTimesWith(times: () => number): void {
         this.zombieTimes = times;
     }
@@ -897,6 +938,8 @@ export class CatastropheManager {
         this.wholeAsked.clear();
         this.hordeSlots = new Map();
         this.hordeTiles = [];
+        this.hordeFire = new Set();
+        this.heldFires.length = 0;
         this.hordeTerrainToldAt = Number.NEGATIVE_INFINITY;
         this.hordeTerrainHash = zombieTerrainHash(this.horde.terrain);
         this.speedUpZombies();
@@ -985,13 +1028,67 @@ export class CatastropheManager {
         changes.sort((a, b) => a.slot - b.slot);
         const delayed = Math.ceil(zombieStepAt(horde, this.now() + ZOMBIE_INPUT_DELAY_MS));
         const applyStep = Math.max(delayed, horde.safeStep + 1);
-        if (changes.length > 0) {
+        const { fireOn, fireOff } = this.readFire(tilesWide, tilesHigh);
+        const fires = fireOn.length > 0 || fireOff.length > 0;
+        if (changes.length > 0 || fires) {
             for (const change of changes) this.hordeTiles[change.slot] = change.tile;
-            this.hordeLog.push({ applyStep, changes });
+            this.hordeLog.push({
+                applyStep,
+                changes,
+                ...(fireOn.length > 0 ? { fireOn } : {}),
+                ...(fireOff.length > 0 ? { fireOff } : {}),
+            });
             this.hordeLogAt.push(this.now());
         }
         this.horde = { ...horde, safeStep: applyStep - 1 };
-        this.hordeLogStale ||= changes.length > 0;
+        this.hordeLogStale ||= changes.length > 0 || fires;
+    }
+
+    /**
+     * What burns now, in the tiles of the horde: the meadow, the feet of the trees on fire, the patches of fire the
+     * players hold; the tiles that took fire since the last reading and those that went out, in growing order. Read
+     * with the avatars, once a second: a zombie dies of a fire 2.5 s after it is seen, as it runs to an avatar 2.5 s
+     * after it moved.
+     */
+    private readFire(tilesWide: number, tilesHigh: number): { fireOn: number[]; fireOff: number[] } {
+        const now = new Set<number>();
+        let read: ZombieFireRead | undefined;
+        try {
+            read = this.zombieFire();
+        } catch (error) {
+            console.error("The fire of the map could not be read for a horde", error);
+        }
+        if (read) {
+            const width = Math.min(read.width, tilesWide);
+            const height = Math.min(read.height, tilesHigh);
+            for (let tileY = 0; tileY < height; tileY++) {
+                for (let tileX = 0; tileX < width; tileX++) {
+                    if (read.burning[tileY * read.width + tileX] > 0) now.add(tileY * tilesWide + tileX);
+                }
+            }
+            for (const tree of read.trees) {
+                const tileX = Math.floor(tree.x / TILE_PX);
+                const tileY = Math.floor(tree.y / TILE_PX);
+                if (tileX >= 0 && tileY >= 0 && tileX < tilesWide && tileY < tilesHigh)
+                    now.add(tileY * tilesWide + tileX);
+            }
+        }
+        const at = this.now();
+        let held = 0;
+        for (const fire of this.heldFires) {
+            if (fire.until < at) continue;
+            this.heldFires[held++] = fire;
+            for (const tile of fire.tiles) if (tile >= 0 && tile < tilesWide * tilesHigh) now.add(tile);
+        }
+        this.heldFires.length = held;
+        const fireOn: number[] = [];
+        const fireOff: number[] = [];
+        for (const tile of now) if (!this.hordeFire.has(tile)) fireOn.push(tile);
+        for (const tile of this.hordeFire) if (!now.has(tile)) fireOff.push(tile);
+        fireOn.sort((a, b) => a - b);
+        fireOff.sort((a, b) => a - b);
+        this.hordeFire = now;
+        return { fireOn, fireOff };
     }
 
     /**

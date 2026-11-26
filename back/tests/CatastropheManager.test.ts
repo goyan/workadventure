@@ -1468,6 +1468,44 @@ describe("CatastropheManager, a horde of zombies", () => {
         expect(bytes / (15 * 60)).toBeLessThan(5_000);
     }, 30_000);
 
+    it("burns the zombies in the fire of the map: the tiles that take fire and go out, with the avatars, 2.5 s later", () => {
+        const { manager, sent } = zombieHarness();
+        // The meadow of the map, a tile a byte (20 x 15 tiles), and its trees on fire.
+        const burning = new Uint8Array(20 * 15);
+        burning[5 * 20 + 3] = 1;
+        const trees = [{ x: 330, y: 210 }];
+        manager.zombieFireWith(() => ({ width: 20, height: 15, burning, trees }));
+        manager.startZombies(ask);
+        const first = decodeZombieLog(sent[0].zombies?.avatars ?? "");
+        expect(first).toHaveLength(1);
+        expect(first[0]).toMatchObject({ applyStep: 25, fireOn: [5 * 20 + 3, 6 * 20 + 10] });
+        // A second later the grass is out, a tree still burns, another tile takes: told at its step.
+        burning[5 * 20 + 3] = 0;
+        burning[7 * 20 + 4] = 1;
+        vi.advanceTimersByTime(ZOMBIE_TELL_MS);
+        const told = decodeZombieLog(sent[sent.length - 1].zombies?.avatars ?? "");
+        expect(told.at(-1)).toEqual({ applyStep: 35, changes: [], fireOn: [7 * 20 + 4], fireOff: [5 * 20 + 3] });
+        // Nothing changed: nothing written.
+        const entries = decodeZombieLog(manager.zombies()?.avatars ?? "").length;
+        vi.advanceTimersByTime(ZOMBIE_TELL_MS);
+        expect(decodeZombieLog(manager.zombies()?.avatars ?? "")).toHaveLength(entries);
+    });
+
+    it("burns the zombies under a patch of fire a player holds, whatever takes fire there", () => {
+        const { manager } = zombieHarness();
+        manager.startZombies(ask);
+        vi.advanceTimersByTime(2_000);
+        expect(manager.request(1, CatastropheKind.CATASTROPHE_FIRE, 330, 210, 1, false)).toBe(true);
+        vi.advanceTimersByTime(ZOMBIE_TELL_MS);
+        const patch = [5 * 20 + 10, 6 * 20 + 9, 6 * 20 + 10, 6 * 20 + 11, 7 * 20 + 10];
+        const log = decodeZombieLog(manager.zombies()?.avatars ?? "");
+        expect(log.at(-1)).toMatchObject({ fireOn: patch });
+        // Let go: out at the next reading but one.
+        vi.advanceTimersByTime(2 * ZOMBIE_TELL_MS);
+        const after = decodeZombieLog(manager.zombies()?.avatars ?? "");
+        expect(after.some((entry) => entry.fireOff?.join() === patch.join())).toBe(true);
+    });
+
     it("sends no horde before the size of the map is read", () => {
         const { manager, sent } = harness();
         expect(manager.startZombies(ask)).toBe(false);
