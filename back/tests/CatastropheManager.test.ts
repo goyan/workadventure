@@ -1,4 +1,5 @@
 import {
+    BALL_ICE_AGAIN_MS,
     BALL_LASTS_MS,
     COLD_LASTS_MS,
     COLDS_PER_ROOM,
@@ -351,6 +352,62 @@ describe("CatastropheManager, balls", () => {
         expect(manager.ball(8, 100, 80, -5)).toBe(true);
         expect(sent.map((message) => message.radiusTiles)).toEqual([16, 1]);
         expect(manager.balls().map((ball) => ball.radiusPx)).toEqual([256, 16]);
+    });
+
+    describe("the ice under it", () => {
+        const withIce = () => {
+            const made = harness();
+            const broken: { x: number; y: number; radiusTiles: number }[] = [];
+            made.manager.breakIceWith((x, y, radiusTiles) => broken.push({ x, y, radiusTiles }));
+            return { ...made, broken };
+        };
+
+        it("is broken under the disc of the ball, as wide as the ball, from its first message", () => {
+            const { manager, broken } = withIce();
+            manager.ball(7, 100, 80, 4);
+            expect(broken).toEqual([{ x: 100, y: 80, radiusTiles: 2 }]);
+        });
+
+        it("is not broken again while the ball stays or moves little, but again after a second, as the frost closes it", () => {
+            const { manager, broken } = withIce();
+            manager.ball(7, 100, 80, 4);
+            for (let message = 0; message < 10; message++) {
+                vi.advanceTimersByTime(50);
+                manager.ball(7, 100 + message, 80, 4);
+            }
+            expect(broken).toHaveLength(1);
+            vi.advanceTimersByTime(BALL_ICE_AGAIN_MS);
+            manager.ball(7, 110, 80, 4);
+            expect(broken).toHaveLength(2);
+        });
+
+        it("is broken along the way of a ball that moved far between two messages, a disc every radius", () => {
+            const { manager, broken } = withIce();
+            manager.ball(7, 100, 80, 4);
+            vi.advanceTimersByTime(50);
+            manager.ball(7, 100 + 4 * 64, 80, 4);
+            expect(broken.slice(1).map((disc) => disc.x)).toEqual([164, 228, 292, 356]);
+            expect(broken.every((disc) => disc.radiusTiles === 2)).toBe(true);
+        });
+
+        it("is not broken by a message the server ignores, nor when the ball is let go", () => {
+            const { manager, broken } = withIce();
+            manager.ball(7, 100, 80, 4);
+            vi.advanceTimersByTime(BALL_MIN_REPORT_MS - 1);
+            manager.ball(7, 400, 80, 4);
+            manager.request(7, BALL, 400, 80, 4, false, true);
+            expect(broken).toHaveLength(1);
+        });
+
+        it("goes on when the ice cannot be broken", () => {
+            const { manager, sent } = harness();
+            vi.spyOn(console, "error").mockImplementation(() => undefined);
+            manager.breakIceWith(() => {
+                throw new Error("no ice");
+            });
+            expect(manager.ball(7, 100, 80, 4)).toBe(true);
+            expect(sent).toHaveLength(1);
+        });
     });
 
     it("is gone at once when its player lets go, and the room is told", () => {

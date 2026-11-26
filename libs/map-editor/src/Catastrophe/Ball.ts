@@ -38,6 +38,48 @@ export const BALL_LEVEL_SLACK_PX = 6;
  */
 export const BALL_LEVEL_REACH_CELLS = 20;
 
+/** A ball held still breaks the ice under it again this often, in milliseconds: the frost closes what it opened. */
+export const BALL_ICE_AGAIN_MS = 1000;
+/** The ice of the way of a ball between two of its messages is broken by this many discs at most. */
+export const BALL_ICE_MOST_DISCS = 16;
+
+/** Where the ice under a ball was last broken, and with what size of ball and when (ms). */
+export interface BallIceMark {
+    x: number;
+    y: number;
+    radiusPx: number;
+    at: number;
+}
+
+/**
+ * The points of the map (pixels) to break the ice around, with the disc of the ball (its radius, the sphere being cut
+ * by the surface at its middle), for a ball now at `ball` that was last broken at `last`; none when the ice under it
+ * is broken already: it moved less than half its radius (a tile at least) since, is of the same size, and was broken
+ * less than BALL_ICE_AGAIN_MS ago. A ball that moved breaks the ice of its way, a disc every radius.
+ */
+export function ballIceDiscs(
+    last: BallIceMark | undefined,
+    ball: { x: number; y: number; radiusPx: number },
+    now: number,
+): { x: number; y: number }[] {
+    if (!Number.isFinite(ball.x) || !Number.isFinite(ball.y)) return [];
+    if (!last) return [{ x: ball.x, y: ball.y }];
+    const away = Math.hypot(ball.x - last.x, ball.y - last.y);
+    if (
+        last.radiusPx === ball.radiusPx &&
+        now - last.at < BALL_ICE_AGAIN_MS &&
+        away < Math.max(TILE_PX, ball.radiusPx / 2)
+    ) {
+        return [];
+    }
+    const discs = Math.min(BALL_ICE_MOST_DISCS, Math.max(1, Math.ceil(away / Math.max(TILE_PX, ball.radiusPx))));
+    const way: { x: number; y: number }[] = [];
+    for (let disc = 1; disc <= discs; disc++) {
+        way.push({ x: last.x + ((ball.x - last.x) * disc) / discs, y: last.y + ((ball.y - last.y) * disc) / discs });
+    }
+    return way;
+}
+
 /** The diameter of a ball of that size: one out of range is the nearest; a size that is none is the usual one. */
 export function ballTiles(diameterTiles: number): number {
     if (!Number.isFinite(diameterTiles) || diameterTiles === 0) return BALL_DEFAULT_TILES;
