@@ -55,6 +55,16 @@ export const HOME_REACH_PX = 160;
 /** It walks to the water, and around its tree, at this share of the speed of the map. */
 const STROLL_SHARE = 0.6;
 /**
+ * An antelope of a herd grazes between its steps: it stands this long at least, and up to REST_SPREAD_MS more (spread
+ * by its id and the moment, without a draw), then walks a few steps around its leader (or itself, for a leader).
+ */
+export const REST_MIN_MS = 4_000;
+const REST_SPREAD_MS = 6_000;
+/** How far from where it stands a leader of a herd walks between two rests, in cells. */
+const GRAZE_REACH_CELLS = 3;
+/** A herd walks while it grazes at this share of the speed of the map. */
+const GRAZE_SHARE = 0.5;
+/**
  * On a land, the lions and the tigers leave the antelopes alone once fewer live there than this share of what the
  * land holds: they fall back on the fish, and the herd comes back. Without it, predators that never lack fish keep
  * the antelopes at nothing (seen over simulated hours).
@@ -751,7 +761,7 @@ export function stepPopulation(
             if (frightened.has(animal) || pursuing.has(animal)) {
                 // It will come back to the water soon, not after a whole interval.
                 if (animal.drinkUntil !== undefined) animal.drinkAt = now + drinkIntervalMs / 4;
-                animal.drinkUntil = animal.thirstySince = undefined;
+                animal.drinkUntil = animal.thirstySince = animal.restUntil = undefined;
                 continue;
             }
             if (animal.drinkUntil !== undefined) {
@@ -769,6 +779,7 @@ export function stepPopulation(
             const level = levelOf(animal);
             if (now >= animal.drinkAt) {
                 const setsOut = animal.thirstySince === undefined;
+                animal.restUntil = undefined;
                 animal.thirstySince ??= now;
                 if (land.atShore?.(cellX, cellY) === true) {
                     animal.thirstySince = undefined;
@@ -796,7 +807,33 @@ export function stepPopulation(
             if (animal.homeX === undefined || animal.homeY === undefined) {
                 // Without a tree, an animal of a group strolls around its leader.
                 const leader = leaderOf(animal, leadersIn(animal));
-                if (!leader || dead.has(leader) || distance(animal, leader) <= GROUP_REACH_PX) continue;
+                const strayed = leader !== undefined && !dead.has(leader) && distance(animal, leader) > GROUP_REACH_PX;
+                if (SPECIES[animal.kind].group === "herd" && !strayed) {
+                    // A herd grazes: each one stands a while, walks a few steps, and stands again.
+                    const reached =
+                        animal.targetX === undefined ||
+                        animal.targetY === undefined ||
+                        Math.hypot(animal.targetX - animal.x, animal.targetY - animal.y) < 1;
+                    if (animal.restUntil === undefined && reached) animal.restUntil = now + restMsOf(animal, now);
+                    if (animal.restUntil === undefined) continue;
+                    if (now < animal.restUntil) {
+                        animal.targetX = animal.targetY = undefined;
+                        still.add(animal);
+                        continue;
+                    }
+                    animal.restUntil = undefined;
+                    const near = land.randomCell(body, { cellX, cellY }, GRAZE_REACH_CELLS, level, random);
+                    if (!near) {
+                        still.add(animal);
+                        continue;
+                    }
+                    animal.targetX = (near.cellX + 0.2 + 0.6 * random()) * TERRAIN_CELL;
+                    animal.targetY = (near.cellY + 0.2 + 0.6 * random()) * TERRAIN_CELL;
+                    animal.speed = maxSpeed * GRAZE_SHARE;
+                    continue;
+                }
+                animal.restUntil = undefined;
+                if (!leader || dead.has(leader) || !strayed) continue;
                 const idle =
                     animal.targetX === undefined ||
                     animal.targetY === undefined ||
@@ -862,6 +899,12 @@ export function stepPopulation(
     tally.arrivals = population.animals.length - before;
     for (const arrived of population.animals.slice(before)) of(arrived.kind).arrivals++;
     return tally;
+}
+
+/** How long an antelope of a herd that just stopped grazes there: spread by its id and the moment, without a draw. */
+function restMsOf(animal: Animal, now: number): number {
+    const spread = ((animal.id * 7919 + Math.floor(now / LIFE_STEP_MS) * 104_729) % 1000) / 1000;
+    return REST_MIN_MS + spread * REST_SPREAD_MS;
 }
 
 /** How far around it an animal whose own ground burns looks for one that does not, in cells. */

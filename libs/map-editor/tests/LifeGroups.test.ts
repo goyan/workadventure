@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Animal } from "../src/Life/Animal";
 import { GROUP_REACH_PX, HERD_SIZE, leaderOf, leadersOf, PRIDE_SHARE_PX } from "../src/Life/Groups";
 import { landPlacesOf } from "../src/Life/LandPlaces";
-import { LIFE_STEP_MS, stepPopulation } from "../src/Life/Population";
+import { LIFE_STEP_MS, REST_MIN_MS, stepPopulation } from "../src/Life/Population";
 import type { Population, SpeciesTallies } from "../src/Life/Population";
 import { waterBodiesOf } from "../src/Life/WaterBodies";
 import type { LifeSettings } from "../src/types";
@@ -155,6 +155,59 @@ describe("a herd of antelopes", () => {
         // It drank, and waits a whole interval like her.
         expect(byId(population, 2).drinkAt).toBeLessThan(1e12);
         expect(byId(population, 2).drinkAt).toBeGreaterThan(time());
+    });
+
+    it("grazes: it stands a while where it stopped, then walks a few steps at a calm pace", () => {
+        const population = seeded([animal(1, "antelope", "female", 30, 20, { bornAt: -1000 })]);
+        const { step, time } = world(plain(), population);
+        step();
+        const matriarch = byId(population, 1);
+        const from = { x: matriarch.x, y: matriarch.y };
+        expect(matriarch.restUntil).toBeGreaterThanOrEqual(time() + REST_MIN_MS - LIFE_STEP_MS);
+        // Still, whatever its rest lasts.
+        step(REST_MIN_MS / LIFE_STEP_MS - 1);
+        expect({ x: matriarch.x, y: matriarch.y }).toEqual(from);
+        // Then it sets out, slower than the map allows, and not far.
+        step(20);
+        expect(apart(matriarch, { ...matriarch, ...from })).toBeGreaterThan(0);
+        expect(apart(matriarch, { ...matriarch, ...from })).toBeLessThan(5 * 16);
+        let walked = 0;
+        let stood = 0;
+        for (let index = 0; index < 240; index++) {
+            const before = { x: matriarch.x, y: matriarch.y };
+            step();
+            const moved = Math.hypot(matriarch.x - before.x, matriarch.y - before.y);
+            if (moved === 0) stood++;
+            else walked++;
+            expect(moved).toBeLessThanOrEqual((settings.maxSpeed * 32 * LIFE_STEP_MS) / 1000 / 2 + 1e-9);
+        }
+        // Mostly grazing: a few steps between long stops.
+        expect(stood).toBeGreaterThan(walked);
+        expect(walked).toBeGreaterThan(0);
+    });
+
+    it("stops grazing to run from a lion", () => {
+        const population = seeded([
+            animal(1, "antelope", "female", 30, 20, { bornAt: -1000, restUntil: 1e12 }),
+            animal(2, "lion", "male", 33, 20),
+        ]);
+        const { step } = world(plain(), population);
+        step();
+        const antelope = byId(population, 1);
+        expect(antelope.restUntil).toBeUndefined();
+        expect(antelope.x).toBeLessThan(middle(30));
+    });
+
+    it("leaves its rest to catch up with its matriarch once she is too far", () => {
+        const population = seeded([
+            animal(1, "antelope", "female", 10, 20, { bornAt: -1000, restUntil: 1e12 }),
+            animal(2, "antelope", "male", 30, 20, { restUntil: 1e12 }),
+        ]);
+        const { step } = world(plain(), population);
+        step();
+        const follower = byId(population, 2);
+        expect(follower.restUntil).toBeUndefined();
+        expect(follower.x).toBeLessThan(middle(30));
     });
 });
 
