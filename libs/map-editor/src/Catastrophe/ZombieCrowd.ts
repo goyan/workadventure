@@ -174,6 +174,8 @@ export const ZOMBIE_GONE = 2;
 export const ZOMBIE_DYING = 3;
 /** Met by a dart of the Nerf: it recoils, falls, lies, and is gone at its step `dieAt` (it does not burn). */
 export const ZOMBIE_SHOT = 4;
+/** Thrown by a comet that landed by it: it falls as one a grenade threw, dead, without burning; gone at `dieAt`. */
+export const ZOMBIE_THROWN = 5;
 
 /** Where a zombie that did not walk at a step was (ZombieCrowd remembers where its zombies walked, in half pixels). */
 const PAST_NONE = 0xffff;
@@ -214,6 +216,8 @@ const BLAST_UP_M_S = 7;
 const BLAST_AWAY_M_S = 9;
 const SHOVE_AWAY_M_S = 5;
 export const ZOMBIE_BURN_STEPS = 40;
+/** A meteor throws the zombies of its crater higher and further than a grenade: a rock of tonnes, not 400 g. */
+const IMPACT_POWER = 1.5;
 /** A body thrown bounces off the ground keeping this share of its speed downwards, and slides to a stop. */
 const BODY_BOUNCE = 0.25;
 const BODY_SLIDE_BRAKE = 6;
@@ -752,7 +756,7 @@ export class ZombieCrowd {
                 const path = this.pathOf(grenade);
                 const px = path.x[ZOMBIE_GRENADE_FUSE_STEPS];
                 const py = path.y[ZOMBIE_GRENADE_FUSE_STEPS];
-                const killed = this.blow(px, py, ZOMBIE_GRENADE_LETHAL_M * PX, ZOMBIE_GRENADE_BLAST_M * PX);
+                const killed = this.blow(px, py, ZOMBIE_GRENADE_LETHAL_M * PX, ZOMBIE_GRENADE_BLAST_M * PX, true);
                 this.explosions.push({ x: px, y: py, step: this.steps, killed });
             }
             // The darts whose flight is over: every zombie each went through, as the zombies walked then, is killed.
@@ -767,10 +771,10 @@ export class ZombieCrowd {
                 for (const hit of hits) this.shoot(hit, way.ux, way.uy);
             }
             // The comets and the burning meteors that land now: their own burst is drawn by the meteor, their fire set
-            // by the server; they are not blasts of grenades.
+            // by the server; they are not blasts of grenades. A comet throws, a burning meteor throws and burns.
             for (const impact of entry.impacts ?? []) {
                 const { lethal, blast } = zombieImpactRadii(impact);
-                this.impactKills += this.blow(impact.x, impact.y, lethal, blast);
+                this.impactKills += this.blow(impact.x, impact.y, lethal, blast, impact.burning, IMPACT_POWER);
             }
             this.logAt++;
         }
@@ -1042,10 +1046,10 @@ export class ZombieCrowd {
 
     /**
      * A blast at a point (a grenade that goes off, a meteor that lands): the zombies within `lethal` (map pixels) are
-     * thrown up and away, burning, and are gone; those within `blast` are shoved away, the more the nearer. How many it
-     * killed.
+     * thrown up and away, dead, `burning` or not, and are gone; those within `blast` are shoved away, the more the
+     * nearer; those it kills `power` times as fast as a grenade throws them. How many it killed.
      */
-    private blow(px: number, py: number, lethal: number, blast: number): number {
+    private blow(px: number, py: number, lethal: number, blast: number, burning: boolean, power = 1): number {
         let killed = 0;
         for (let zombie = 0; zombie < this.count; zombie++) {
             if (this.state[zombie] !== ZOMBIE_WALKING) continue;
@@ -1058,14 +1062,14 @@ export class ZombieCrowd {
             const ny = d > 1e-6 ? dy / d : 0;
             const falloff = (1 - d / blast) * (1 - d / blast);
             if (d < lethal) {
-                this.state[zombie] = ZOMBIE_DYING;
+                this.state[zombie] = burning ? ZOMBIE_DYING : ZOMBIE_THROWN;
                 this.walking--;
                 this.dying++;
                 this.target[zombie] = -1;
                 this.z[zombie] = 0;
-                this.vz[zombie] = (BLAST_UP_M_S * (1 - d / lethal) + 2) * PX;
-                this.vx[zombie] = nx * BLAST_AWAY_M_S * falloff * PX;
-                this.vy[zombie] = ny * BLAST_AWAY_M_S * falloff * PX;
+                this.vz[zombie] = (BLAST_UP_M_S * (1 - d / lethal) + 2) * PX * power;
+                this.vx[zombie] = nx * BLAST_AWAY_M_S * falloff * PX * power;
+                this.vy[zombie] = ny * BLAST_AWAY_M_S * falloff * PX * power;
                 this.dieAt[zombie] = this.steps + ZOMBIE_BURN_STEPS;
                 killed++;
             } else {
@@ -1092,7 +1096,7 @@ export class ZombieCrowd {
                 }
                 continue;
             }
-            if (state[zombie] !== ZOMBIE_DYING) continue;
+            if (state[zombie] !== ZOMBIE_DYING && state[zombie] !== ZOMBIE_THROWN) continue;
             lastX[zombie] = x[zombie];
             lastY[zombie] = y[zombie];
             if (this.steps >= this.dieAt[zombie]) {

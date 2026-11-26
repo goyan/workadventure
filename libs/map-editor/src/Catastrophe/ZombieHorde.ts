@@ -333,7 +333,7 @@ function unzigzag(value: number): number {
 /**
  * The log of the avatars, as it is told: for each entry its step, its changes, its grenades, then its darts (where
  * each is shot from, the way to its end, how many steps before the entry it was shot, the steps of a tick), then its
- * impacts (where each lands, the radius of its crater). The count of the darts is told doubled, one more when impacts
+ * impacts (where each lands, the radius of its crater doubled, one more for a burning meteor). The count of the darts is told doubled, one more when impacts
  * follow: an entry without impacts takes as many bytes as before there were any.
  */
 export function encodeZombieLog(entries: readonly ZombieLogEntry[]): string {
@@ -373,7 +373,7 @@ function pushEntry(bytes: number[], entry: ZombieLogEntry): void {
     for (const impact of impacts) {
         pushVarint(bytes, impact.x);
         pushVarint(bytes, impact.y);
-        pushVarint(bytes, impact.radiusTiles);
+        pushVarint(bytes, impact.radiusTiles * 2 + (impact.burning ? 1 : 0));
     }
 }
 
@@ -497,7 +497,8 @@ function readEntries(bytes: readonly number[], from: number): ZombieLogEntry[] {
         for (let impact = 0; impact < landed && at.read < bytes.length; impact++) {
             const x = readVarint(bytes, at);
             const y = readVarint(bytes, at);
-            impacts.push({ x, y, radiusTiles: readVarint(bytes, at) });
+            const size = readVarint(bytes, at);
+            impacts.push({ x, y, radiusTiles: Math.floor(size / 2), burning: size % 2 === 1 });
         }
         entries.push({
             applyStep: step,

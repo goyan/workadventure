@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { ZOMBIE_DYING, ZOMBIE_GONE, ZOMBIE_WALKING, ZombieCrowd } from "../src/Catastrophe/ZombieCrowd";
+import { ZOMBIE_DYING, ZOMBIE_GONE, ZOMBIE_THROWN, ZOMBIE_WALKING, ZombieCrowd } from "../src/Catastrophe/ZombieCrowd";
 import {
     decodeZombieLog,
     encodeZombieLog,
     encodeZombieTerrain,
     zombieDirection,
     ZombieLogWriter,
+    ZOMBIE_PX_PER_METRE,
     zombieTerrainOf,
 } from "../src/Catastrophe/ZombieHorde";
 import type { ZombieHorde, ZombieLogEntry } from "../src/Catastrophe/ZombieHorde";
@@ -16,7 +17,7 @@ import { TERRAIN_CELL, TILE_PX } from "../src/types";
 
 const START = 1_800_000_000_000;
 /** The checksum of the reference crowd with comets (see its test): set once, changed only with the model. */
-const IMPACT_REFERENCE_CHECKSUM = 2085977709;
+const IMPACT_REFERENCE_CHECKSUM = 4016508268;
 
 /** A horde over a map of `widthCells` x `heightCells` cells, over that ground, at the speed of reality. */
 function horde(overrides: Partial<ZombieHorde> = {}, terrain?: Uint8Array, widthCells = 120, heightCells = 80) {
@@ -60,15 +61,15 @@ describe("the log of a horde with comets", () => {
     it("tells the impacts with the darts, the grenades and the avatars, and reads them back the same", () => {
         const log: ZombieLogEntry[] = [
             { applyStep: 25, changes: [{ slot: 0, tile: 1234 }] },
-            { applyStep: 40, changes: [], impacts: [{ x: 1900, y: 640, radiusTiles: 8 }] },
+            { applyStep: 40, changes: [], impacts: [{ x: 1900, y: 640, radiusTiles: 8, burning: true }] },
             {
                 applyStep: 41,
                 changes: [{ slot: 1, tile: 7 }],
                 grenades: [{ fromX: 10, fromY: 20, toX: 300, toY: 400 }],
                 darts: [{ fromX: 100, fromY: 200, toX: 90, toY: 600, shotStep: 30, stride: 1 }],
                 impacts: [
-                    { x: 0, y: 0, radiusTiles: 1 },
-                    { x: 20_000, y: 16_000, radiusTiles: 4 },
+                    { x: 0, y: 0, radiusTiles: 1, burning: false },
+                    { x: 20_000, y: 16_000, radiusTiles: 4, burning: true },
                 ],
             },
             {
@@ -93,13 +94,13 @@ describe("the log of a horde with comets", () => {
         // Step (2 bytes), changes, grenades, darts (1 each), the dart (6): as many as before there were impacts.
         expect(atob(encodeZombieLog([dart])).length).toBe(11);
         expect(atob(encodeZombieLog([{ applyStep: 25, changes: [] }])).length).toBe(4);
-        const impact = { applyStep: 9000, changes: [], impacts: [zombieImpactOf(7680.4, 5119.6, 4)] };
+        const impact = { applyStep: 9000, changes: [], impacts: [zombieImpactOf(7680.4, 5119.6, 4, false)] };
         expect(atob(encodeZombieLog([impact])).length).toBe(11);
     });
 
     it("keeps an impact within what a meteor may be, in whole pixels", () => {
-        expect(zombieImpactOf(12.6, 7.4, 30)).toEqual({ x: 13, y: 7, radiusTiles: 8 });
-        expect(zombieImpactOf(0, 0, 0).radiusTiles).toBe(4);
+        expect(zombieImpactOf(12.6, 7.4, 30, true)).toEqual({ x: 13, y: 7, radiusTiles: 8, burning: true });
+        expect(zombieImpactOf(0, 0, 0, false).radiusTiles).toBe(4);
         expect(zombieImpactRadii({ radiusTiles: 4 })).toEqual({ lethal: 4 * TILE_PX, blast: 12 * TILE_PX });
     });
 });
@@ -122,12 +123,15 @@ describe("when a meteor lands in a horde", () => {
         expect(zombieImpactFall({ ...told, safeStep: 44 }, START + 1000)).toEqual({ applyStep: 45, fallMs: 3500 });
     });
 
-    it("kills the zombies in its crater, throws them burning, shoves those around, and is no grenade", () => {
+    it.each([
+        { what: "a burning meteor throws them burning", burning: true, state: ZOMBIE_DYING },
+        { what: "a comet throws them without fire", burning: false, state: ZOMBIE_THROWN },
+    ])("kills the zombies in its crater: $what; shoves those around, and is no grenade", ({ burning, state }) => {
         const told = horde({ count: 400 });
         const plain = new ZombieCrowd(told);
         plain.advanceTo(START + 20_000);
         const at = middleOf(plain);
-        const impact = zombieImpactOf(at.x, at.y, 6);
+        const impact = zombieImpactOf(at.x, at.y, 6, burning);
         const { lethal, blast } = zombieImpactRadii(impact);
         const near = (crowd: ZombieCrowd, zombie: number) =>
             Math.sqrt((crowd.x[zombie] - at.x) ** 2 + (crowd.y[zombie] - at.y) ** 2);
@@ -149,11 +153,15 @@ describe("when a meteor lands in a horde", () => {
         struck.step();
         expect(struck.killedByImpacts).toBe(inCrater);
         expect(struck.dying).toBe(inCrater);
+        // Thrown up higher than by a grenade: half as fast again.
         let thrown = 0;
+        let highest = 0;
         for (let zombie = 0; zombie < struck.count; zombie++) {
-            if (struck.state[zombie] === ZOMBIE_DYING && struck.z[zombie] > 0) thrown++;
+            if (struck.state[zombie] === state && struck.z[zombie] > 0) thrown++;
+            highest = Math.max(highest, struck.vz[zombie]);
         }
         expect(thrown).toBe(inCrater);
+        expect(highest).toBeGreaterThan(9 * ZOMBIE_PX_PER_METRE);
         // Those around are pushed away from it, further than they would have gone.
         let pushed = 0;
         for (const zombie of ring) {
@@ -186,7 +194,7 @@ describe("when a meteor lands in a horde", () => {
                     changes: [{ slot: 0, tile: Math.floor(600 / TILE_PX) * 60 + Math.floor(1500 / TILE_PX) }],
                 },
             },
-            { second: 18, entry: { applyStep: 205, changes: [], impacts: [zombieImpactOf(at.x, at.y, 6)] } },
+            { second: 18, entry: { applyStep: 205, changes: [], impacts: [zombieImpactOf(at.x, at.y, 6, false)] } },
             {
                 second: 19,
                 entry: {
@@ -197,7 +205,7 @@ describe("when a meteor lands in a horde", () => {
             },
             {
                 second: 20,
-                entry: { applyStep: 225, changes: [], impacts: [zombieImpactOf(at.x - 200, at.y - 100, 2)] },
+                entry: { applyStep: 225, changes: [], impacts: [zombieImpactOf(at.x - 200, at.y - 100, 2, true)] },
             },
             { second: 26, entry: { applyStep: 285, changes: [{ slot: 0, tile: -1 }] } },
         ];
@@ -257,12 +265,12 @@ describe("when a meteor lands in a horde", () => {
                 ...zombieDirection(250),
                 avatars: encodeZombieLog([
                     { applyStep: 20, changes: [{ slot: 0, tile: Math.floor(480 / TILE_PX) * 80 + 640 / TILE_PX }] },
-                    { applyStep: 150, changes: [], impacts: [zombieImpactOf(1900, 700, 8)] },
-                    { applyStep: 260, changes: [], impacts: [zombieImpactOf(1400, 800, 3)] },
+                    { applyStep: 150, changes: [], impacts: [zombieImpactOf(1900, 700, 8, false)] },
+                    { applyStep: 260, changes: [], impacts: [zombieImpactOf(1400, 800, 3, true)] },
                     {
                         applyStep: 330,
                         changes: [],
-                        impacts: [zombieImpactOf(1000, 760, 5), zombieImpactOf(800, 700, 1)],
+                        impacts: [zombieImpactOf(1000, 760, 5, false), zombieImpactOf(800, 700, 1, true)],
                     },
                 ]),
             },

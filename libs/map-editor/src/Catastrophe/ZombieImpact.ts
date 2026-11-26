@@ -4,8 +4,9 @@ import { ZOMBIE_INPUT_DELAY_MS, zombieStepAt } from "./ZombieHorde";
 import type { ZombieHorde } from "./ZombieHorde";
 
 /**
- * A comet or a burning meteor that lands in a horde of zombies: the zombies in its crater are thrown up and away,
- * burning, and are gone, as by a grenade; those of a ring around it are shoved away, the more the nearer. The server
+ * A comet or a burning meteor that lands in a horde of zombies: the zombies in its crater are thrown up and away, dead,
+ * as by a grenade (a burning meteor sets them on fire too, a comet of ice does not), and are gone; those of a ring
+ * around it are shoved away, the more the nearer. The server
  * alone decides it (who launched it plays no part): it goes in the log of the horde, at the step it lands at, so that
  * the server and every browser kill the same zombies. Its water and its wave kill none: a zombie never dies in water.
  *
@@ -19,14 +20,16 @@ export interface ZombieImpact {
     x: number;
     y: number;
     radiusTiles: number;
+    /** A burning meteor (the zombies it throws burn), not a comet. */
+    burning: boolean;
 }
 
 /** The ring an impact shoves goes this many times the radius of its crater: as a grenade (15 m for 5 m). */
 export const ZOMBIE_IMPACT_BLAST_TIMES = 3;
 
 /** The impact of a meteor of that size at that point, as the log tells it: whole pixels, a crater a meteor may have. */
-export function zombieImpactOf(x: number, y: number, radiusTiles: number): ZombieImpact {
-    return { x: Math.round(x), y: Math.round(y), radiusTiles: meteorShape(radiusTiles).radiusTiles };
+export function zombieImpactOf(x: number, y: number, radiusTiles: number, burning: boolean): ZombieImpact {
+    return { x: Math.round(x), y: Math.round(y), radiusTiles: meteorShape(radiusTiles).radiusTiles, burning };
 }
 
 /** How far an impact kills (its crater, as the water takes it) and how far it shoves, map pixels. */

@@ -7,6 +7,7 @@ import {
     ZOMBIE_DART_SCALES,
     ZOMBIE_DYING,
     ZOMBIE_SHOT,
+    ZOMBIE_THROWN,
     ZOMBIE_WALKING,
     ZombieCrowd,
 } from "@workadventure/map-editor";
@@ -450,14 +451,15 @@ export class ZombieView {
         for (let zombie = 0; zombie < crowd.count; zombie++) {
             this.bandOf[zombie] = -1;
             this.fallAge[zombie] = -1;
-            const burning = state[zombie] === ZOMBIE_DYING;
+            // Thrown by a grenade or a meteor (burning, or not by a comet).
+            const thrown = state[zombie] === ZOMBIE_DYING || state[zombie] === ZOMBIE_THROWN;
             // Met by a dart: drawn falling from the step it was met at, where it was met (the crowd may have it walk
-            // on until the log applies the dart), recoiling along the dart. Thrown by a grenade before, it burns.
-            const fall = burning ? undefined : fallen?.get(zombie);
+            // on until the log applies the dart), recoiling along the dart. Thrown by a blast before, it flies.
+            const fall = thrown ? undefined : fallen?.get(zombie);
             const fallAge = fall ? now - fall.step : -1;
             if (fall && fallAge >= ZOMBIE_DART_FALL_STEPS) continue;
             const falling = fall !== undefined && fallAge >= 0;
-            if (dust ? dust[zombie] === 0 : state[zombie] !== ZOMBIE_WALKING && !burning && !falling) continue;
+            if (dust ? dust[zombie] === 0 : state[zombie] !== ZOMBIE_WALKING && !thrown && !falling) continue;
             const recoil = falling ? ZOMBIE_DART_RECOIL_PX * Math.min(1, fallAge / ZOMBIE_DART_RECOIL_STEPS) : 0;
             const px =
                 fall && falling ? fall.x + fall.ux * recoil : lastX[zombie] + (x[zombie] - lastX[zombie]) * between;
@@ -526,20 +528,23 @@ export class ZombieView {
                         );
                     }
                     fade = Math.min(1, (ZOMBIE_DART_FALL_STEPS - fallAge) / FADE_STEPS);
-                } else if (crowd.state[zombie] === ZOMBIE_DYING) {
-                    // Thrown by a blast: hurt in the air, falling dead on the ground, burning, then charred and gone.
+                } else if (crowd.state[zombie] === ZOMBIE_DYING || crowd.state[zombie] === ZOMBIE_THROWN) {
+                    // Thrown by a blast: hurt in the air, falling dead on the ground, burning (not when a comet of
+                    // ice threw it), then charred and gone.
                     const age = crowd.steps - (crowd.dieAt[zombie] - ZOMBIE_BURN_STEPS);
                     lift = crowd.z[zombie];
                     row = lift > 2 && age < 8 ? ZOMBIE_HURT : ZOMBIE_DEAD;
                     const count = sheet.counts[row];
                     image =
                         row === ZOMBIE_HURT ? Math.min(count - 1, age >> 1) : Math.min(count - 1, Math.floor(age / 3));
-                    const charred = Math.min(1, age / ZOMBIE_BURN_STEPS);
-                    const flicker = (zombie * 7 + crowd.steps * 3) % 5 < 2 ? 1 : 0.85;
-                    const red = 255;
-                    const green = Math.round((150 - 110 * charred) * flicker);
-                    const blue = Math.round((70 - 60 * charred) * flicker);
-                    tint = (red << 16) | (green << 8) | blue;
+                    if (crowd.state[zombie] === ZOMBIE_DYING) {
+                        const charred = Math.min(1, age / ZOMBIE_BURN_STEPS);
+                        const flicker = (zombie * 7 + crowd.steps * 3) % 5 < 2 ? 1 : 0.85;
+                        const red = 255;
+                        const green = Math.round((150 - 110 * charred) * flicker);
+                        const blue = Math.round((70 - 60 * charred) * flicker);
+                        tint = (red << 16) | (green << 8) | blue;
+                    }
                     fade = Math.min(1, (ZOMBIE_BURN_STEPS - age) / 10);
                 } else if (this.dust) {
                     // Falling to dust: they collapse, then fade.

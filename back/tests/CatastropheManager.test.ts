@@ -1371,7 +1371,7 @@ describe("CatastropheManager, a horde of zombies", () => {
         const zombies = sent[before].zombies;
         expect(zombies?.logFrom).toBeGreaterThan(0);
         expect(decodeZombieLog(zombies?.avatars ?? "")).toEqual([
-            { applyStep: 45, changes: [], impacts: [{ x: 320, y: 160, radiusTiles: 4 }] },
+            { applyStep: 45, changes: [], impacts: [{ x: 320, y: 160, radiusTiles: 4, burning: false }] },
         ]);
         expect(zombies?.safeStep).toBe(44);
         // The meteor falls until that step comes, its water with it.
@@ -1383,7 +1383,7 @@ describe("CatastropheManager, a horde of zombies", () => {
         // In the whole log a player who joins is sent.
         const whole = decodeZombieLog(manager.wholeZombies("p1")?.zombies?.avatars ?? "");
         expect(whole.filter((entry) => entry.impacts)).toEqual([
-            { applyStep: 45, changes: [], impacts: [{ x: 320, y: 160, radiusTiles: 4 }] },
+            { applyStep: 45, changes: [], impacts: [{ x: 320, y: 160, radiusTiles: 4, burning: false }] },
         ]);
     });
 
@@ -1400,7 +1400,7 @@ describe("CatastropheManager, a horde of zombies", () => {
             expect(fall).toBeGreaterThanOrEqual(2_500);
             expect(fall).toBeLessThan(2_600);
             const [entry] = decodeZombieLog(sent[before].zombies?.avatars ?? "");
-            expect(entry.impacts).toEqual([{ x: 100, y: 400, radiusTiles: 7 }]);
+            expect(entry.impacts).toEqual([{ x: 100, y: 400, radiusTiles: 7, burning: true }]);
             expect(entry.applyStep).toBe((Date.now() + fall) / 100);
             expect(entry.applyStep).toBeGreaterThan(manager.zombies()?.safeStep ?? Infinity);
         }
