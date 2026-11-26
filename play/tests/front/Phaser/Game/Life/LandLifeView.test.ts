@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { floorDepth } from "../../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorDepth";
 import { AquaticLife } from "../../../../../src/front/Phaser/Game/Life/AquaticLife";
-import { directionOf, landFrame, LandLifeView } from "../../../../../src/front/Phaser/Game/Life/LandLifeView";
+import {
+    directionOf,
+    headingOf,
+    landFrame,
+    LandLifeView,
+} from "../../../../../src/front/Phaser/Game/Life/LandLifeView";
 import { drinkStance } from "../../../../../src/front/Phaser/Game/Wander/WanderDrink";
 import { isLandKind, landSpeciesOf } from "../../../../../src/front/Phaser/Game/Life/LandSprites";
 
@@ -370,6 +375,109 @@ describe("an animal that glides slowly", () => {
             flips.add(sprites[0].flipX);
         }
         expect([...flips]).toEqual([false]);
+    });
+});
+
+describe("an animal of a herd", () => {
+    /** A sheet of five columns, as the antelope of the catalogue: the rows down, left, right, up. */
+    const rowOf = (frame: number | string): number => Math.floor(Number(frame) / 5);
+    const herdView = (grassAt?: (x: number, y: number) => boolean) =>
+        createView({ sheets: { antelope: 5 }, sheetOf: () => "antelope", grassAt });
+
+    it("keeps its side while its way leans less than about 56° from it, and turns round when it comes back", () => {
+        expect(headingOf(10, 12, "right")).toBe("right");
+        expect(headingOf(10, 16, "right")).toBe("down");
+        expect(headingOf(12, -10, "up")).toBe("up");
+        expect(headingOf(-10, 1, "right")).toBe("left");
+        expect(headingOf(1, 10, "up")).toBe("down");
+        expect(headingOf(0, 0, "left")).toBe("left");
+    });
+
+    it("walks through the frames of its row while it glides slowly, even when a message comes late", () => {
+        const { view, life, sprites } = herdView();
+        // Twenty-five pixels a second to the right: less than half a pixel a frame.
+        const told = [0, 1000, 2000, 3250, 4250];
+        const frames = new Set<number | string>();
+        const moving = new Set<boolean>();
+        life.receive([{ id: 1, kind: 4, x: 100, y: 100 }], 0);
+        view.update(0);
+        for (let now = 16, next = 1; now < 4250; now += 16) {
+            if (next < told.length && now >= told[next]) {
+                life.receive([{ id: 1, kind: 4, x: 100 + 25 * next, y: 100 }], now);
+                next++;
+            }
+            view.update(now);
+            // It sets out with the first message, a second after the first place.
+            if (now < 1300) continue;
+            frames.add(sprites[0].frame.name);
+            view.forEachShown((_id, _sprite, animal) => moving.add(animal.moving));
+        }
+        // The three frames of the walk to the right, never the frame it stands on alone.
+        expect([...frames].sort()).toEqual([10, 11, 12]);
+        expect([...moving]).toEqual([true]);
+    });
+
+    it("does not turn round for a step back nor aside of a few pixels", () => {
+        const { view, life, sprites } = herdView();
+        life.receive([{ id: 1, kind: 4, x: 100, y: 100 }], 0);
+        view.update(0);
+        // To the right, a step back of three pixels, a step down of four, and to the right again.
+        const places = [
+            [130, 100],
+            [127, 100],
+            [128, 104],
+            [160, 104],
+        ];
+        const rows = new Set<number>();
+        let now = 0;
+        for (const [x, y] of places) {
+            life.receive([{ id: 1, kind: 4, x, y }], now);
+            for (const end = now + 1000; now < end; now += 16) {
+                view.update(now);
+                if (now >= 500) rows.add(rowOf(sprites[0].frame.name));
+            }
+        }
+        expect([...rows]).toEqual([rowOf(landFrame("right", false, 0, 5))]);
+    });
+
+    it("bows to the grass only once it stood a while, not between two slow steps", () => {
+        const { view, life, sprites } = herdView(() => true);
+        life.receive([{ id: 1, kind: 4, x: 100, y: 100 }], 0);
+        view.update(0);
+        life.receive([{ id: 1, kind: 4, x: 120, y: 100 }], 16);
+        let bowed = false;
+        for (let now = 32; now <= 1024; now += 16) {
+            view.update(now);
+            bowed ||= sprites[0].angle !== 0 || sprites[0].scaleY !== 1;
+        }
+        expect(bowed).toBe(false);
+        // It stopped at 1016, seen at 1024: head up for a while, then down.
+        view.update(1024 + 500);
+        expect(sprites[0].scaleY).toBe(1);
+        expect(sprites[0].angle).toBe(0);
+        view.update(1024 + 1000);
+        expect(sprites[0].angle !== 0 || sprites[0].scaleY !== 1).toBe(true);
+    });
+
+    it("drawn here, rises a pixel every other step while it walks, and keeps its side going down", () => {
+        const { view, life, sprites } = createView();
+        life.receive([{ id: 1, kind: 4, x: 100, y: 100 }], 0);
+        view.update(0);
+        life.receive([{ id: 1, kind: 4, x: 60, y: 100 }], 16);
+        const heights = new Set<number>();
+        for (let now = 32; now < 1000; now += 16) {
+            view.update(now);
+            heights.add(sprites[0].y);
+        }
+        expect([...heights].sort((a, b) => a - b)).toEqual([99, 100]);
+        expect(sprites[0].flipX).toBe(true);
+        // Down: still turned to the left.
+        life.receive([{ id: 1, kind: 4, x: 60, y: 140 }], 1016);
+        for (let now = 1032; now < 2000; now += 16) view.update(now);
+        expect(sprites[0].flipX).toBe(true);
+        // Once it stands, on its feet.
+        view.update(2500);
+        expect(sprites[0].y).toBe(140);
     });
 });
 

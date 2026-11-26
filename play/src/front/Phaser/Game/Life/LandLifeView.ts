@@ -14,6 +14,20 @@ const MARGIN_PX = 48;
 const WALK_FRAME_MS = 150;
 /** Under this many pixels between two frames an animal stands still. */
 const STILL_PX = 0.05;
+/**
+ * The life glides an animal between two messages of the server (a second apart, AquaticLife): one that comes late
+ * stops it a moment. It is still walking that long after it last moved, so that its walk does not flicker.
+ */
+const WALK_HOLD_MS = 300;
+/** It turns only once it went this far one way: a step aside in a herd does not turn it round. */
+const TURN_PX = 6;
+/**
+ * It keeps facing a side while its way leans less than that towards the other axis (tan of about 56°): a way near
+ * a diagonal does not swap between a side and the front at each step.
+ */
+const AXIS_MARGIN = 1.5;
+/** An antelope bows to the grass once it stood that long. */
+const GRAZE_AFTER_MS = 800;
 /** The state the server tells for an animal that drinks. */
 const DRINKING = 3;
 /** A sheet of the catalogue has four rows of frames. */
@@ -24,6 +38,19 @@ export function directionOf(dx: number, dy: number, previous: WanderDirection): 
     if (Math.abs(dx) < STILL_PX && Math.abs(dy) < STILL_PX) return previous;
     if (Math.abs(dx) >= Math.abs(dy)) return dx < 0 ? "left" : "right";
     return dy < 0 ? "up" : "down";
+}
+
+/**
+ * Where an animal faces once it went by (dx, dy) since it last turned: as `directionOf`, but it keeps its side while
+ * the way still goes that side and leans less than AXIS_MARGIN towards the other axis.
+ */
+export function headingOf(dx: number, dy: number, previous: WanderDirection): WanderDirection {
+    const next = directionOf(dx, dy, previous);
+    if (next === previous) return previous;
+    const horizontal = previous === "left" || previous === "right";
+    const along = horizontal ? (previous === "left" ? -dx : dx) : previous === "up" ? -dy : dy;
+    const across = Math.abs(horizontal ? dy : dx);
+    return along > 0 && across < along * AXIS_MARGIN ? previous : next;
 }
 
 /** The frame of a sheet of the catalogue for an animal that walks or stands. */
@@ -48,6 +75,11 @@ interface Shown {
      */
     atX: number;
     atY: number;
+    /** Where it was when it last turned, or set out: it turns again once it went TURN_PX from there. */
+    turnX: number;
+    turnY: number;
+    /** When the life last moved it. */
+    movedAt: number;
     /** Since when it drinks, undefined while it does not. */
     drinkingSince: number | undefined;
     /** How much lower than its place it is drawn (the relief seen in 3/4). */
@@ -150,6 +182,9 @@ export class LandLifeView {
                     led: false,
                     atX: animal.x,
                     atY: animal.y,
+                    turnX: animal.x,
+                    turnY: animal.y,
+                    movedAt: Number.NEGATIVE_INFINITY,
                     drinkingSince: undefined,
                     drop,
                 };
@@ -162,25 +197,45 @@ export class LandLifeView {
                 entry.columns = columns;
                 changed ||= onScreen(x, y);
             }
-            const moved = Math.abs(x - sprite.x) >= 1 || Math.abs(y - sprite.y) >= 1;
-            const moving = led ? led.moving : moved;
-            entry.direction = led
-                ? led.direction
-                : directionOf(animal.x - entry.atX, animal.y - entry.atY, entry.direction);
+            // Whether it walks is read on its place in the life, not on the whole pixels of the sprite: a slow
+            // animal moves less than a pixel a frame, and would stop every other frame.
+            const stirred = Math.hypot(animal.x - entry.atX, animal.y - entry.atY) >= STILL_PX;
+            if (stirred && now - entry.movedAt >= WALK_HOLD_MS) {
+                // It sets out: it turns from where it stood.
+                entry.turnX = entry.atX;
+                entry.turnY = entry.atY;
+            }
+            if (stirred) entry.movedAt = now;
+            const moving = led ? led.moving : now - entry.movedAt < WALK_HOLD_MS;
+            if (led) entry.direction = led.direction;
+            else if (Math.hypot(animal.x - entry.turnX, animal.y - entry.turnY) >= TURN_PX) {
+                entry.direction = headingOf(animal.x - entry.turnX, animal.y - entry.turnY, entry.direction);
+                entry.turnX = animal.x;
+                entry.turnY = animal.y;
+            }
             entry.atX = animal.x;
             entry.atY = animal.y;
+            // The image drawn here has no frames of a walk: it rises a pixel every other step instead.
+            const bob =
+                columns === undefined && moving && !reduced && Math.floor(now / WALK_FRAME_MS) % 2 === 1 ? 1 : 0;
+            const moved = Math.abs(x - sprite.x) >= 1 || Math.abs(y - bob - sprite.y) >= 1;
             if (moved || sprite.alpha !== animal.alpha) changed ||= onScreen(x, y) || onScreen(sprite.x, sprite.y);
             entry.moving = moving;
             entry.led = led !== undefined;
             entry.drop = drop;
-            sprite.setPosition(x, y);
+            sprite.setPosition(x, y - bob);
             // Sorted by its place, whatever the row it is drawn at.
             placeAtDepth(sprite, lift > 0 ? floorDepth(lift, placeY) : placeY);
             sprite.setAlpha(animal.alpha);
             // Head down at the water (the stance of the wandering animals, without its sway of a pixel: the place
             // of the sprite tells whether the animal moved).
             // An antelope that stands still on grass grazes, in the same stance: the server eats the grass under it.
-            const grazing = species === "antelope" && !moving && this.grassAt(animal.x, animal.y);
+            // Only once it stood a while: not at each stop of a step.
+            const grazing =
+                species === "antelope" &&
+                !moving &&
+                now - entry.movedAt >= GRAZE_AFTER_MS &&
+                this.grassAt(animal.x, animal.y);
             const drinking = (animal.state === DRINKING || grazing) && led === undefined;
             entry.drinkingSince = drinking ? (entry.drinkingSince ?? now) : undefined;
             const stance =
@@ -195,8 +250,8 @@ export class LandLifeView {
                 changed ||= onScreen(x, y);
             }
             if (columns === undefined) {
-                // The image drawn here heads right.
-                sprite.setFlipX(entry.direction === "left" || (entry.direction !== "right" && animal.facingLeft));
+                // The image drawn here heads right; going up or down, it keeps the side it last walked to.
+                sprite.setFlipX(entry.direction === "left" || (entry.direction !== "right" && sprite.flipX));
             } else {
                 sprite.setFlipX(false);
                 const frame = landFrame(entry.direction, moving && !reduced, now, columns);
