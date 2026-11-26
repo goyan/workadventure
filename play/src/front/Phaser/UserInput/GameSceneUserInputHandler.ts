@@ -40,6 +40,7 @@ import {
     ballDiameterTilesStore,
     coldCelsiusStore,
     coldRadiusTilesStore,
+    disarmCatastrophe,
     heldBallStore,
     downpourRadiusTilesStore,
     downpourWholeMapStore,
@@ -47,6 +48,7 @@ import {
     drainRadiusTilesStore,
     meteorRadiusTilesStore,
     zombieShownStore,
+    type CatastropheChoice,
 } from "@wa/front/Stores/CatastropheStore";
 import {
     endWaterLevelGesture,
@@ -60,7 +62,7 @@ import { isKeyFromInteractiveElement } from "@wa/front/Utils/isKeyFromInteractiv
 import { findShortcutAction } from "@wa/front/Stores/ShortcutsStore";
 import { spaceClimbs } from "../Vehicle/AirplaneAltitudeKeys";
 import { MapDragPointerCapture } from "./MapDragPointerCapture";
-import { MapDragGesture } from "./MapDragGesture";
+import { MapDragGesture, mapDragThreshold } from "./MapDragGesture";
 import { MapPanShortcut } from "./MapPanShortcut";
 
 import Pointer = Phaser.Input.Pointer;
@@ -93,6 +95,34 @@ function isTypingTarget(event: KeyboardEvent): boolean {
 const PINCH_MAX_DELTA_Y = 50;
 
 /**
+ * How long the click of an armed catastrophe, with a mouse, waits for a second click before throwing anything: a
+ * double click walks there and disarms the catastrophe, so its first click must not have thrown it. A press held as
+ * long, or moved, is a held throw (a downpour, a ball…) at once.
+ */
+export const ARMED_CLICK_WAIT_MS = 300;
+
+/** A first click of an armed catastrophe, released, waiting to be thrown unless a second click comes. */
+interface PendingArmedClick {
+    kind: CatastropheChoice;
+    timer: Phaser.Time.TimerEvent;
+    run: () => void;
+}
+
+/** A press of an armed held catastrophe that is not held yet: a click, or the start of a hold. */
+interface PendingArmedPress {
+    kind: HeldCatastrophe;
+    pointer: Pointer;
+    id: number;
+    x: number;
+    y: number;
+    /** The point of the map pressed, where a click throws it. */
+    point: { x: number; y: number };
+    timer: Phaser.Time.TimerEvent;
+}
+
+type HeldCatastrophe = "downpour" | "fire" | "drain" | "ball" | "cold";
+
+/**
  * A trackpad two-finger scroll is told apart from a notched mouse wheel: a notched wheel (Windows/Linux) reports
  * multiples of 120 on the legacy wheelDeltaY and never scrolls horizontally, a trackpad reports continuous values.
  * Pinch gestures and Ctrl+wheel (ctrlKey) are zoom gestures and are never treated as a scroll.
@@ -113,7 +143,11 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     /** While the click of an armed downpour is held: tells the server where the pointer is, a few times a second. */
     private downpourReports: Phaser.Time.TimerEvent | undefined;
     /** The catastrophe a held click is throwing: a downpour that follows the pointer, or fire painted along it. */
-    private heldKind: "downpour" | "fire" | "drain" | "ball" | "cold" | undefined;
+    private heldKind: HeldCatastrophe | undefined;
+    /** The first click of an armed catastrophe, waiting for a second one (see ARMED_CLICK_WAIT_MS). */
+    private pendingClick: PendingArmedClick | undefined;
+    /** The press of an armed held catastrophe, not held yet (see ARMED_CLICK_WAIT_MS). */
+    private pendingPress: PendingArmedPress | undefined;
     /** The ball held under the pointer: the pointer that holds it, and what the server was last told of it. */
     private ballPointer: Pointer | undefined;
     private ballTold: { x: number; y: number; tiles: number; ticksAgo: number } | undefined;
@@ -158,6 +192,9 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         const unsubscribeArmed = armedCatastropheStore.subscribe((armed) => {
             // A downpour only rains, and a fire is only painted, while it is the armed one.
             if (armed !== this.heldKind) this.stopDownpour();
+            // A click of another catastrophe, or of none, throws nothing any more.
+            if (this.pendingClick && this.pendingClick.kind !== armed) this.cancelPendingClick();
+            if (this.pendingPress && this.pendingPress.kind !== armed) this.cancelPendingPress();
             if (wasArmed === (armed !== undefined)) return;
             wasArmed = armed !== undefined;
             this.gameScene.input.setDefaultCursor(this.aiming() ? "crosshair" : this.idleCursor());
@@ -177,6 +214,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             unsubscribeArmed();
             unsubscribePipette();
             unsubscribeWeatherPipette();
+            this.cancelPendingClick();
+            this.cancelPendingPress();
             this.stopDownpour();
             this.pointerCapture.destroy();
             this.panShortcut.destroy();
@@ -240,8 +279,10 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         // picks nothing. The press itself is left to the map drag, which stays free. In the map editor too, whose
         // tool is put aside while a catastrophe is armed.
         if (get(armedCatastropheStore) !== undefined && (pointer.wasTouch || pointer.leftButtonReleased())) {
+            // A press released before it was held is a click: thrown once, unless a second click comes.
+            if (this.pendingPress) this.clickPendingPress(pointer.getDuration());
             // The downpour rained, the fire was painted, while the click was held: releasing it only ends it.
-            if (this.heldCatastrophe() !== undefined) this.stopDownpour();
+            else if (this.heldCatastrophe() !== undefined) this.stopDownpour();
             else this.launchArmedCatastrophe(pointer);
             return;
         }
@@ -372,22 +413,120 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         ) {
             return;
         }
-        // The server decides what the comet or the fireball does there.
-        this.gameScene.connection?.emitLaunchCatastrophe(
+        // The server decides what the comet or the fireball does there: where, and how wide, as clicked.
+        const kind =
             get(armedCatastropheStore) === "fireball"
                 ? CatastropheKind.CATASTROPHE_FIREBALL
-                : CatastropheKind.CATASTROPHE_METEOR,
-            worldPoint.x,
-            worldPoint.y,
-            get(meteorRadiusTilesStore),
-        );
+                : CatastropheKind.CATASTROPHE_METEOR;
+        const tiles = get(meteorRadiusTilesStore);
+        const launch = () => this.gameScene.connection?.emitLaunchCatastrophe(kind, worldPoint.x, worldPoint.y, tiles);
+        if (this.awaitsDoubleClick(pointer)) this.deferClick(launch);
+        else launch();
+    }
+
+    /**
+     * Whether a click of an armed catastrophe waits for a second one before throwing it: with a mouse, where a
+     * double click walks. A tap throws at once (no double tap walks), and so does a click in the map editor.
+     */
+    private awaitsDoubleClick(pointer: Pointer): boolean {
+        const input = this.gameScene.userInputManager;
+        return !pointer.wasTouch && !get(mapEditorModeStore) && input.isControlsEnabled && input.isRightClickEnabled;
+    }
+
+    /** The press is the second one of a double click: the browser counts the clicks of the mouse in a row. */
+    private isDoubleClickPress(pointer: Pointer): boolean {
+        return pointer.leftButtonDown() && pointer.event instanceof MouseEvent && pointer.event.detail >= 2;
+    }
+
+    /**
+     * Throws a first click once ARMED_CLICK_WAIT_MS passed without a second one. Another single click throws the one
+     * still waiting at once: it was no double click.
+     */
+    private deferClick(run: () => void): void {
+        this.flushPendingClick();
+        const kind = get(armedCatastropheStore);
+        if (kind === undefined) return;
+        const guarded = (): void => {
+            this.pendingClick = undefined;
+            if (get(armedCatastropheStore) === kind && this.gameScene.userInputManager.isControlsEnabled) run();
+        };
+        this.pendingClick = {
+            kind,
+            run: guarded,
+            timer: this.gameScene.time.addEvent({ delay: ARMED_CLICK_WAIT_MS, callback: guarded }),
+        };
+    }
+
+    private flushPendingClick(): void {
+        const pending = this.pendingClick;
+        if (!pending) return;
+        pending.timer.remove();
+        pending.run();
+    }
+
+    private cancelPendingClick(): void {
+        this.pendingClick?.timer.remove();
+        this.pendingClick = undefined;
+    }
+
+    /**
+     * The press of an armed held catastrophe, with a mouse: nothing is thrown yet, it may be the first click of a
+     * double click. It is held as soon as the pointer moves, or once it stayed pressed ARMED_CLICK_WAIT_MS.
+     */
+    private awaitHold(pointer: Pointer): void {
+        this.cancelPendingPress();
+        const kind = this.heldCatastrophe();
+        if (kind === undefined || !this.gameScene.userInputManager.isControlsEnabled) return;
+        this.pendingPress = {
+            kind,
+            pointer,
+            id: pointer.id,
+            x: pointer.x,
+            y: pointer.y,
+            point: this.mapPointUnder(pointer),
+            timer: this.gameScene.time.addEvent({
+                delay: ARMED_CLICK_WAIT_MS,
+                callback: () => this.holdPendingPress(),
+            }),
+        };
+    }
+
+    private holdPendingPress(): void {
+        const press = this.pendingPress;
+        if (!press) return;
+        this.cancelPendingPress();
+        if (press.pointer.isDown) this.startDownpour(press.pointer);
+    }
+
+    /**
+     * The press was released before it was held: a click, thrown where it was pressed as the short hold it was, held
+     * as long as the click was (a ball is seen there that long, then let go and the server told so).
+     */
+    private clickPendingPress(pressedMs: number): void {
+        const press = this.pendingPress;
+        if (!press) return;
+        this.cancelPendingPress();
+        this.deferClick(() => {
+            this.stopDownpour();
+            this.heldKind = press.kind;
+            this.reportHeld(press.kind, press.point);
+            this.downpourReports = this.gameScene.time.addEvent({
+                delay: Math.min(Math.max(pressedMs, 0), ARMED_CLICK_WAIT_MS),
+                callback: () => this.stopDownpour(),
+            });
+        });
+    }
+
+    private cancelPendingPress(): void {
+        this.pendingPress?.timer.remove();
+        this.pendingPress = undefined;
     }
 
     /**
      * The catastrophe a held click throws, when one of those is armed: the downpour, the fire, the drain, the ball,
      * the cold snap.
      */
-    private heldCatastrophe(): "downpour" | "fire" | "drain" | "ball" | "cold" | undefined {
+    private heldCatastrophe(): HeldCatastrophe | undefined {
         const armed = get(armedCatastropheStore);
         return armed === "downpour" || armed === "fire" || armed === "drain" || armed === "ball" || armed === "cold"
             ? armed
@@ -402,66 +541,14 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         this.stopDownpour();
         if (!this.gameScene.userInputManager.isControlsEnabled) return;
         const kind = this.heldCatastrophe();
+        if (kind === undefined) return;
         this.heldKind = kind;
         const report = (): void => {
             if (get(armedCatastropheStore) !== kind || !pointer.isDown) {
                 this.stopDownpour();
                 return;
             }
-            const { x, y } = this.mapPointUnder(pointer);
-            if (kind === "fire") {
-                // A patch of fire at each report: the fire is painted along the way of the pointer.
-                this.gameScene.connection?.emitLaunchCatastrophe(
-                    CatastropheKind.CATASTROPHE_FIRE,
-                    x,
-                    y,
-                    get(fireRadiusTilesStore),
-                );
-                return;
-            }
-            if (kind === "drain") {
-                this.gameScene.connection?.emitLaunchCatastrophe(
-                    CatastropheKind.CATASTROPHE_DRAIN,
-                    x,
-                    y,
-                    get(drainRadiusTilesStore),
-                );
-                return;
-            }
-            if (kind === "ball") {
-                // The ball is under the pointer at once, here; the server is told when it moved, and now and then
-                // while it is held still.
-                const tiles = get(ballDiameterTilesStore);
-                heldBallStore.set({ x, y, radiusPx: ballRadiusPx(tiles) });
-                const told = this.ballTold;
-                if (told && told.x === x && told.y === y && told.tiles === tiles) {
-                    told.ticksAgo++;
-                    if (told.ticksAgo * BALL_REPORT_MS < BALL_STILL_REPORT_MS) return;
-                }
-                this.ballTold = { x, y, tiles, ticksAgo: 0 };
-                this.gameScene.connection?.emitLaunchCatastrophe(CatastropheKind.CATASTROPHE_BALL, x, y, tiles);
-                return;
-            }
-            if (kind === "cold") {
-                // The server lays the cold air there, and alone freezes what lies under it.
-                this.gameScene.connection?.emitLaunchCatastrophe(
-                    CatastropheKind.CATASTROPHE_COLD,
-                    x,
-                    y,
-                    get(coldRadiusTilesStore),
-                    false,
-                    false,
-                    get(coldCelsiusStore),
-                );
-                return;
-            }
-            this.gameScene.connection?.emitLaunchCatastrophe(
-                CatastropheKind.CATASTROPHE_DOWNPOUR,
-                x,
-                y,
-                get(downpourRadiusTilesStore),
-                get(downpourWholeMapStore),
-            );
+            this.reportHeld(kind, this.mapPointUnder(pointer));
         };
         if (kind === "ball") this.ballPointer = pointer;
         report();
@@ -471,6 +558,63 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             loop: true,
             callback: report,
         });
+    }
+
+    /** Throws the held catastrophe once at a point of the map: one report of its hold. */
+    private reportHeld(kind: HeldCatastrophe, { x, y }: { x: number; y: number }): void {
+        if (kind === "fire") {
+            // A patch of fire at each report: the fire is painted along the way of the pointer.
+            this.gameScene.connection?.emitLaunchCatastrophe(
+                CatastropheKind.CATASTROPHE_FIRE,
+                x,
+                y,
+                get(fireRadiusTilesStore),
+            );
+            return;
+        }
+        if (kind === "drain") {
+            this.gameScene.connection?.emitLaunchCatastrophe(
+                CatastropheKind.CATASTROPHE_DRAIN,
+                x,
+                y,
+                get(drainRadiusTilesStore),
+            );
+            return;
+        }
+        if (kind === "ball") {
+            // The ball is under the pointer at once, here; the server is told when it moved, and now and then
+            // while it is held still.
+            const tiles = get(ballDiameterTilesStore);
+            heldBallStore.set({ x, y, radiusPx: ballRadiusPx(tiles) });
+            const told = this.ballTold;
+            if (told && told.x === x && told.y === y && told.tiles === tiles) {
+                told.ticksAgo++;
+                if (told.ticksAgo * BALL_REPORT_MS < BALL_STILL_REPORT_MS) return;
+            }
+            this.ballTold = { x, y, tiles, ticksAgo: 0 };
+            this.gameScene.connection?.emitLaunchCatastrophe(CatastropheKind.CATASTROPHE_BALL, x, y, tiles);
+            return;
+        }
+        if (kind === "cold") {
+            // The server lays the cold air there, and alone freezes what lies under it.
+            this.gameScene.connection?.emitLaunchCatastrophe(
+                CatastropheKind.CATASTROPHE_COLD,
+                x,
+                y,
+                get(coldRadiusTilesStore),
+                false,
+                false,
+                get(coldCelsiusStore),
+            );
+            return;
+        }
+        this.gameScene.connection?.emitLaunchCatastrophe(
+            CatastropheKind.CATASTROPHE_DOWNPOUR,
+            x,
+            y,
+            get(downpourRadiusTilesStore),
+            get(downpourWholeMapStore),
+        );
     }
 
     /** The point of the map under a pointer. One past the edge is on the edge: a cloud never leaves the map. */
@@ -761,10 +905,26 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 return;
             }
         }
+        if (get(armedCatastropheStore) !== undefined && !pointer.wasTouch && pointer.leftButtonDown()) {
+            if (this.isDoubleClickPress(pointer) && this.awaitsDoubleClick(pointer)) {
+                // The second press of a double click: the player walks there at its release (handlePointerUpEvent),
+                // as if the catastrophe had been unselected in its panel, and its first click throws nothing.
+                this.cancelPendingClick();
+                this.cancelPendingPress();
+                disarmCatastrophe();
+            } else {
+                // A new single click: the one still waiting was no double click.
+                this.flushPendingClick();
+            }
+        }
         // An armed downpour or fire takes the press: it rains, or burns, while it is held, and the drag moves the
-        // cloud or paints the fire, not the map.
+        // cloud or paints the fire, not the map. With a mouse, it waits to be held (awaitHold).
         if (this.heldCatastrophe() !== undefined) {
-            if (pointer.wasTouch || pointer.leftButtonDown()) this.startDownpour(pointer);
+            if (pointer.wasTouch) this.startDownpour(pointer);
+            else if (pointer.leftButtonDown()) {
+                if (this.awaitsDoubleClick(pointer)) this.awaitHold(pointer);
+                else this.startDownpour(pointer);
+            }
             return;
         }
         if (!pointer.leftButtonDown() || !this.canDragMap()) {
@@ -784,6 +944,17 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         if (this.ballPointer) {
             const { x, y } = this.mapPointUnder(this.ballPointer);
             heldBallStore.set({ x, y, radiusPx: ballRadiusPx(get(ballDiameterTilesStore)) });
+        }
+        // A press of a held catastrophe that moves is held: it is no drag of the map either.
+        const press = this.pendingPress;
+        if (press) {
+            if (
+                pointer.id === press.id &&
+                Math.hypot(pointer.x - press.x, pointer.y - press.y) >= mapDragThreshold(pointer)
+            ) {
+                this.holdPendingPress();
+            }
+            return;
         }
         // A held downpour follows the pointer by itself (see startDownpour): the move is no drag of the map.
         if (this.downpourReports) return;
@@ -813,6 +984,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     }
 
     public handlePointerCancelEvent(): void {
+        // A press cancelled before its release is no click.
+        this.cancelPendingPress();
         this.stopDownpour();
         this.pointerCapture.release();
         this.gameScene.getCameraManager().stopManualPanInertia();
