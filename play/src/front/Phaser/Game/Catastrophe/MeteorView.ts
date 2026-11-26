@@ -62,8 +62,12 @@ interface Meteor {
     burning: boolean;
     /** How many sparks a fireball throws at impact. */
     sparks: number;
-    /** When the meteor was launched, in ms of the game. */
+    /**
+     * When the meteor was launched, in ms of the game, and how long it falls: METEOR_FALL_MS, longer while a horde of
+     * zombies goes on (the server lets it land at a step every browser can still be told: zombieImpactFall).
+     */
     launchedAt: number;
+    fallMs: number;
     /** Whether the meteor falls into water: read when it is announced, before the impact empties its crater. */
     wet: boolean;
     /** Whether its impact flashes the screen: decided once, when it lands (see `flashAllowed`). */
@@ -109,15 +113,19 @@ export class MeteorView {
         const rings: WaterRing[] = [];
         for (const meteor of this.meteors) {
             if (!meteor.wet || meteor.burning) continue;
-            const ring = waterRingOf(meteor, now - meteor.launchedAt - METEOR_FALL_MS);
+            const ring = waterRingOf(meteor, now - meteor.launchedAt - meteor.fallMs);
             if (ring) rings.push(ring);
         }
         return rings;
     }
 
-    /** `receivedAt` in ms of the game: the impact is `message.impactInMs` later. */
+    /**
+     * `receivedAt` in ms of the game: the impact is `message.impactInMs` later. It falls that long when that is longer
+     * than METEOR_FALL_MS (into a horde of zombies), so that it is seen falling from the moment it is launched.
+     */
     public add(message: CatastropheMessage, receivedAt: number): void {
         const shape = meteorShape(message.radiusTiles);
+        const fallMs = Math.max(METEOR_FALL_MS, message.impactInMs);
         this.meteors.push({
             x: message.x,
             y: message.y,
@@ -126,7 +134,8 @@ export class MeteorView {
             scale: shape.radiusTiles / METEOR_DEFAULT_TILES,
             burning: message.kind === CatastropheKind.CATASTROPHE_FIREBALL,
             sparks: Math.min(FIREBALL_MAX_EMBERS, shape.radiusTiles * FIREBALL_EMBERS_PER_TILE),
-            launchedAt: receivedAt + message.impactInMs - METEOR_FALL_MS,
+            launchedAt: receivedAt + message.impactInMs - fallMs,
+            fallMs,
             wet: this.isWet(message.x, message.y),
             flashes: undefined,
         });
@@ -153,9 +162,9 @@ export class MeteorView {
         for (let index = this.meteors.length - 1; index >= 0; index--) {
             const meteor = this.meteors[index];
             const sinceLaunch = now - meteor.launchedAt;
-            const frame = meteorFrame(sinceLaunch, METEOR_FALL_MS, reduced);
+            const frame = meteorFrame(sinceLaunch, meteor.fallMs, reduced);
             // The circles of the wave run on the water long after the burst: none on dry ground, none in reduced motion.
-            const sinceImpact = sinceLaunch - METEOR_FALL_MS;
+            const sinceImpact = sinceLaunch - meteor.fallMs;
             const circles =
                 meteor.wet && !meteor.burning && !reduced && !this.realWaves()
                     ? waveCircles(sinceImpact, meteor.shape)

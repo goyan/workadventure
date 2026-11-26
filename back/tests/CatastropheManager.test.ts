@@ -1415,6 +1415,116 @@ describe("CatastropheManager, a horde of zombies", () => {
         expect(tail).toEqual(decodeZombieLog(whole).slice(from, from + tail.length));
     });
 
+    it("lands a comet in the horde: in its log at the step it lands, falling until then, told at once", () => {
+        const { manager, sent, strike } = zombieHarness();
+        manager.startZombies(ask);
+        vi.advanceTimersByTime(2_000);
+        // The log was read at 2 s: complete to 2.5 s after it, step 44.
+        expect(manager.zombies()?.safeStep).toBe(44);
+        const before = sent.length;
+        expect(manager.launch(METEOR, 320, 160.4, 4)).toBe(true);
+        expect(sent).toHaveLength(before + 2);
+        // The horde told this impact alone, at the step 2.5 s from now, after the step its log is complete to.
+        const zombies = sent[before].zombies;
+        expect(zombies?.logFrom).toBeGreaterThan(0);
+        expect(decodeZombieLog(zombies?.avatars ?? "")).toEqual([
+            { applyStep: 45, changes: [], impacts: [{ x: 320, y: 160, radiusTiles: 4, burning: false }] },
+        ]);
+        expect(zombies?.safeStep).toBe(44);
+        // The meteor falls until that step comes, its water with it.
+        expect(sent[before + 1]).toMatchObject({ kind: METEOR, x: 320, y: 160.4, impactInMs: 2500, radiusTiles: 4 });
+        vi.advanceTimersByTime(2_499);
+        expect(strike).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(1);
+        expect(strike).toHaveBeenCalledWith(320, 160.4, 4);
+        // In the whole log a player who joins is sent.
+        const whole = decodeZombieLog(manager.wholeZombies("p1")?.zombies?.avatars ?? "");
+        expect(whole.filter((entry) => entry.impacts)).toEqual([
+            { applyStep: 45, changes: [], impacts: [{ x: 320, y: 160, radiusTiles: 4, burning: false }] },
+        ]);
+    });
+
+    it("lands a burning meteor in the horde too, and falls some 2.5 s whenever it is launched", () => {
+        const { manager, sent } = zombieHarness();
+        const burn = vi.fn<(x: number, y: number, radiusTiles: number, id: number) => void>();
+        manager.burnWith(burn);
+        manager.startZombies(ask);
+        for (const wait of [1_250, 730, 20, 999]) {
+            vi.advanceTimersByTime(wait);
+            const before = sent.length;
+            expect(manager.launch(FIREBALL, 100, 400, 7)).toBe(true);
+            const fall = sent[before + 1].impactInMs;
+            expect(fall).toBeGreaterThanOrEqual(2_500);
+            expect(fall).toBeLessThan(2_600);
+            const [entry] = decodeZombieLog(sent[before].zombies?.avatars ?? "");
+            expect(entry.impacts).toEqual([{ x: 100, y: 400, radiusTiles: 7, burning: true }]);
+            expect(entry.applyStep).toBe((Date.now() + fall) / 100);
+            expect(entry.applyStep).toBeGreaterThan(manager.zombies()?.safeStep ?? Infinity);
+        }
+        vi.advanceTimersByTime(2_600);
+        expect(burn).toHaveBeenCalledTimes(4);
+    });
+
+    it("lets a meteor fall as before without a horde, or when the horde is over before it lands", () => {
+        const { manager, sent, strike } = zombieHarness();
+        manager.launch(METEOR, 320, 160, 4);
+        expect(sent[0].impactInMs).toBe(METEOR_FALL_MS);
+        manager.startZombies({ ...ask, minutes: 1 });
+        vi.advanceTimersByTime(58_500);
+        const before = sent.length;
+        manager.launch(METEOR, 320, 160, 4);
+        expect(sent).toHaveLength(before + 1);
+        expect(sent[before]).toMatchObject({ kind: METEOR, impactInMs: METEOR_FALL_MS });
+        expect(decodeZombieLog(manager.zombies()?.avatars ?? "").some((entry) => entry.impacts)).toBe(false);
+        vi.advanceTimersByTime(METEOR_FALL_MS);
+        expect(strike).toHaveBeenCalledTimes(2);
+    });
+
+    it("lets a meteor fall as usual, killing no zombie, while the log is promised far ahead after the map slowed down", () => {
+        const { manager, sent, speed } = zombieHarness();
+        manager.startZombies(ask);
+        speed(10);
+        vi.advanceTimersByTime(3_000);
+        speed(1);
+        vi.advanceTimersByTime(ZOMBIE_TELL_MS);
+        const before = sent.length;
+        manager.launch(METEOR, 320, 160, 4);
+        expect(sent).toHaveLength(before + 1);
+        expect(sent[before]).toMatchObject({ kind: METEOR, impactInMs: METEOR_FALL_MS });
+        // Some 25 s later at the speed of reality, the log is promised close ahead again: into the horde.
+        vi.advanceTimersByTime(25_000);
+        const again = sent.length;
+        manager.launch(METEOR, 320, 160, 4);
+        expect(sent).toHaveLength(again + 2);
+        expect(sent[again + 1].impactInMs).toBeLessThanOrEqual(3_500);
+        expect(decodeZombieLog(manager.zombies()?.avatars ?? "").filter((entry) => entry.impacts)).toHaveLength(1);
+    });
+
+    it("keeps its log within bounds over a horde of 15 minutes with comets launched as fast as a room may", () => {
+        const { manager, sent } = zombieHarness();
+        manager.startZombies({ ...ask, minutes: 15 });
+        let bytes = 0;
+        const counted = sent.length;
+        for (let tick = 0; tick < (15 * 60_000) / 100 - 1; tick++) {
+            vi.advanceTimersByTime(100);
+            while (manager.launch(METEOR, 320, 160, 8));
+        }
+        for (const message of sent.slice(counted)) {
+            bytes += (message.zombies?.avatars.length ?? 0) + (message.zombies?.terrain.length ?? 0);
+        }
+        const entries = decodeZombieLog(manager.zombies()?.avatars ?? "");
+        const impacts = entries.filter((entry) => entry.impacts).length;
+        // Twenty falling at once for some 2.5 s each: 8 a second at most, 7 200 over the longest horde.
+        expect(impacts).toBeLessThanOrEqual(7_200);
+        expect(impacts).toBeGreaterThan(7_000);
+        const whole = manager.zombies()?.avatars.length ?? 0;
+        expect(whole).toBeLessThan(120_000);
+        const alone = sent.map((message) => message.zombies).filter((zombies) => (zombies?.logFrom ?? 0) > 0);
+        expect(Math.min(...alone.map((zombies) => zombies?.avatars.length ?? 0))).toBeLessThan(20);
+        // Some 105 KB of log at the end, and 3 KB a second on average to a browser, its ground every 30 s included.
+        expect(bytes / (15 * 60)).toBeLessThan(5_000);
+    }, 30_000);
+
     it("sends no horde before the size of the map is read", () => {
         const { manager, sent } = harness();
         expect(manager.startZombies(ask)).toBe(false);
