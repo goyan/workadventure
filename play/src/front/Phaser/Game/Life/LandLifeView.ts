@@ -26,8 +26,17 @@ const TURN_PX = 6;
  * a diagonal does not swap between a side and the front at each step.
  */
 const AXIS_MARGIN = 1.5;
-/** An antelope bows to the grass once it stood that long. */
-const GRAZE_AFTER_MS = 800;
+/**
+ * An antelope bows to the grass once it stood that long: longer than a second between two messages and the hold of
+ * its walk, so that with reduced motion, where it jumps from a place to the next at each message, it does not bow
+ * between two of them.
+ */
+const GRAZE_AFTER_MS = 1300;
+/**
+ * The life moves an animal that walks at each frame, however slow it goes and however many frames a second, and
+ * leaves one that stands exactly where it is: any move counts.
+ */
+const STIRRED_PX = 0.001;
 /** The state the server tells for an animal that drinks. */
 const DRINKING = 3;
 /** A sheet of the catalogue has four rows of frames. */
@@ -199,7 +208,7 @@ export class LandLifeView {
             }
             // Whether it walks is read on its place in the life, not on the whole pixels of the sprite: a slow
             // animal moves less than a pixel a frame, and would stop every other frame.
-            const stirred = Math.hypot(animal.x - entry.atX, animal.y - entry.atY) >= STILL_PX;
+            const stirred = Math.hypot(animal.x - entry.atX, animal.y - entry.atY) >= STIRRED_PX;
             if (stirred && now - entry.movedAt >= WALK_HOLD_MS) {
                 // It sets out: it turns from where it stood.
                 entry.turnX = entry.atX;

@@ -451,12 +451,48 @@ describe("an animal of a herd", () => {
             bowed ||= sprites[0].angle !== 0 || sprites[0].scaleY !== 1;
         }
         expect(bowed).toBe(false);
-        // It stopped at 1016, seen at 1024: head up for a while, then down.
-        view.update(1024 + 500);
+        // It stopped at 1016, seen at 1024: head up for over a second (a message may come late), then down.
+        view.update(1024 + 1200);
         expect(sprites[0].scaleY).toBe(1);
         expect(sprites[0].angle).toBe(0);
-        view.update(1024 + 1000);
+        view.update(1024 + 1400);
         expect(sprites[0].angle !== 0 || sprites[0].scaleY !== 1).toBe(true);
+    });
+
+    it("with reduced motion, does not bow to the grass between two messages while it walks", () => {
+        const { scene, sprites } = createScene({ antelope: 5 });
+        const life = new AquaticLife(isLandKind);
+        const view = new LandLifeView(
+            scene as unknown as SceneOfView,
+            life,
+            () => true,
+            () => true,
+            () => "antelope",
+            undefined,
+            () => true,
+        );
+        let bowed = false;
+        for (let now = 0, second = 0; now < 5000; now += 16) {
+            // A message a second, each one 20 pixels further: it jumps there at once.
+            if (now >= second * 1000) life.receive([{ id: 1, kind: 4, x: 100 + 20 * second++, y: 100 }], now);
+            view.update(now);
+            if (now >= 1000) bowed ||= sprites[0].angle !== 0 || sprites[0].scaleY !== 1;
+        }
+        expect(bowed).toBe(false);
+    });
+
+    it("walks however slow it goes and however many frames a second are drawn", () => {
+        const { view, life } = herdView();
+        life.receive([{ id: 1, kind: 4, x: 100, y: 100 }], 0);
+        view.update(0);
+        // Three pixels in a second, drawn at 120 frames a second: 0.025 pixel a frame.
+        life.receive([{ id: 1, kind: 4, x: 103, y: 100 }], 1);
+        const moving = new Set<boolean>();
+        for (let now = 9; now < 1000; now += 1000 / 120) {
+            view.update(now);
+            view.forEachShown((_id, _sprite, animal) => moving.add(animal.moving));
+        }
+        expect([...moving]).toEqual([true]);
     });
 
     it("drawn here, rises a pixel every other step while it walks, and keeps its side going down", () => {
