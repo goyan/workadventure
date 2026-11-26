@@ -360,4 +360,28 @@ describe("ZombieView", () => {
         expect(visible(waiting.blitters)).toHaveLength(1);
         expect(visible(waiting.blitters)).not.toEqual(visible(reference.blitters));
     });
+
+    it("tells the doors the zombies about to go through them, as drawn, and none while they are not drawn", () => {
+        const dry = new Uint8Array(WIDTH_CELLS * HEIGHT_CELLS);
+        const { scene } = createScene();
+        const view = new ZombieView(scene);
+        expect(view.doorOpenersIn({ left: 0, top: 0, right: 10_000, bottom: 10_000 })).toEqual([]);
+        view.setHorde(hordeOver(dry), START);
+        for (let image = 1; image <= 40; image++) view.update(START + image * 100, START + image * 100, true, false);
+        // The single zombie, running east: told where it will be in a quarter of a second, facing sideways.
+        const [zombie] = view.doorOpenersIn({ left: 0, top: 0, right: 10_000, bottom: 10_000 });
+        expect(zombie.facingSideways).toBe(true);
+        expect(zombie.silent).toBeUndefined();
+        expect(zombie.uuid).toBeUndefined();
+        // A rectangle just ahead of it: it is in it; one just behind it: it is not.
+        expect(
+            view.doorOpenersIn({ left: zombie.x - 2, top: zombie.y - 2, right: zombie.x + 2, bottom: zombie.y + 2 }),
+        ).toHaveLength(1);
+        expect(
+            view.doorOpenersIn({ left: zombie.x - 60, top: zombie.y - 2, right: zombie.x - 40, bottom: zombie.y + 2 }),
+        ).toHaveLength(0);
+        // In Basique (not drawn), it opens nothing.
+        view.update(START + 4100, START + 4100, false, false);
+        expect(view.doorOpenersIn({ left: 0, top: 0, right: 10_000, bottom: 10_000 })).toEqual([]);
+    });
 });

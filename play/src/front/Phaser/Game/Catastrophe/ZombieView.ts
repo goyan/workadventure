@@ -10,9 +10,12 @@ import {
     ZOMBIE_THROWN,
     ZOMBIE_WALKING,
     ZombieCrowd,
+    TERRAIN_CELL,
+    TILE_PX,
 } from "@workadventure/map-editor";
 import type { ZombieHorde } from "@workadventure/map-editor";
 import { floorDepth } from "../MapEditor/MapLayer/FloorDepth";
+import type { DoorCharacter, DoorCrowd, DoorRect } from "../MapEditor/MapLayer/DoorAnimator";
 import { SWIM_DEPTH_PX } from "../Terrain/Pixel/TerrainUnits";
 import {
     ZOMBIE_DEAD,
@@ -67,6 +70,13 @@ const CATCH_UP_MS = 8;
 const SHOWN_BEHIND_STEPS = 3;
 /** Stopped or over, the zombies left fall to dust over this long (ms). */
 const DUST_MS = 1500;
+/**
+ * A zombie opens a door it will be in this soon (s), where it runs: the door opens as it comes (a run of 3 to 5 m/s
+ * covers a tile in a quarter of a second, the door takes about as long to open); further than it can run by then
+ * (px, at its fastest), none is looked at.
+ */
+const DOOR_LOOKAHEAD_S = 0.25;
+const DOOR_LOOKAHEAD_PX = 48;
 /** The batches of a band are told apart by the altitude they are drawn at: this many bands an altitude, at most. */
 const BANDS_AN_ALTITUDE = 65_536;
 /** A zombie a dart met is drawn hurt this many steps, then falls dead over that many, and fades over the last ones. */
@@ -97,7 +107,7 @@ interface ZombieBatch {
  * drawn between their last two steps. Images of one sheet drawn once, batched by bands of the map (Phaser Blitter),
  * a pool of them kept: nothing is made or thrown away at each image. Nothing at all while no horde crosses the map.
  */
-export class ZombieView {
+export class ZombieView implements DoorCrowd {
     private crowd: ZombieCrowd | undefined;
     /** What is drawn of each zombie: where it faces, how far into its shamble, how dark. */
     private facing = new Uint8Array(0);
@@ -129,6 +139,13 @@ export class ZombieView {
     /** What draw sorts with, kept from an image to the next. */
     private counts = new Int32Array(0);
     private next = new Int32Array(0);
+    /** Whether the zombies walking were drawn at the last image, and between which steps: who opens the doors. */
+    private walkingDrawn = false;
+    private drawnBetween = 1;
+    /** The zombies walking at the step `doorStep` (none a dart felled), by tile: counted, then laid in order. */
+    private doorStep = -1;
+    private doorStart = new Int32Array(0);
+    private doorList = new Int32Array(0);
 
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
@@ -232,6 +249,63 @@ export class ZombieView {
             if (dx * dx + dy * dy <= range * range) return true;
         }
         return false;
+    }
+
+    /**
+     * The zombies that will be in a rectangle of the map in a moment (DOOR_LOOKAHEAD_S), where they run, as they were
+     * drawn at the last image: those walking, not felled by a dart. None while they are not drawn (Basique, falling to
+     * dust, catching up): every browser opens the same doors from the same crowd, the server knows nothing of it.
+     */
+    public doorOpenersIn(rect: DoorRect): DoorCharacter[] {
+        const crowd = this.crowd;
+        if (!crowd || !this.walkingDrawn) return [];
+        const tilesWide = crowd.tilesAcross;
+        const tilesHigh = Math.ceil((crowd.height * TERRAIN_CELL) / TILE_PX);
+        if (this.doorStep !== crowd.steps) this.indexForDoors(crowd, tilesWide, tilesHigh);
+        const { x, y, lastX, lastY, vx, vy } = crowd;
+        const between = this.drawnBetween;
+        const openers: DoorCharacter[] = [];
+        const fromX = Math.max(0, Math.floor((rect.left - DOOR_LOOKAHEAD_PX) / TILE_PX));
+        const toX = Math.min(tilesWide - 1, Math.floor((rect.right + DOOR_LOOKAHEAD_PX) / TILE_PX));
+        const fromY = Math.max(0, Math.floor((rect.top - DOOR_LOOKAHEAD_PX) / TILE_PX));
+        const toY = Math.min(tilesHigh - 1, Math.floor((rect.bottom + DOOR_LOOKAHEAD_PX) / TILE_PX));
+        for (let tileY = fromY; tileY <= toY; tileY++) {
+            for (let tileX = fromX; tileX <= toX; tileX++) {
+                const tile = tileY * tilesWide + tileX;
+                for (let at = this.doorStart[tile]; at < this.doorStart[tile + 1]; at++) {
+                    const zombie = this.doorList[at];
+                    const px = lastX[zombie] + (x[zombie] - lastX[zombie]) * between + vx[zombie] * DOOR_LOOKAHEAD_S;
+                    const py = lastY[zombie] + (y[zombie] - lastY[zombie]) * between + vy[zombie] * DOOR_LOOKAHEAD_S;
+                    if (px < rect.left || px > rect.right || py < rect.top || py > rect.bottom) continue;
+                    openers.push({ x: px, y: py, facingSideways: Math.abs(vx[zombie]) > Math.abs(vy[zombie]) });
+                }
+            }
+        }
+        return openers;
+    }
+
+    /** The zombies walking now (none a dart felled), by the tile each is in: what doorOpenersIn looks through. */
+    private indexForDoors(crowd: ZombieCrowd, tilesWide: number, tilesHigh: number): void {
+        this.doorStep = crowd.steps;
+        const tiles = tilesWide * tilesHigh;
+        if (this.doorStart.length < tiles + 1) this.doorStart = new Int32Array(tiles + 1);
+        if (this.doorList.length < crowd.count) this.doorList = new Int32Array(crowd.count);
+        const start = this.doorStart;
+        start.fill(0, 0, tiles + 1);
+        const fallen = this.fallenOf(crowd);
+        const tileOf = (zombie: number): number => {
+            const tileX = Math.min(tilesWide - 1, Math.max(0, Math.floor(crowd.x[zombie] / TILE_PX)));
+            const tileY = Math.min(tilesHigh - 1, Math.max(0, Math.floor(crowd.y[zombie] / TILE_PX)));
+            return tileY * tilesWide + tileX;
+        };
+        const opens = (zombie: number): boolean => crowd.state[zombie] === ZOMBIE_WALKING && !fallen?.has(zombie);
+        for (let zombie = 0; zombie < crowd.count; zombie++) if (opens(zombie)) start[tileOf(zombie) + 1]++;
+        for (let tile = 0; tile < tiles; tile++) start[tile + 1] += start[tile];
+        for (let zombie = 0; zombie < crowd.count; zombie++) {
+            if (opens(zombie)) this.doorList[start[tileOf(zombie)]++] = zombie;
+        }
+        for (let tile = tiles; tile > 0; tile--) start[tile] = start[tile - 1];
+        start[0] = 0;
     }
 
     /** Where the body of the horde is (the mean of those walking), map pixels; undefined while none walks. */
@@ -339,6 +413,7 @@ export class ZombieView {
      */
     public update(epoch: number | undefined, now: number, shown: boolean, still: boolean): void {
         const crowd = this.crowd;
+        this.walkingDrawn = false;
         if (!crowd) return;
         if (this.dust) {
             const left = (this.dust.until - now) / DUST_MS;
@@ -385,7 +460,9 @@ export class ZombieView {
         }
         this.shown = true;
         if (!this.scene.textures.exists(TEXTURE)) return;
-        this.draw(crowd, crowd.between(epoch), 1, still);
+        this.walkingDrawn = true;
+        this.drawnBetween = crowd.between(epoch);
+        this.draw(crowd, this.drawnBetween, 1, still);
         this.scene.markDirty();
     }
 

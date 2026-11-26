@@ -52,11 +52,20 @@ export interface DoorCharacter {
     uuid?: string;
 }
 
-interface DoorRect {
+export interface DoorRect {
     left: number;
     top: number;
     right: number;
     bottom: number;
+}
+
+/**
+ * A crowd too large to be told character by character (a horde of zombies, ZombieView): those of it about to go through
+ * a rectangle of the map, asked for door by door. They open the doors as the players do, heard as theirs are, but never
+ * a locked one: they carry no identity.
+ */
+export interface DoorCrowd {
+    doorOpenersIn(rect: DoorRect): readonly DoorCharacter[];
 }
 
 /**
@@ -160,12 +169,14 @@ export class DoorAnimator {
      * @param characters Every character that opens doors: the players, local and remote, and their companions.
      * @param listener The local player, one of `characters`: sets how loud the doors are.
      * @param locks The locked areas: their doors only open for the characters allowed through. Undefined: no lock.
+     * @param crowd A horde of zombies: its zombies open the doors none of `characters` opens.
      */
     public update(
         time: number,
         characters: readonly DoorCharacter[],
         listener: DoorCharacter,
         locks?: DoorLocks,
+        crowd?: DoorCrowd,
     ): void {
         if (time >= this.nextScanAt) {
             this.nextScanAt = time + RESCAN_PERIOD_MS;
@@ -183,7 +194,7 @@ export class DoorAnimator {
         for (const state of this.pieces.values()) {
             const key = this.doorKey(state);
             if (!nearest.has(key)) {
-                nearest.set(key, this.nearestCharacter(state, characters, time, locks));
+                nearest.set(key, this.nearestCharacter(state, characters, time, locks, crowd));
             }
             const door = this.getDoorState(key, time);
             const pusher = nearest.get(key);
@@ -415,12 +426,16 @@ export class DoorAnimator {
         return false;
     }
 
-    /** The character near the door that is the closest to its middle, if any. */
+    /**
+     * The character near the door that is the closest to its middle, if any; else the closest of the crowd near it,
+     * unless the door is locked.
+     */
     private nearestCharacter(
         state: DoorPieceState,
         characters: readonly DoorCharacter[],
         time: number,
         locks: DoorLocks | undefined,
+        crowd?: DoorCrowd,
     ): DoorCharacter | undefined {
         const lockedZones = locks?.zones.filter((zone) => isDoorInZone(state.rect, state.piece.orientation, zone));
         const centerX = (state.rect.left + state.rect.right) / 2;
@@ -437,6 +452,24 @@ export class DoorAnimator {
             ) {
                 continue;
             }
+            const distance = Math.hypot(character.x - centerX, character.y - centerY);
+            if (distance < bestDistance) {
+                best = character;
+                bestDistance = distance;
+            }
+        }
+        if (best || !crowd || (lockedZones && lockedZones.length > 0)) {
+            return best;
+        }
+        const passage = this.passageRect(state);
+        // As far as a character walking along a vertical door may be from it and still open it (isNear).
+        const margin = state.piece.orientation === "v" ? MAP_LAYER_TILE_SIZE / 4 : 0;
+        for (const character of crowd.doorOpenersIn({
+            ...passage,
+            left: passage.left - margin,
+            right: passage.right + margin,
+        })) {
+            if (!this.isNear(passage, state.piece.orientation, character)) continue;
             const distance = Math.hypot(character.x - centerX, character.y - centerY);
             if (distance < bestDistance) {
                 best = character;

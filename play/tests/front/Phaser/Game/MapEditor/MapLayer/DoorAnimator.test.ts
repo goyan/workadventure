@@ -8,7 +8,11 @@ import {
     wallRise,
 } from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import { DOOR_SOUND_KEYS, DoorAnimator } from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/DoorAnimator";
-import type { DoorCharacter } from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/DoorAnimator";
+import type {
+    DoorCharacter,
+    DoorCrowd,
+    DoorRect,
+} from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/DoorAnimator";
 
 vi.mock("../../../../../../src/front/Phaser/Helpers/TexturesHelper", () => ({
     TexturesHelper: { loadEntityImage: () => Promise.resolve() },
@@ -505,5 +509,94 @@ describe("open vertical passages", () => {
         expect(animator.isInOpenVerticalPassage(128, 145 - rise)).toBe(false);
         expect(animator.isInOpenVerticalPassage(128, 212 - rise)).toBe(false);
         expect(animator.isInOpenVerticalPassage(128, 240 - rise)).toBe(false);
+    });
+});
+
+// A horde of zombies (ZombieView): too many to be told as characters, its zombies are asked for door by door.
+describe("DoorAnimator and a crowd", () => {
+    /** A crowd of one zombie walking through `from` to `to` in 4 s (none when `at` gives undefined). */
+    function crowdOf(at: (time: number) => DoorCharacter | undefined) {
+        let now = 0;
+        const asked: DoorRect[] = [];
+        const crowd: DoorCrowd = {
+            doorOpenersIn: (rect) => {
+                asked.push(rect);
+                const zombie = at(now);
+                return zombie &&
+                    zombie.x >= rect.left &&
+                    zombie.x <= rect.right &&
+                    zombie.y >= rect.top &&
+                    zombie.y <= rect.bottom
+                    ? [zombie]
+                    : [];
+            },
+        };
+        return { crowd, asked, setNow: (time: number) => (now = time) };
+    }
+    const walking =
+        (from: Point, to: Point, facingSideways = false) =>
+        (time: number): DoorCharacter => ({
+            x: from.x + ((to.x - from.x) * Math.min(time, 4_000)) / 4_000,
+            y: from.y + ((to.y - from.y) * Math.min(time, 4_000)) / 4_000,
+            facingSideways,
+        });
+
+    function walkCrowd(
+        animator: DoorAnimator,
+        at: (time: number) => DoorCharacter | undefined,
+        listener: DoorCharacter,
+        locks?: Parameters<DoorAnimator["update"]>[3],
+    ) {
+        const { crowd, asked, setNow } = crowdOf(at);
+        let everOpen = false;
+        for (let time = 0; time <= 6_000; time += FRAME_STEP_MS) {
+            setNow(time);
+            animator.update(time, [listener], listener, locks, crowd);
+            everOpen ||= animator.isDoorOpen("door");
+        }
+        return { everOpen, openAtEnd: animator.isDoorOpen("door"), asked };
+    }
+
+    it("a zombie going through a door opens it, heard as a player's, and it closes behind it", () => {
+        const { animator, playSound } = makeAnimator();
+        // The local player in the room under the door: they hear its doors.
+        const result = walkCrowd(animator, walking({ x: 144, y: 120 }, { x: 144, y: 240 }), { ...AWAY });
+        expect(result.everOpen).toBe(true);
+        expect(result.openAtEnd).toBe(false);
+        expect(soundsOf(playSound)).toEqual([DOOR_SOUND_KEYS.open, DOOR_SOUND_KEYS.close]);
+    });
+
+    it("a zombie walking along the wall of a horizontal door does not open it", () => {
+        const { animator } = makeAnimator();
+        const result = walkCrowd(animator, walking({ x: 80, y: 176 }, { x: 240, y: 176 }, true), { ...AWAY });
+        expect(result.everOpen).toBe(false);
+    });
+
+    it("a zombie never opens the door of a locked area", () => {
+        const { animator, playSound } = makeAnimator();
+        const zone = { areaId: "z", x: 96, y: 192, width: 128, height: 128 };
+        const result = walkCrowd(
+            animator,
+            walking({ x: 144, y: 120 }, { x: 144, y: 240 }),
+            { ...AWAY },
+            {
+                zones: [zone],
+                hasPass: () => true,
+            },
+        );
+        expect(result.everOpen).toBe(false);
+        expect(playSound).not.toHaveBeenCalled();
+        // Not even asked for: a locked door is closed to the whole horde.
+        expect(result.asked).toHaveLength(0);
+    });
+
+    it("is not asked for a door a player opens", () => {
+        const { animator } = makeAnimator();
+        const { crowd, asked } = crowdOf(() => ({ ...IN_DOOR }));
+        const player = { ...IN_DOOR };
+        animator.update(0, [player], player, undefined, crowd);
+        animator.update(40, [player], player, undefined, crowd);
+        expect(animator.isDoorOpen("door")).toBe(true);
+        expect(asked).toHaveLength(0);
     });
 });
