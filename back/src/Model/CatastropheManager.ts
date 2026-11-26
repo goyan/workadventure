@@ -54,6 +54,9 @@ import {
     zombieDartFits,
     zombieDartFlightEnd,
     zombieDartStride,
+    zombieImpactFall,
+    zombieImpactOf,
+    zombieLastStep,
 } from "@workadventure/map-editor";
 import type {
     Ball,
@@ -1252,7 +1255,9 @@ export class CatastropheManager {
     /**
      * A player launches a catastrophe at a point of the map (pixels): a meteor or a fireball whose crater is
      * `radiusTiles` wide, kept within what a meteor may be. After the fall, the water takes the impact of a meteor;
-     * a fireball burns its crater instead. False when it is refused.
+     * a fireball burns its crater instead. While a horde of zombies goes on, it lands in it too (ZombieImpact): it
+     * falls until a step every browser can still be told, and goes in the log of the horde at that step. False when
+     * it is refused.
      */
     public launch(kind: CatastropheKind, x: number, y: number, radiusTiles: number): boolean {
         const burning = kind === CatastropheKind.CATASTROPHE_FIREBALL;
@@ -1265,6 +1270,7 @@ export class CatastropheManager {
         if (this.inFlight.size >= METEORS_PER_ROOM) return false;
         const tiles = meteorShape(radiusTiles).radiusTiles;
         const id = this.nextId++;
+        const fallMs = this.landInHorde(x, y, tiles);
         this.room.sendSubMessageToRoom({
             message: {
                 $case: "catastropheMessage",
@@ -1273,7 +1279,7 @@ export class CatastropheManager {
                     kind,
                     x,
                     y,
-                    impactInMs: METEOR_FALL_MS,
+                    impactInMs: fallMs,
                     radiusTiles: tiles,
                     wholeMap: false,
                 },
@@ -1287,11 +1293,31 @@ export class CatastropheManager {
             } catch (error) {
                 console.error("A meteor of the map could not strike", error);
             }
-        }, METEOR_FALL_MS);
+        }, fallMs);
         // A meteor must never keep the process alive.
         timer.unref?.();
         this.inFlight.add(timer);
         return true;
+    }
+
+    /**
+     * A meteor launched now at a point (pixels), its crater that wide (tiles), into the horde going on: written in its
+     * log at the step it lands at, and told to the room at once. How long it falls (ms): METEOR_FALL_MS without a
+     * horde, or when the horde is over before it lands. METEORS_PER_ROOM falling at once for some 2.5 s each: 8 a
+     * second at most, some 7 200 over a horde of 15 minutes, 11 bytes or so each in its log.
+     */
+    private landInHorde(x: number, y: number, radiusTiles: number): number {
+        const horde = this.goingHorde();
+        if (!horde) return METEOR_FALL_MS;
+        const now = this.now();
+        const { applyStep, fallMs } = zombieImpactFall(horde, now);
+        if (applyStep >= zombieLastStep(horde)) return METEOR_FALL_MS;
+        this.hordeLog.push({ applyStep, changes: [], impacts: [zombieImpactOf(x, y, radiusTiles)] });
+        this.hordeLogAt.push(now);
+        this.hordeLogStale = true;
+        // The room is told this impact alone, as a grenade.
+        this.tellZombies(horde, undefined, this.hordeLog.length - 1);
+        return fallMs;
     }
 
     public stop(): void {
