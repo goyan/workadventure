@@ -2,7 +2,8 @@ import * as Phaser from "phaser";
 import { billowDrift, CLOUD_BILLOW_PERIOD_PX, NOISE_GLSL, shaderSeconds, shaderWrap } from "../ShaderNoise";
 import type { WeatherView } from "./WeatherFrame";
 import type { CloudPatch } from "./Clouds";
-import { CONTRAIL_LIFE_SECONDS, MAX_CONTRAILS } from "./Contrails";
+import { MAX_CONTRAILS } from "./Contrails";
+import { screenScale } from "./ScreenScale";
 import type { Contrail } from "./Contrails";
 
 /**
@@ -58,6 +59,8 @@ export interface CloudFrame {
     still: boolean;
     /** The trails of the planes (Contrails.ts), over the clouds. */
     contrails?: readonly Contrail[];
+    /** Where the trails cast their shadow on the ground (map pixels) and its opacity; undefined: no shadow. */
+    contrailShadow?: { x: number; y: number; alpha: number };
 }
 
 /** How far a cloud looks towards the light (north-west) to tell its far side, in map pixels: as cloudTones. */
@@ -113,9 +116,15 @@ uniform vec4 uRainbow;       // centre x, y and radius of the rainbow (map pixel
 uniform vec4 uTrail0;        // a contrail: its first point (map pixels at the drawing), its direction
 uniform vec4 uTrail1;
 uniform vec4 uTrail2;
-uniform vec4 uTrailInfo0;    // its length, map pixels of trail a second, its strength (0: none), 1 while flying
+uniform vec4 uTrailInfo0;    // its length, map pixels of trail a second, its strength (0: none), its life (< 0: landed)
 uniform vec4 uTrailInfo1;
 uniform vec4 uTrailInfo2;
+uniform vec3 uTrailCurve;    // how each plane turns (Contrail.curvature), 1 / map pixels, > 0 to the left
+uniform float uPlaneLights;  // how bright the lights of the planes are (Contrail.lights), 0 by day
+uniform float uTime;         // seconds on the clock of the shaders (shaderSeconds): the blinking of the lights
+uniform float uScreenPx;     // map pixels a screen pixel covers: the lights keep their size on the screen
+uniform vec2 uTrailWind;     // the drift of the air up there, map pixels a second
+uniform vec3 uTrailShadow;   // x, y offset of the shadows of the trails on the ground (map pixels), their opacity
 uniform vec2 uRainbowDir;    // the way the rainbow bows, away from the sun
 uniform float uRainbowSpan;  // the cosine of the half opening of its arc
 
@@ -272,35 +281,178 @@ vec4 billows(vec2 world, float out_, vec4 under) {
     return vec4(tone * alpha, alpha) + under * (1.0 - alpha);
 }
 
-// A contrail, high over the clouds: two engine trails, thin and close behind the plane, that merge, spread, wave and
-// break into puffs as they age, then fade. Fixed to the air (it drifts with the sky). Its opacity at this point.
-float contrail(vec2 world, vec4 trail, vec4 info) {
+// A point in the frame of the arc of a trail (from its first point, along dir, turning by k: > 0 to the left):
+// how far along the arc, how far to its left. A straight line when k is about 0.
+vec2 arcFrame(vec2 rel, vec2 dir, float k) {
+    float u = dot(rel, dir);
+    float w = dot(rel, vec2(-dir.y, dir.x));
+    if (abs(k) < 1e-7) return vec2(u, w);
+    float s = atan(u * k, 1.0 - w * k) / k;
+    vec2 fromCentre = vec2(u, w - 1.0 / k);
+    return vec2(s, (1.0 / abs(k) - length(fromCentre)) * sign(k));
+}
+
+// The way along the arc s from its first point.
+vec2 arcTangent(vec2 dir, float k, float s) {
+    float a = k * s;
+    return dir * cos(a) + vec2(-dir.y, dir.x) * sin(a);
+}
+
+// The point of the arc s from its first point, from that point.
+vec2 arcPoint(vec2 dir, float k, float s) {
+    if (abs(k) < 1e-7) return dir * s;
+    float a = k * s;
+    return (dir * sin(a) + vec2(-dir.y, dir.x) * (1.0 - cos(a))) / k;
+}
+
+// A contrail, high over the clouds, as seen from below it: two thin engine trails a little way behind the plane (the
+// air needs a moment to condense), that merge and spread. As it ages its ice thins out over a wider band: it meanders,
+// leans and spreads downwind (the crystals fall into slower air), breaks into lumps along its length and feathery
+// streaks, and dissolves from its thinnest parts first, in holes then fragments, until nothing is left. Fixed to the
+// air (it drifts with the wind). Its opacity at this point.
+float contrail(vec2 world, vec4 trail, vec4 info, float k) {
     if (info.z <= 0.0) return 0.0;
+    float life = abs(info.w);
     vec2 rel = world - uMotion - trail.xy;
-    float along = dot(rel, trail.zw);
-    if (along < -6.0 || along > info.x + 6.0) return 0.0;
+    vec2 frame = arcFrame(rel, trail.zw, k);
+    float along = frame.x;
+    if (along < -8.0 || along > info.x + 8.0) return 0.0;
     float age = max(info.x - along, 0.0) / info.y;
-    float across = dot(rel, vec2(-trail.w, trail.z));
+    if (age >= life) return 0.0;
+    vec2 way = arcTangent(trail.zw, k, along);
+    vec2 side = vec2(-way.y, way.x);
+    float across = frame.y;
+    float spread = 1.6 + 4.2 * sqrt(age) + age * 1.1;
+    // Downwind lean: the falling crystals trail behind, the band widens on that side.
+    float shift = dot(uTrailWind, side) * age * 0.02;
+    float width = spread + abs(shift) * 0.45;
     // Far from the line: nothing, before any noise (most of the screen).
-    if (abs(across) > 26.0 + age * 3.0) return 0.0;
-    vec2 q = world - uSky - uMotion;
-    across += (noise3(vec3(along / 260.0, 0.5, 7.3)) - 0.5) * age * 0.5;
-    float spread = 6.0 + age * 0.8;
-    float twin = 7.0 * (1.0 - smoothstep(4.0, 14.0, age));
-    float core = exp(-pow((abs(across) - twin) / spread, 2.0));
-    float puffs = mix(1.0, 0.35 + 1.1 * fbm3(vec3(q / 26.0, age * 0.03), 2), smoothstep(10.0, 50.0, age));
-    float fade = (1.0 - smoothstep(${(CONTRAIL_LIFE_SECONDS * 0.35).toFixed(1)}, ${CONTRAIL_LIFE_SECONDS.toFixed(1)}, age)) / (1.0 + age * 0.02);
-    // The air needs a few seconds to condense: a gap behind the plane.
-    float condense = smoothstep(0.3, 1.5, age);
-    float plane = info.w * exp(-dot(world - uMotion - trail.xy - trail.zw * info.x, world - uMotion - trail.xy - trail.zw * info.x) / 3.0);
-    return clamp(core * puffs * fade * condense * 0.92 + plane, 0.0, 1.0) * info.z;
+    if (abs(across - shift * 0.5) > width * 3.0 + age * 0.4 + 12.0) return 0.0;
+    float meander = (noise3(vec3(along / 340.0, 0.5, 7.3 + life)) - 0.5) * age * 0.7;
+    float lumps = smoothstep(14.0, 50.0, age);
+    float wave = sin(along * 6.2832 / (80.0 + spread * 2.5)) * lumps * spread * 0.3;
+    float x = across - shift * 0.5 - meander - wave;
+    float twin = 8.0 * (1.0 - smoothstep(1.5, 6.0, age));
+    float jets = exp(-pow((abs(x) - twin) / width, 2.0));
+    // The same ice over a wider band: thinner as it spreads, less so for a persistent trail (moist air feeds it).
+    float thin = pow(5.0 / (width + 3.4), mix(0.55, 0.3, smoothstep(40.0, 90.0, life)));
+    // Streaks along the trail, fixed to the air, slowly changing.
+    float n = fbm3(vec3(along / (60.0 + width * 0.8), x / (3.0 + width * 0.45), age * 0.05 + life), 2);
+    float crow = mix(1.0, 0.3 + 0.7 * (0.5 + 0.5 * cos(along * 6.2832 / (95.0 + spread * 3.0) + 1.3)), lumps * 0.75);
+    float d = jets * thin * crow * mix(1.0, 0.35 + 1.3 * n, smoothstep(1.0, 12.0, age));
+    // The whole width of the band shows, thinner at its edges; holes open where the streaks are thinnest, grow and
+    // join until only fragments are left, which fade.
+    float erode = smoothstep(life * 0.2, life, age);
+    float holes = smoothstep(erode * 1.05 - 0.2, erode * 1.05 + 0.05, n + (1.0 - jets) * 0.25 * erode);
+    float a = min(d * 1.5, 1.0) * holes * (1.0 - erode * 0.6);
+    a *= smoothstep(0.02, 0.18, age) * 0.92;
+    return clamp(a, 0.0, 1.0) * info.z;
+}
+
+// A tapered segment: its distance field, ra thick at a, rb at b.
+float segment(vec2 p, vec2 a, vec2 b, float ra, float rb) {
+    vec2 pa = p - a;
+    vec2 ba = b - a;
+    float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+    return length(pa - ba * h) - mix(ra, rb, h);
+}
+
+// The airliner at the head of a trail, seen from below: fuselage, swept wings, two engines (where the two trails come
+// from) and the tailplane. Its nose points into the air that carries it, so along its trail; the wind only makes it
+// drift sideways over the ground.
+// x: how much of it covers this point, y: how far inside its outline (for its shading).
+vec2 airliner(vec2 world, vec4 trail, vec4 info, float k) {
+    if (info.z <= 0.0 || info.w <= 0.0) return vec2(0.0);
+    vec2 rel = world - uMotion - trail.xy - arcPoint(trail.zw, k, info.x);
+    if (dot(rel, rel) > 625.0) return vec2(0.0);
+    vec2 way = arcTangent(trail.zw, k, info.x);
+    vec2 p = vec2(dot(rel, way), abs(dot(rel, vec2(-way.y, way.x)))) / 1.5;
+    float d = segment(p, vec2(-12.0, 0.0), vec2(9.0, 0.0), 1.7, 1.7);
+    d = min(d, segment(p, vec2(9.0, 0.0), vec2(13.0, 0.0), 1.7, 0.5));
+    d = min(d, segment(p, vec2(2.5, 0.0), vec2(-4.5, 12.5), 2.6, 0.55));
+    d = min(d, segment(p, vec2(-10.0, 0.0), vec2(-13.5, 4.8), 1.3, 0.4));
+    d = min(d, segment(p, vec2(2.6, 5.5), vec2(0.0, 5.5), 1.0, 1.0));
+    d *= 1.5;
+    // As opaque by night as by day (its trail fades, not the plane).
+    return vec2(smoothstep(0.7, -0.5, d) * clamp(info.z + uPlaneLights, 0.0, 1.0), smoothstep(0.0, -1.6, d));
+}
+
+// A light of a plane: a bright point and its glow, the same size on the screen whatever the zoom (a light seen from
+// far is a point, not a speck too small to see).
+float lamp(vec2 p, vec2 at) {
+    vec2 d = (p - at) / max(uScreenPx, 0.5);
+    float r2 = dot(d, d);
+    return exp(-r2 / 1.6) + 0.12 * exp(-r2 / 14.0);
+}
+
+// The lights of the plane at the head of a trail, from dusk on: red on its left wing tip and green on its right, steady;
+// white strobes on both tips, flashing twice a second and a half; the red beacon on its fuselage, once a second. Each
+// plane blinks in its own time. Premultiplied colour.
+vec4 planeLights(vec2 world, vec4 trail, vec4 info, float k) {
+    if (uPlaneLights <= 0.0 || info.w <= 0.0) return vec4(0.0);
+    vec2 rel = world - uMotion - trail.xy - arcPoint(trail.zw, k, info.x);
+    float reach = 30.0 + 18.0 * max(uScreenPx, 0.5);
+    if (dot(rel, rel) > reach * reach) return vec4(0.0);
+    vec2 way = arcTangent(trail.zw, k, info.x);
+    // Map pixels along the plane, and to its right (y down: the turn of the heading clockwise).
+    vec2 p = vec2(dot(rel, way), dot(rel, vec2(-way.y, way.x)));
+    vec2 tip = vec2(-4.5, 12.5) * 1.5;
+    float phase = fract(info.y * 0.137);
+    float strobeT = fract(uTime / 1.5 + phase);
+    float strobe = step(strobeT, 0.04) + step(0.12, strobeT) * step(strobeT, 0.16);
+    float beacon = step(fract(uTime + phase * 3.7), 0.12);
+    float left = lamp(p, vec2(tip.x, -tip.y));
+    float right = lamp(p, tip);
+    vec3 colour = vec3(1.0, 0.12, 0.08) * left + vec3(0.1, 1.0, 0.3) * right;
+    colour += vec3(1.0) * strobe * (left + right) * 1.4;
+    colour += vec3(1.0, 0.1, 0.05) * beacon * lamp(p, vec2(1.0, 0.0)) * 1.3;
+    float a = clamp(max(colour.r, max(colour.g, colour.b)), 0.0, 1.0) * uPlaneLights;
+    return vec4(min(colour, vec3(1.0)) * uPlaneLights, a);
+}
+
+float trailsAt(vec2 world) {
+    return max(max(contrail(world, uTrail0, uTrailInfo0, uTrailCurve.x),
+        contrail(world, uTrail1, uTrailInfo1, uTrailCurve.y)), contrail(world, uTrail2, uTrailInfo2, uTrailCurve.z));
+}
+
+vec2 planesAt(vec2 world) {
+    vec2 a = airliner(world, uTrail0, uTrailInfo0, uTrailCurve.x);
+    vec2 b = airliner(world, uTrail1, uTrailInfo1, uTrailCurve.y);
+    vec2 c = airliner(world, uTrail2, uTrailInfo2, uTrailCurve.z);
+    return a.x >= b.x && a.x >= c.x ? a : (b.x >= c.x ? b : c);
 }
 
 vec4 contrails(vec2 world, float out_, vec4 under) {
-    float a = max(max(contrail(world, uTrail0, uTrailInfo0), contrail(world, uTrail1, uTrailInfo1)),
-        contrail(world, uTrail2, uTrailInfo2));
-    if (a <= 0.0) return under;
-    return vec4(uLit * a, a) + under * (1.0 - a);
+    // Their shadow on the ground first, faint and outdoors only, under the clouds too (they are higher).
+    if (uTrailShadow.z > 0.0) {
+        vec2 at = world - uTrailShadow.xy;
+        float s = max(trailsAt(at), planesAt(at).x) * uTrailShadow.z * out_;
+        under = vec4(0.0, 0.0, 0.0, s) + under * (1.0 - s);
+    }
+    float a = trailsAt(world);
+    if (a > 0.0) {
+        // Dense young trails white, the thin veils of old ones a touch of the sky's blue grey.
+        vec3 tone = mix(uLit * vec3(0.86, 0.9, 0.97), uLit, smoothstep(0.2, 0.8, a));
+        // At night lit by the moon: blue grey.
+        tone = mix(tone, vec3(0.5, 0.56, 0.7), uPlaneLights);
+        under = vec4(tone * a, a) + under * (1.0 - a);
+    }
+    // The planes over their trails: a light grey edge, white body in the sun, blue grey under the moon.
+    vec2 plane = planesAt(world);
+    if (plane.x > 0.0) {
+        vec3 body = mix(uLit * vec3(0.55, 0.58, 0.63), uLit * 0.97, plane.y);
+        // At night lit by the moon: a pale blue grey, its edge darker, standing out from the dark ground.
+        body = mix(body, mix(vec3(0.3, 0.34, 0.44), vec3(0.62, 0.68, 0.8), plane.y), uPlaneLights);
+        under = vec4(body * plane.x, plane.x) + under * (1.0 - plane.x);
+    }
+    // Their lights, from dusk on.
+    if (uPlaneLights > 0.0) {
+        vec4 l = planeLights(world, uTrail0, uTrailInfo0, uTrailCurve.x);
+        l = max(l, planeLights(world, uTrail1, uTrailInfo1, uTrailCurve.y));
+        l = max(l, planeLights(world, uTrail2, uTrailInfo2, uTrailCurve.z));
+        under = l + under * (1.0 - l.a);
+    }
+    return under;
 }
 
 void main() {
@@ -324,7 +476,7 @@ void main() {
         if (uCumulus > 0.5) color = cumulus(world, out_, color);
         else color = billows(world, out_, color);
     }
-    if (uTrailInfo0.z + uTrailInfo1.z + uTrailInfo2.z > 0.0) color = contrails(world, out_, color);
+    if (uTrailInfo0.z + uTrailInfo1.z + uTrailInfo2.z > 0.0 || uPlaneLights > 0.0) color = contrails(world, out_, color);
 
     if (color.a <= 0.002) discard;
     gl_FragColor = color;
@@ -585,9 +737,22 @@ export class CloudLayer {
             );
             setUniform(
                 `uTrailInfo${index}`,
-                trail ? [trail.length, trail.speed, trail.strength, trail.flying ? 1 : 0] : [0, 1, 0, 0],
+                trail
+                    ? [trail.length, trail.speed, trail.strength, trail.flying ? trail.life : -trail.life]
+                    : [0, 1, 0, 1],
             );
         }
+        setUniform(
+            "uTrailCurve",
+            Array.from({ length: MAX_CONTRAILS }, (_, index) => frame?.contrails?.at(index)?.curvature ?? 0),
+        );
+        setUniform("uPlaneLights", frame?.contrails?.at(0)?.lights ?? 0);
+        setUniform("uTime", shaderSeconds(this.scene.time.now));
+        setUniform("uScreenPx", 1 / screenScale(this.scene));
+        const wind = frame?.contrails?.at(0)?.wind;
+        setUniform("uTrailWind", wind ? [wind.x, wind.y] : [0, 0]);
+        const trailShadow = frame?.contrailShadow;
+        setUniform("uTrailShadow", trailShadow ? [trailShadow.x, trailShadow.y, trailShadow.alpha] : [0, 0, 0]);
         const bow = frame?.rainbow;
         setUniform("uRainbow", bow ? [bow.x, bow.y, bow.radius, bow.strength] : [0, 0, 1, 0]);
         setUniform("uRainbowDir", bow ? [bow.direction.x, bow.direction.y] : [0, -1]);
