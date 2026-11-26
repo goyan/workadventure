@@ -12,7 +12,10 @@ import type { GameMapFrontWrapper } from "../../../../src/front/Phaser/Game/Game
 import type { CameraManager } from "../../../../src/front/Phaser/Game/CameraManager";
 import type { UserInputManager } from "../../../../src/front/Phaser/UserInput/UserInputManager";
 import type { ActivatablesManager } from "../../../../src/front/Phaser/Game/ActivatablesManager";
-import { GameSceneUserInputHandler } from "../../../../src/front/Phaser/UserInput/GameSceneUserInputHandler";
+import {
+    ARMED_CLICK_WAIT_MS,
+    GameSceneUserInputHandler,
+} from "../../../../src/front/Phaser/UserInput/GameSceneUserInputHandler";
 import { isActivatable } from "../../../../src/front/Phaser/Game/ActivatableInterface";
 import { mapEditorModeStore } from "../../../../src/front/Stores/MapEditorStore";
 import { characterPickerStore } from "../../../../src/front/Stores/CharacterPickerStore";
@@ -35,6 +38,7 @@ import {
     rodEquippedStore,
 } from "../../../../src/front/Stores/FishingStore";
 import {
+    armedCatastropheStore,
     ballDiameterTilesStore,
     coldCelsiusStore,
     coldRadiusTilesStore,
@@ -984,8 +988,29 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             toggleArmedCatastrophe("meteor");
         }
 
+        // The one-shot timers of the scene: a first click waiting for a second one, a press waiting to be held.
+        let waits: { callback: () => void; delay: number; removed: boolean }[];
+        function wait(config: { callback: () => void; delay: number }): { remove: () => void } {
+            const pending = { callback: config.callback, delay: config.delay, removed: false };
+            waits.push(pending);
+            return {
+                remove: () => {
+                    pending.removed = true;
+                },
+            };
+        }
+        /** ARMED_CLICK_WAIT_MS passes: what waited for it runs. */
+        function elapseWait(): void {
+            for (const pending of waits.splice(0)) {
+                expect(pending.delay).toBe(ARMED_CLICK_WAIT_MS);
+                if (!pending.removed) pending.callback();
+            }
+        }
+
         beforeEach(() => {
+            waits = [];
             scene.connection = mock<RoomConnection>({ emitLaunchCatastrophe: launch });
+            Object.defineProperty(scene, "time", { configurable: true, value: { addEvent: wait } });
         });
 
         afterEach(() => {
@@ -1000,10 +1025,13 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             expect(setDefaultCursor).toHaveBeenLastCalledWith("auto");
         });
 
-        it("an armed meteor takes the left click", () => {
+        it("an armed meteor takes the left click, once no second click came", () => {
             arm();
             handler.handlePointerUpEvent(pointer(0, 1), []);
+            // It may be the first click of a double click, which walks: nothing falls yet.
+            expect(launch).not.toHaveBeenCalled();
 
+            elapseWait();
             expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_METEOR, 480, 640, 4]]);
             expect(scene.moveTo.mock.calls).toEqual([]);
         });
@@ -1013,6 +1041,9 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             scene.seenPointUnder.mockImplementation((point) => ({ x: point.x, y: point.y - 64 }));
             arm();
             handler.handlePointerUpEvent(pointer(0, 1), []);
+            // The pointer may have moved meanwhile: it falls where it was clicked.
+            camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(10, 10));
+            elapseWait();
 
             expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_METEOR, 480, 576, 4]]);
         });
@@ -1023,6 +1054,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             meteorRadiusTilesStore.set(9);
             handler.handlePointerUpEvent(pointer(0, 1), []);
             meteorRadiusTilesStore.set(4);
+            elapseWait();
 
             expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_FIREBALL, 480, 640, 9]]);
             expect(scene.moveTo.mock.calls).toEqual([]);
@@ -1033,6 +1065,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             meteorRadiusTilesStore.set(12);
             handler.handlePointerUpEvent(pointer(0, 1), []);
             meteorRadiusTilesStore.set(4);
+            elapseWait();
 
             expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_METEOR, 480, 640, 12]]);
         });
@@ -1041,17 +1074,87 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             arm();
             vi.mocked(isActivatable).mockReturnValue(true);
             handler.handlePointerUpEvent(pointer(0, 1), [mock<Phaser.GameObjects.GameObject>()]);
+            elapseWait();
 
             expect(launch).toHaveBeenCalledTimes(1);
             expect(activatablesManager.handlePointerDownEvent.mock.calls).toEqual([]);
         });
 
-        it("a double click while armed does not walk", () => {
+        /** A double click of the mouse, as Phaser hands it: press, release, press (detail 2), release (detail 2). */
+        function doubleClick(): void {
+            for (const detail of [1, 2]) {
+                const press = pointer(0, detail);
+                press.event = new MouseEvent("mousedown", { button: 0, detail });
+                press.isDown = true;
+                handler.handlePointerDownEvent(press, []);
+                handler.handlePointerUpEvent(pointer(0, detail), []);
+            }
+        }
+
+        it.each(["meteor", "fireball"] as const)(
+            "a double click with the %s armed runs there, throws nothing and disarms it",
+            (choice) => {
+                catastrophePanelStore.set(true);
+                toggleArmedCatastrophe(choice);
+                doubleClick();
+                elapseWait();
+
+                expect(launch).not.toHaveBeenCalled();
+                expect(get(armedCatastropheStore)).toBeUndefined();
+                // The panel stays open, nothing armed in it: as if the catastrophe had been unselected there.
+                expect(get(catastrophePanelStore)).toBe(true);
+                expect(scene.moveTo.mock.calls).toEqual([[{ x: 480, y: 640 }, true, WOKA_SPEED * 2.5]]);
+                // A single click after it walks no more and throws nothing: nothing is armed.
+                handler.handlePointerUpEvent(pointer(0, 1), []);
+                elapseWait();
+                expect(launch).not.toHaveBeenCalled();
+            },
+        );
+
+        it("a double click slower than the wait threw its first click, and still runs and disarms", () => {
             arm();
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+            elapseWait();
+            expect(launch).toHaveBeenCalledTimes(1);
+
+            const second = pointer(0, 2);
+            second.event = new MouseEvent("mousedown", { button: 0, detail: 2 });
+            handler.handlePointerDownEvent(second, []);
             handler.handlePointerUpEvent(pointer(0, 2), []);
+            elapseWait();
 
             expect(launch).toHaveBeenCalledTimes(1);
-            expect(scene.moveTo.mock.calls).toEqual([]);
+            expect(get(armedCatastropheStore)).toBeUndefined();
+            expect(scene.moveTo.mock.calls).toEqual([[{ x: 480, y: 640 }, true, WOKA_SPEED * 2.5]]);
+        });
+
+        it("a new single click throws the one still waiting at once: it was no double click", () => {
+            arm();
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+            camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(700, 300));
+            const next = pointer(0, 1);
+            next.event = new MouseEvent("mousedown", { button: 0, detail: 1 });
+            handler.handlePointerDownEvent(next, []);
+            expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_METEOR, 480, 640, 4]]);
+
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+            elapseWait();
+            expect(launch.mock.calls[1]).toEqual([CatastropheKind.CATASTROPHE_METEOR, 700, 300, 4]);
+            expect(launch).toHaveBeenCalledTimes(2);
+        });
+
+        it("a click still waiting throws nothing once the catastrophe is disarmed, or the controls are off", () => {
+            arm();
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+            catastrophePanelStore.set(false);
+            elapseWait();
+            expect(launch).not.toHaveBeenCalled();
+
+            arm();
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+            scene.userInputManager = mock<UserInputManager>({ isControlsEnabled: false, isRightClickEnabled: true });
+            elapseWait();
+            expect(launch).not.toHaveBeenCalled();
         });
 
         it("a one-finger tap launches, a long press does not", () => {
@@ -1070,7 +1173,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
 
         it("a drag of the map launches nothing", () => {
             arm();
-            const down = pointer();
+            const down = pointer(0, 1);
             down.x = 100;
             down.y = 100;
             handler.handlePointerDownEvent(down, []);
@@ -1103,7 +1206,8 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 Object.defineProperty(scene, "time", {
                     configurable: true,
                     value: {
-                        addEvent: (config: { callback: () => void }) => {
+                        addEvent: (config: { callback: () => void; delay: number; loop?: boolean }) => {
+                            if (!config.loop) return wait(config);
                             ticks.push(config.callback);
                             return { remove };
                         },
@@ -1116,9 +1220,12 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 downpourRadiusTilesStore.set(3);
             });
 
-            it("rains under the pointer as soon as the click is pressed, and again while it is held", () => {
+            it("rains under the pointer once the press is held, and again while it is held", () => {
                 armDownpour();
                 handler.handlePointerDownEvent(held(), []);
+                // A press may be the first click of a double click: nothing rains before it is held.
+                expect(launch).not.toHaveBeenCalled();
+                elapseWait();
                 expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_DOWNPOUR, 480, 640, 3, false]]);
 
                 camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(500, 700));
@@ -1130,15 +1237,17 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 scene.seenPointUnder.mockImplementation((point) => ({ x: point.x, y: point.y - 64 }));
                 armDownpour();
                 handler.handlePointerDownEvent(held(), []);
+                elapseWait();
                 expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_DOWNPOUR, 480, 576, 3, false]]);
             });
 
-            it("sets fire under the pointer as soon as the click is pressed, and paints it while the click is held", () => {
+            it("sets fire under the pointer once the press is held, and paints it while the click is held", () => {
                 catastrophePanelStore.set(true);
                 toggleArmedCatastrophe("fire");
                 fireRadiusTilesStore.set(5);
                 const press = held();
                 handler.handlePointerDownEvent(press, []);
+                elapseWait();
                 expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_FIRE, 480, 640, 5]]);
 
                 // Dragging paints fire along the way: the map does not move.
@@ -1163,6 +1272,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 coldCelsiusStore.set(-60);
                 const press = held();
                 handler.handlePointerDownEvent(press, []);
+                elapseWait();
                 expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_COLD, 480, 640, 5, false, false, -60]]);
 
                 camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(500, 700));
@@ -1193,6 +1303,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 drainRadiusTilesStore.set(7);
                 const press = held();
                 handler.handlePointerDownEvent(press, []);
+                elapseWait();
                 expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_DRAIN, 480, 640, 7]]);
 
                 camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(500, 700));
@@ -1214,6 +1325,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 toggleArmedCatastrophe("ball");
                 ballDiameterTilesStore.set(6);
                 handler.handlePointerDownEvent(held(), []);
+                elapseWait();
                 expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_BALL, 480, 576, 6]]);
                 expect(get(heldBallStore)).toEqual({ x: 480, y: 576, radiusPx: 96 });
             });
@@ -1223,7 +1335,8 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 Object.defineProperty(scene, "time", {
                     configurable: true,
                     value: {
-                        addEvent: (config: { callback: () => void; delay: number }) => {
+                        addEvent: (config: { callback: () => void; delay: number; loop?: boolean }) => {
+                            if (!config.loop) return wait(config);
                             ticks.push(config.callback);
                             delays.push(config.delay);
                             return { remove };
@@ -1235,6 +1348,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 ballDiameterTilesStore.set(6);
                 const press = held();
                 handler.handlePointerDownEvent(press, []);
+                elapseWait();
                 expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_BALL, 480, 640, 6]]);
                 // Shown under the pointer at once, without waiting for the server.
                 expect(get(heldBallStore)).toEqual({ x: 480, y: 640, radiusPx: 96 });
@@ -1271,6 +1385,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 armDownpour();
                 const press = held();
                 handler.handlePointerDownEvent(press, []);
+                elapseWait();
                 handler.handlePointerMoveEvent(press, []);
                 expect(cameraManager.startManualPan.mock.calls).toEqual([]);
                 expect(remove).not.toHaveBeenCalled();
@@ -1281,11 +1396,117 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 expect(scene.moveTo.mock.calls).toEqual([]);
             });
 
+            it("a press that moves is held at once: the fire is painted from there", () => {
+                catastrophePanelStore.set(true);
+                toggleArmedCatastrophe("fire");
+                const press = held();
+                handler.handlePointerDownEvent(press, []);
+                // A jitter under the drag threshold is still a click.
+                press.x = 123;
+                handler.handlePointerMoveEvent(press, []);
+                expect(launch).not.toHaveBeenCalled();
+
+                press.x = 130;
+                camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(500, 700));
+                handler.handlePointerMoveEvent(press, []);
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_FIRE, 500, 700, 2]]);
+                expect(cameraManager.startManualPan.mock.calls).toEqual([]);
+                elapseWait();
+                expect(launch).toHaveBeenCalledTimes(1);
+            });
+
+            it.each([
+                ["downpour", [CatastropheKind.CATASTROPHE_DOWNPOUR, 480, 640, 3, false]],
+                ["fire", [CatastropheKind.CATASTROPHE_FIRE, 480, 640, 2]],
+                ["drain", [CatastropheKind.CATASTROPHE_DRAIN, 480, 640, 3]],
+                ["cold", [CatastropheKind.CATASTROPHE_COLD, 480, 640, 3, false, false, -80]],
+            ] as const)(
+                "a click of the %s throws it once where it was pressed, when no second click came",
+                (choice, expected) => {
+                    catastrophePanelStore.set(true);
+                    toggleArmedCatastrophe(choice);
+                    handler.handlePointerDownEvent(held(), []);
+                    camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(10, 10));
+                    handler.handlePointerUpEvent(pointer(0, 1), []);
+                    expect(launch).not.toHaveBeenCalled();
+
+                    elapseWait();
+                    expect(launch.mock.calls).toEqual([expected]);
+                    expect(ticks).toEqual([]);
+                },
+            );
+
+            it("a click of the ball holds it there and lets it go, when no second click came", () => {
+                catastrophePanelStore.set(true);
+                toggleArmedCatastrophe("ball");
+                ballDiameterTilesStore.set(6);
+                handler.handlePointerDownEvent(held(), []);
+                handler.handlePointerUpEvent(pointer(0, 1), []);
+                expect(launch).not.toHaveBeenCalled();
+                expect(get(heldBallStore)).toBeUndefined();
+
+                elapseWait();
+                expect(launch.mock.calls).toEqual([
+                    [CatastropheKind.CATASTROPHE_BALL, 480, 640, 6],
+                    [CatastropheKind.CATASTROPHE_BALL, 480, 640, 6, false, true],
+                ]);
+                expect(get(heldBallStore)).toBeUndefined();
+                ballDiameterTilesStore.set(4);
+            });
+
+            it.each(["downpour", "fire", "drain", "ball", "cold"] as const)(
+                "a double click with the %s armed runs there, throws nothing and disarms it",
+                (choice) => {
+                    catastrophePanelStore.set(true);
+                    toggleArmedCatastrophe(choice);
+                    doubleClick();
+                    elapseWait();
+
+                    expect(launch).not.toHaveBeenCalled();
+                    expect(get(heldBallStore)).toBeUndefined();
+                    expect(get(armedCatastropheStore)).toBeUndefined();
+                    expect(scene.moveTo.mock.calls).toEqual([[{ x: 480, y: 640 }, true, WOKA_SPEED * 2.5]]);
+                },
+            );
+
+            it("a ball held is let go, the server told, when the double click of a slower hand disarms it", () => {
+                catastrophePanelStore.set(true);
+                toggleArmedCatastrophe("ball");
+                const press = held();
+                handler.handlePointerDownEvent(press, []);
+                elapseWait();
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_BALL, 480, 640, 4]]);
+                handler.handlePointerUpEvent(pointer(0, 1), []);
+                expect(launch.mock.calls[1]).toEqual([CatastropheKind.CATASTROPHE_BALL, 480, 640, 4, false, true]);
+
+                const second = pointer(0, 2);
+                second.event = new MouseEvent("mousedown", { button: 0, detail: 2 });
+                second.isDown = true;
+                handler.handlePointerDownEvent(second, []);
+                handler.handlePointerUpEvent(pointer(0, 2), []);
+                elapseWait();
+                expect(launch).toHaveBeenCalledTimes(2);
+                expect(get(heldBallStore)).toBeUndefined();
+                expect(get(armedCatastropheStore)).toBeUndefined();
+                expect(scene.moveTo.mock.calls).toHaveLength(1);
+            });
+
+            it("a held ball is let go, the server told, when it is disarmed while held", () => {
+                catastrophePanelStore.set(true);
+                toggleArmedCatastrophe("ball");
+                handler.handlePointerDownEvent(held(), []);
+                elapseWait();
+                catastrophePanelStore.set(false);
+                expect(launch.mock.calls[1]).toEqual([CatastropheKind.CATASTROPHE_BALL, 480, 640, 4, false, true]);
+                expect(get(heldBallStore)).toBeUndefined();
+            });
+
             it("carries the size and the whole map chosen in the panel", () => {
                 armDownpour();
                 downpourRadiusTilesStore.set(9);
                 downpourWholeMapStore.set(true);
                 handler.handlePointerDownEvent(held(), []);
+                elapseWait();
                 expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_DOWNPOUR, 480, 640, 9, true]]);
             });
 
@@ -1294,6 +1515,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 const press = held();
                 camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(-50, 9999));
                 handler.handlePointerDownEvent(press, []);
+                elapseWait();
                 expect(launch.mock.calls[0].slice(1, 3)).toEqual([0, 1183]);
 
                 press.isDown = false;
@@ -1303,6 +1525,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
 
                 remove.mockClear();
                 handler.handlePointerDownEvent(held(), []);
+                elapseWait();
                 catastrophePanelStore.set(false);
                 expect(remove).toHaveBeenCalled();
             });

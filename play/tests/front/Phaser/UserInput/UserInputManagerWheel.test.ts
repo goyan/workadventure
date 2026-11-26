@@ -1,6 +1,8 @@
 import * as Phaser from "phaser";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { mock } from "vitest-mock-extended";
+import { get } from "svelte/store";
+import { CatastropheKind } from "@workadventure/messages";
 import type { GameScene } from "../../../../src/front/Phaser/Game/GameScene";
 import type { CameraManager } from "../../../../src/front/Phaser/Game/CameraManager";
 import { GameSceneUserInputHandler } from "../../../../src/front/Phaser/UserInput/GameSceneUserInputHandler";
@@ -13,6 +15,14 @@ import { setLocale } from "../../../../src/i18n/i18n-svelte";
 import type { NerfManager } from "../../../../src/front/Phaser/Game/Nerf/NerfManager";
 import type { ActivatablesManager } from "../../../../src/front/Phaser/Game/ActivatablesManager";
 import { armWaterLevelPipette, disarmWaterLevelPipette } from "../../../../src/front/Stores/WaterLevelPipetteStore";
+import {
+    armedCatastropheStore,
+    catastrophePanelStore,
+    heldBallStore,
+    toggleArmedCatastrophe,
+} from "../../../../src/front/Stores/CatastropheStore";
+import type { RoomConnection } from "../../../../src/front/Connection/RoomConnection";
+import { WOKA_SPEED } from "../../../../src/front/Enum/EnvironmentVariable";
 
 // The wheel integration only needs the real handler methods, not character rendering or UI stores.
 vi.mock("../../../../src/front/Phaser/Player/Player", () => ({ Player: class {} }));
@@ -34,6 +44,8 @@ vi.mock("../../../../src/front/Stores/EmoteStore", async () => {
 vi.mock("../../../../src/front/Connection/LocalUserStore", () => ({}));
 vi.mock("../../../../src/front/Chat/Stores/ChatStore", () => ({}));
 vi.mock("../../../../src/front/Components/PopUp/SayPopUp.svelte", () => ({ default: vi.fn() }));
+// No seat under the double click: the run ends where it was aimed.
+vi.mock("../../../../src/front/Phaser/Player/Seat", () => ({ findSeatAtPoint: vi.fn(), isSeatTaken: vi.fn() }));
 
 describe("UserInputManager wheel and Nerf events", () => {
     let scene: ReturnType<typeof mock<GameScene>>;
@@ -135,6 +147,87 @@ describe("UserInputManager wheel and Nerf events", () => {
         } finally {
             disarmWaterLevelPipette();
         }
+    });
+
+    // A double click to walk while a catastrophe is armed, through the real dispatch of the pointer (lessons-learned §2):
+    // the native mousedown/mouseup of each click, with the click count of the browser.
+    describe("a double click with a catastrophe armed", () => {
+        const launch = vi.fn();
+        let waits: (() => void)[];
+        let loops: (() => void)[];
+
+        function click(detail: number): void {
+            const press = mock<Phaser.Input.Pointer>({ x: 120, y: 160, wasTouch: false, id: 1 });
+            press.event = new MouseEvent("mousedown", { button: 0, detail });
+            press.isDown = true;
+            press.leftButtonDown.mockReturnValue(true);
+            press.getDuration.mockReturnValue(50);
+            scene.input.emit(Phaser.Input.Events.POINTER_DOWN, press, []);
+            const release = mock<Phaser.Input.Pointer>({ x: 120, y: 160, wasTouch: false, id: 1 });
+            release.event = new MouseEvent("mouseup", { button: 0, detail });
+            release.leftButtonReleased.mockReturnValue(true);
+            release.getDuration.mockReturnValue(50);
+            press.isDown = false;
+            scene.input.emit(Phaser.Input.Events.POINTER_UP, release, []);
+        }
+
+        beforeEach(() => {
+            waits = [];
+            loops = [];
+            launch.mockReset();
+            const camera = mock<Phaser.Cameras.Scene2D.Camera>();
+            camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(480, 640));
+            cameraManager.getCamera.mockReturnValue(camera);
+            scene.Map = mock<Phaser.Tilemaps.Tilemap>({ widthInPixels: 1504, heightInPixels: 1184 });
+            scene.seenPointUnder.mockImplementation((point) => point);
+            scene.groundPointUnder.mockImplementation((point) => point);
+            scene.moveTo.mockResolvedValue({ x: 480, y: 640, cancelled: false });
+            scene.connection = mock<RoomConnection>({ emitLaunchCatastrophe: launch });
+            Object.defineProperty(scene, "time", {
+                configurable: true,
+                value: {
+                    addEvent: (config: { callback: () => void; loop?: boolean }) => {
+                        (config.loop ? loops : waits).push(config.callback);
+                        return { remove: () => undefined };
+                    },
+                },
+            });
+            Object.defineProperty(scene, "CurrentPlayer", {
+                configurable: true,
+                value: { sitOnSeat: vi.fn(), stayStandingHere: vi.fn() },
+            });
+            catastrophePanelStore.set(true);
+        });
+
+        afterEach(() => {
+            catastrophePanelStore.set(false);
+        });
+
+        it.each(["meteor", "ball"] as const)(
+            "runs there with the %s armed, throws nothing and disarms it",
+            (choice) => {
+                toggleArmedCatastrophe(choice);
+                click(1);
+                click(2);
+                for (const run of waits.splice(0)) run();
+
+                expect(launch).not.toHaveBeenCalled();
+                expect(get(armedCatastropheStore)).toBeUndefined();
+                expect(get(heldBallStore)).toBeUndefined();
+                expect(scene.moveTo.mock.calls).toEqual([[{ x: 480, y: 640 }, true, WOKA_SPEED * 2.5]]);
+            },
+        );
+
+        it("a single click still throws the comet, once no second click came, and walks nowhere", () => {
+            toggleArmedCatastrophe("meteor");
+            click(1);
+            expect(launch).not.toHaveBeenCalled();
+            for (const run of waits.splice(0)) run();
+
+            expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_METEOR, 480, 640, 4]]);
+            expect(get(armedCatastropheStore)).toBe("meteor");
+            expect(scene.moveTo.mock.calls).toEqual([]);
+        });
     });
 
     describe("after a control of a panel was used", () => {
