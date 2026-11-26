@@ -174,7 +174,10 @@ const FAR = 0x7fffffff;
 export const ZOMBIE_WAITING = 0;
 export const ZOMBIE_WALKING = 1;
 export const ZOMBIE_GONE = 2;
-/** Thrown by a grenade, burning: it falls, burns, and is gone at its step `dieAt`. */
+/**
+ * Burning: thrown by a grenade or a burning meteor (it falls, then burns), or caught by a fire where it stands; gone at
+ * its step `dieAt`.
+ */
 export const ZOMBIE_DYING = 3;
 /** Met by a dart of the Nerf: it recoils, falls, lies, and is gone at its step `dieAt` (it does not burn). */
 export const ZOMBIE_SHOT = 4;
@@ -337,6 +340,10 @@ export class ZombieCrowd {
     private explosions: { x: number; y: number; step: number; killed: number }[] = [];
     /** How many zombies the comets and the burning meteors that landed in the horde killed (ZombieImpact). */
     private impactKills = 0;
+    /** The tiles on fire (the log tells them: fireOn, fireOff), how many, and how many zombies the fire killed. */
+    private readonly onFire: Uint8Array;
+    private tilesOnFire = 0;
+    private fireKills = 0;
     /**
      * Where each zombie walked at each of the last ZOMBIE_DART_HISTORY_STEPS steps (in half pixels, PAST_NONE where it
      * did not walk), a step after the other in a ring: where the darts the log applies met them. Written at one place,
@@ -411,6 +418,7 @@ export class ZombieCrowd {
         this.tilesHigh = Math.ceil(this.heightPx / TILE_PX);
         this.tileStart = new Int32Array(this.tilesWide * this.tilesHigh + 1);
         this.crowdCost = new Int32Array(width * height);
+        this.onFire = new Uint8Array(this.tilesWide * this.tilesHigh);
         this.trampled = new Float32Array(this.tilesWide * this.tilesHigh);
         this.lastStep = zombieLastStep(horde);
         this.random = mulberry32(horde.seed);
@@ -555,6 +563,11 @@ export class ZombieCrowd {
             });
         }
         return flying;
+    }
+
+    /** How many zombies walked into a fire and burnt so far. */
+    public get killedByFire(): number {
+        return this.fireKills;
     }
 
     /** How many zombies the comets and the burning meteors that landed in the horde killed so far. */
@@ -724,6 +737,7 @@ export class ZombieCrowd {
         this.choose();
         this.steer();
         this.move();
+        this.burnInFire();
         this.fly();
         this.recordPast();
     }
@@ -777,6 +791,18 @@ export class ZombieCrowd {
             for (const impact of entry.impacts ?? []) {
                 const { lethal, blast } = zombieImpactRadii(impact);
                 this.impactKills += this.blow(impact.x, impact.y, lethal, blast, impact.burning, IMPACT_POWER);
+            }
+            // The fire of the map as the server read it: the tiles that took fire, those that went out.
+            const tiles = this.onFire.length;
+            for (const tile of entry.fireOn ?? []) {
+                if (tile < 0 || tile >= tiles || this.onFire[tile] === 1) continue;
+                this.onFire[tile] = 1;
+                this.tilesOnFire++;
+            }
+            for (const tile of entry.fireOff ?? []) {
+                if (tile < 0 || tile >= tiles || this.onFire[tile] === 0) continue;
+                this.onFire[tile] = 0;
+                this.tilesOnFire--;
             }
             this.logAt++;
         }
@@ -1080,6 +1106,28 @@ export class ZombieCrowd {
             }
         }
         return killed;
+    }
+
+    /** The zombies that walked into a tile on fire take fire where they stand: they burn, and are gone. */
+    private burnInFire(): void {
+        if (this.tilesOnFire === 0) return;
+        const { count, state, x, y, tilesWide, tilesHigh, onFire } = this;
+        for (let zombie = 0; zombie < count; zombie++) {
+            if (state[zombie] !== ZOMBIE_WALKING) continue;
+            const tileX = Math.min(tilesWide - 1, Math.max(0, Math.floor(x[zombie] / TILE_PX)));
+            const tileY = Math.min(tilesHigh - 1, Math.max(0, Math.floor(y[zombie] / TILE_PX)));
+            if (onFire[tileY * tilesWide + tileX] === 0) continue;
+            state[zombie] = ZOMBIE_DYING;
+            this.walking--;
+            this.dying++;
+            this.target[zombie] = -1;
+            this.vx[zombie] = 0;
+            this.vy[zombie] = 0;
+            this.vz[zombie] = 0;
+            this.z[zombie] = 0;
+            this.dieAt[zombie] = this.steps + ZOMBIE_BURN_STEPS;
+            this.fireKills++;
+        }
     }
 
     /**

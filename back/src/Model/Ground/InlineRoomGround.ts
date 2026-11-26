@@ -11,6 +11,7 @@ import type { Downpour, LifeFire, RealWeatherSlot, ReplayedWeather, WaterView } 
 import type { HurricaneAirMessage, MeadowMessage, TerrainWaterMessage, TreeFireMessage } from "@workadventure/messages";
 import { MeadowManager } from "../MeadowManager";
 import { TerrainWaterManager } from "../TerrainWaterManager";
+import type { ToldFire } from "./GroundProtocol";
 import type { RoomGround, RoomGroundInputs } from "./RoomGround";
 
 /**
@@ -196,6 +197,10 @@ export class InlineRoomGround implements RoomGround {
 
     public lifeFire(): LifeFire | undefined {
         return this.ground.meadow.lifeFire();
+    }
+
+    public fireTiles(): ToldFire | undefined {
+        return this.ground.meadow.toldFire();
     }
 
     public iceAt(tileX: number, tileY: number): number {

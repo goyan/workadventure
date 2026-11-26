@@ -341,6 +341,7 @@ export async function byHand(
         getGrid: () => water.getGrid(),
         waterVersion: () => water.waterVersion(),
         lifeFire: () => meadow.lifeFire(),
+        fireTiles: () => meadow.toldFire(),
         iceAt: (tileX, tileY) => meadow.iceAt(tileX, tileY),
         hasMeadow: () => meadow.hasMeadow(),
         catchingUp: () => meadow.catchingUp(),

@@ -16,6 +16,7 @@ import type { HurricaneAirMessage, MeadowMessage, TerrainWaterMessage, TreeFireM
 import type { VariablesRepositoryInterface } from "../../Services/Repository/VariablesRepositoryInterface";
 import type { GameRoom } from "../GameRoom";
 import type { RainTimelineService } from "../Services/RainTimelineService";
+import type { ToldFire } from "./GroundProtocol";
 
 /**
  * What the ground of a room (the water of its relief and its meadow) reads of the room, asked each time it is needed:
@@ -91,6 +92,8 @@ export interface RoomGround {
     waterVersion(): number;
     /** The fire of the meadow and of its trees, for the animals that run from it. */
     lifeFire(): LifeFire | undefined;
+    /** The same fire as tiles of the meadow on fire and trees on fire (a horde of zombies burns in it). */
+    fireTiles(): ToldFire | undefined;
     /** The ice over the water of a tile (32 px), in mm: none before the meadow is made (the ice fishing shacks). */
     iceAt(tileX: number, tileY: number): number;
     /** Whether the meadow is made (the size of the map read): before, its ice is not known, not none. */

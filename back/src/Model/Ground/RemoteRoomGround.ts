@@ -200,6 +200,11 @@ export class RemoteRoomGround implements RoomGround {
         );
     }
 
+    public fireTiles(): ToldFire | undefined {
+        if (this.fallback) return this.fallback.fireTiles();
+        return this.fire;
+    }
+
     public iceAt(tileX: number, tileY: number): number {
         if (this.fallback) return this.fallback.iceAt(tileX, tileY);
         const ice = this.ice;

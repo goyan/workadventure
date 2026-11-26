@@ -1,7 +1,7 @@
 import { WaterSnapshot } from "@workadventure/map-editor";
 import type { MapPlace, RealWeatherSlot, WaterGrid, WAMFileFormat } from "@workadventure/map-editor";
 import type { SubToPusherRoomMessage } from "@workadventure/messages";
-import type { GroundCommand, GroundRoomState, GroundTold, ToldFire } from "./GroundProtocol";
+import type { GroundCommand, GroundRoomState, GroundTold } from "./GroundProtocol";
 import { luckOf } from "./GroundProtocol";
 import { InlineRoomGround } from "./InlineRoomGround";
 
@@ -220,17 +220,7 @@ export class HostedGround {
     /** The meadow as who joins is sent it, its trees, and its fire for the animals. */
     private tellMeadow(): void {
         const meadow = this.ground.meadow;
-        const burning = meadow.burningTiles();
-        const trees = meadow.treeFires().map(({ x, y }) => ({ x, y }));
-        const fire: ToldFire | undefined =
-            burning || trees.length > 0
-                ? {
-                      width: burning?.width ?? 0,
-                      height: burning?.height ?? 0,
-                      burning: burning?.burning ?? new Uint8Array(0),
-                      trees,
-                  }
-                : undefined;
+        const fire = meadow.toldFire();
         this.post({
             kind: "meadow",
             room: this.room,

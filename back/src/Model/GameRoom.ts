@@ -425,6 +425,8 @@ export class GameRoom implements BrothersFinder {
         catastrophes.zombieTerrainWith(gameRoom.zombieTerrain.bind(gameRoom));
         // It runs to the avatars, and goes as fast as the map, as the hurricane does.
         catastrophes.zombieAvatarsWith(gameRoom.zombieAvatars.bind(gameRoom));
+        // It burns in the fire of the meadow and of its trees.
+        catastrophes.zombieFireWith(() => ground.fireTiles());
         catastrophes.zombieTimesWith(gameRoom.hurricaneTimes.bind(gameRoom));
         gameRoom.catastrophes = catastrophes;
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
