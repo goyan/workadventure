@@ -92,6 +92,11 @@ const ZOMBIE_GRENADE_PACE_MS = 1000;
  */
 const ZOMBIE_FIRE_TILES_A_READING = 2048;
 /**
+ * The tiles a horde keeps out of (the desks, the locked areas: ZombieZones) or may go into again told in an entry of
+ * its log, at most: the others over the next readings (a second each).
+ */
+const ZOMBIE_FORBIDDEN_TILES_A_READING = 2048;
+/**
  * A player is answered the whole horde once in this long at most: a little less than the browser waits between two
  * asks (ZOMBIE_ASK_WHOLE_MS), so that a second ask that comes a little early, by the network, is not refused.
  */
@@ -228,6 +233,10 @@ export class CatastropheManager {
     private hordeFire = new Set<number>();
     private readonly heldFires: { tiles: number[]; until: number; read: boolean }[] = [];
     private zombieTimes: () => number = () => 1;
+    /** The tiles a horde keeps out of now (zombieForbiddenTilesOf), as the room reads them: given by the room. */
+    private zombieForbidden: (tilesWide: number, tilesHigh: number) => readonly number[] = () => [];
+    /** The tiles the log says the horde keeps out of. */
+    private hordeForbidden = new Set<number>();
     /**
      * The log of where the avatars stood and of the grenades shot, when each entry was written (ms), their slots by
      * key, and the tile each slot was last told on.
@@ -912,6 +921,11 @@ export class CatastropheManager {
         this.zombieTimes = times;
     }
 
+    /** The tiles the horde keeps out of now (the desks, the locked areas and their doors): read from the room. */
+    public zombieForbiddenWith(forbidden: (tilesWide: number, tilesHigh: number) => readonly number[]): void {
+        this.zombieForbidden = forbidden;
+    }
+
     /**
      * A player sends a horde of zombies across the map, the way, the numbers and the time they chose (kept within what
      * a horde may be), with the collisions of the map as their browser reads them (a tile a bit): it begins now at
@@ -965,6 +979,15 @@ export class CatastropheManager {
         this.heldFires.length = 0;
         this.hordeTerrainToldAt = Number.NEGATIVE_INFINITY;
         this.hordeTerrainHash = zombieTerrainHash(this.horde.terrain);
+        // The desks and the locked areas as the horde begins: from its first step (every browser that has the horde
+        // has its log), the crowd made round them at once.
+        this.hordeForbidden = new Set();
+        const forbidOn = this.readForbidden(this.horde).forbidOn;
+        if (forbidOn.length > 0) {
+            this.hordeLog.push({ applyStep: 0, changes: [], forbidOn });
+            this.hordeLogAt.push(now);
+            this.hordeLogStale = true;
+        }
         this.speedUpZombies();
         this.readAvatars();
         this.tellZombies();
@@ -1053,18 +1076,52 @@ export class CatastropheManager {
         const applyStep = Math.max(delayed, horde.safeStep + 1);
         const { fireOn, fireOff } = this.readFire(tilesWide, tilesHigh);
         const fires = fireOn.length > 0 || fireOff.length > 0;
-        if (changes.length > 0 || fires) {
+        const { forbidOn, forbidOff } = this.readForbidden(horde);
+        const forbids = forbidOn.length > 0 || forbidOff.length > 0;
+        if (changes.length > 0 || fires || forbids) {
             for (const change of changes) this.hordeTiles[change.slot] = change.tile;
             this.hordeLog.push({
                 applyStep,
                 changes,
                 ...(fireOn.length > 0 ? { fireOn } : {}),
                 ...(fireOff.length > 0 ? { fireOff } : {}),
+                ...(forbidOn.length > 0 ? { forbidOn } : {}),
+                ...(forbidOff.length > 0 ? { forbidOff } : {}),
             });
             this.hordeLogAt.push(this.now());
         }
         this.horde = { ...horde, safeStep: applyStep - 1 };
-        this.hordeLogStale ||= changes.length > 0 || fires;
+        this.hordeLogStale ||= changes.length > 0 || fires || forbids;
+    }
+
+    /**
+     * The tiles the horde keeps out of now that it did not, and those it may go into again (the desks, the locked
+     * areas and their doors: an area locked or unlocked, made, moved or removed), in growing order, told with the
+     * avatars once a second, ZOMBIE_FORBIDDEN_TILES_A_READING at most: the others at the next readings.
+     */
+    private readForbidden(horde: ZombieHorde): { forbidOn: number[]; forbidOff: number[] } {
+        const tilesWide = Math.ceil((horde.widthCells * TERRAIN_CELL) / TILE_PX);
+        const tilesHigh = Math.ceil((horde.heightCells * TERRAIN_CELL) / TILE_PX);
+        let read: readonly number[] = [];
+        try {
+            read = this.zombieForbidden(tilesWide, tilesHigh);
+        } catch (error) {
+            console.error("The desks of the map could not be read for a horde", error);
+            return { forbidOn: [], forbidOff: [] };
+        }
+        const now = new Set<number>();
+        for (const tile of read) if (Number.isInteger(tile) && tile >= 0 && tile < tilesWide * tilesHigh) now.add(tile);
+        let forbidOn: number[] = [];
+        let forbidOff: number[] = [];
+        for (const tile of now) if (!this.hordeForbidden.has(tile)) forbidOn.push(tile);
+        for (const tile of this.hordeForbidden) if (!now.has(tile)) forbidOff.push(tile);
+        forbidOn.sort((a, b) => a - b);
+        forbidOff.sort((a, b) => a - b);
+        forbidOff = forbidOff.slice(0, ZOMBIE_FORBIDDEN_TILES_A_READING);
+        forbidOn = forbidOn.slice(0, ZOMBIE_FORBIDDEN_TILES_A_READING - forbidOff.length);
+        for (const tile of forbidOff) this.hordeForbidden.delete(tile);
+        for (const tile of forbidOn) this.hordeForbidden.add(tile);
+        return { forbidOn, forbidOff };
     }
 
     /**

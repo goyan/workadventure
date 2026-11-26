@@ -23,6 +23,7 @@ import {
     dryOnBridges,
     waterWallsOf,
     zombieTerrainOf,
+    zombieForbiddenTilesOf,
 } from "@workadventure/map-editor";
 import * as Sentry from "@sentry/node";
 import { Metadata } from "@grpc/grpc-js";
@@ -428,6 +429,8 @@ export class GameRoom implements BrothersFinder {
         // It burns in the fire of the meadow and of its trees.
         catastrophes.zombieFireWith(() => ground.fireTiles());
         catastrophes.zombieTimesWith(gameRoom.hurricaneTimes.bind(gameRoom));
+        // It keeps out of the desks and of the locked areas.
+        catastrophes.zombieForbiddenWith(gameRoom.zombieForbiddenTiles.bind(gameRoom));
         gameRoom.catastrophes = catastrophes;
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => catastrophes.stop());
@@ -1474,6 +1477,19 @@ export class GameRoom implements BrothersFinder {
             heightCells: cells.height,
             cells: zombieTerrainOf(cells.width, cells.height, depthAt, undefined, waterWallsOf(wam), solid),
         };
+    }
+
+    /**
+     * The tiles a horde of zombies keeps out of now (zombieForbiddenTilesOf): the personal areas of the map, and the
+     * areas whose lock is on (their `lock` variable, JSON as the players set it), with their doors.
+     */
+    public zombieForbiddenTiles(tilesWide: number, tilesHigh: number): number[] {
+        return zombieForbiddenTilesOf(
+            this.getWam(),
+            (areaId, propertyId) => this.getAreaPropertyVariable(areaId, propertyId, "lock") === "true",
+            tilesWide,
+            tilesHigh,
+        );
     }
 
     /** Where the avatars of the room stand for a horde of zombies: not those in Basique (zombieAvatarsOf). */
