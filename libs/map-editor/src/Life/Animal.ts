@@ -38,6 +38,8 @@ export const Animal = z.object({
     drinkAt: z.number().finite().optional(),
     drinkUntil: z.number().finite().optional(),
     thirstySince: z.number().finite().optional(),
+    /** Antelope of a herd: until when it stands and grazes before its next few steps. */
+    restUntil: z.number().finite().optional(),
     /** Gull: since when it stands on a shore; undefined while it flies. */
     perchedAt: z.number().finite().optional(),
     /**
@@ -60,6 +62,7 @@ const CLOCKS = [
     "drinkAt",
     "drinkUntil",
     "thirstySince",
+    "restUntil",
     "perchedAt",
 ] as const satisfies readonly (keyof Animal)[];
 
