@@ -90,7 +90,7 @@ import { SnowGround } from "./SnowGround";
 import { createBlockSurface } from "./BlockSurface";
 import { CLOUD_LAYER_MARGIN, CloudLayer } from "./CloudLayer";
 import { rainbowPlacement, rainbowStrength } from "./Rainbow";
-import { contrails } from "./Contrails";
+import { contrailZoomFade, contrails } from "./Contrails";
 import type { Contrail } from "./Contrails";
 import type { CloudSky } from "./CloudLayer";
 import { screenScale, seenFromFar } from "./ScreenScale";
@@ -115,6 +115,9 @@ import {
     perspectiveFlakes,
 } from "./PerspectiveFall";
 import type { SnowFall } from "./Snowfall";
+
+/** Opacity of the shadow of a dense contrail on the ground. */
+const CONTRAIL_SHADOW_ALPHA = 0.14;
 
 /** The system asks for less motion: the fog patches stand still. */
 const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -372,7 +375,25 @@ export class WeatherManager {
         // Under a hurricane its own spiral of clouds (HurricaneView) takes the place of the clouds of the sky.
         const cloudsShown = this.cloudsShown && settings?.hurricaneSky !== true;
         const showClouds = enabled && cloudsShown && cloudiness > 0;
-        if (!showWeather && !showClouds) {
+        // The planes high over the map, whatever the clouds (shown or not, a clear sky too): none in Basique, nor with
+        // the weather turned off, under a hurricane or when motion is reduced. Higher than the clouds: zooming in, the
+        // camera passes under them first.
+        const trailFade = contrailZoomFade(this.screenScale());
+        const trails =
+            !enabled || settings?.hurricaneSky === true || this.basic || this.reducedMotion || trailFade <= 0
+                ? []
+                : contrails(
+                      serverDate?.getTime() ?? now,
+                      cloudDrift(settings?.windFrom, settings?.windSpeed),
+                      { width: this.scene.Map.widthInPixels, height: this.scene.Map.heightInPixels },
+                      1 - sunlight.night,
+                      cloudiness,
+                  ).map((trail) => ({
+                      ...trail,
+                      strength: trail.strength * trailFade,
+                      lights: trail.lights * trailFade,
+                  }));
+        if (!showWeather && !showClouds && trails.length === 0) {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
                 this.particles?.hide();
@@ -645,16 +666,14 @@ export class WeatherManager {
                 paint,
             );
         }
-        const trails = this.reducedMotion
-            ? []
-            : contrails(
-                  epoch,
-                  cloudDrift(settings?.windFrom, settings?.windSpeed),
-                  { width: this.scene.Map.widthInPixels, height: this.scene.Map.heightInPixels },
-                  1 - sunlight.night,
-                  cloudiness,
-              );
-        this.drawSkyLayer(view, sky, grid ? veil : undefined, sun, trails);
+        const trailOffset = trails.length > 0 && sunlight.shadows > 0 ? cloudShadowOffset(sun) : undefined;
+        // Higher than the clouds: a shadow further away, fainter.
+        const trailShadow = trailOffset && {
+            x: trailOffset.x * 1.6,
+            y: trailOffset.y * 1.6,
+            alpha: CONTRAIL_SHADOW_ALPHA * sunlight.shadows,
+        };
+        this.drawSkyLayer(view, sky, grid ? veil : undefined, sun, trails, trailShadow);
         this.reflectedSky = this.skyOverWater(sun, sunlight, cloudiness, raining || storm);
         if (paint) this.blocks.end();
         // Only the fog passes over the buildings seen from far.
@@ -912,6 +931,7 @@ export class WeatherManager {
         outdoors: readonly WeatherView[] | undefined,
         sun: SunPosition | undefined,
         trails: readonly Contrail[],
+        trailShadow?: { x: number; y: number; alpha: number },
     ): void {
         const layer = this.smoothCloudLayer();
         if (
@@ -949,6 +969,7 @@ export class WeatherManager {
             rainbow,
             still: this.reducedMotion,
             contrails: trails,
+            contrailShadow: trailShadow,
         });
     }
 
