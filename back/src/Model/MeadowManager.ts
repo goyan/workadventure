@@ -5,6 +5,7 @@ import type { VariablesRepositoryInterface } from "../Services/Repository/Variab
 import type { GameRoom } from "./GameRoom";
 import { threadGroundTimings } from "./Ground/GroundTimings";
 import type { RainTimelineService } from "./Services/RainTimelineService";
+import type { ToldFire } from "./Ground/GroundProtocol";
 
 export type { ReplayedWeather } from "@workadventure/map-editor";
 
@@ -127,6 +128,22 @@ export class MeadowManager extends MeadowSimulation {
             }
         }
         return { width: meadow.width, height: meadow.height, burning };
+    }
+
+    /**
+     * Its fire as it is told: the tiles whose grass burns and the trees on fire (for the animals, and for a horde of
+     * zombies, which burns in it). Undefined while nothing burns.
+     */
+    public toldFire(): ToldFire | undefined {
+        const burning = this.burningTiles();
+        const trees = this.treeFires().map(({ x, y }) => ({ x, y }));
+        if (!burning && trees.length === 0) return undefined;
+        return {
+            width: burning?.width ?? 0,
+            height: burning?.height ?? 0,
+            burning: burning?.burning ?? new Uint8Array(0),
+            trees,
+        };
     }
 
     protected save(): void {

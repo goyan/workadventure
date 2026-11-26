@@ -200,15 +200,7 @@ export class InlineRoomGround implements RoomGround {
     }
 
     public fireTiles(): ToldFire | undefined {
-        const burning = this.ground.meadow.burningTiles();
-        const trees = this.ground.meadow.treeFires().map(({ x, y }) => ({ x, y }));
-        if (!burning && trees.length === 0) return undefined;
-        return {
-            width: burning?.width ?? 0,
-            height: burning?.height ?? 0,
-            burning: burning?.burning ?? new Uint8Array(0),
-            trees,
-        };
+        return this.ground.meadow.toldFire();
     }
 
     public iceAt(tileX: number, tileY: number): number {

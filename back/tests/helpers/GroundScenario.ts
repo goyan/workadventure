@@ -341,18 +341,7 @@ export async function byHand(
         getGrid: () => water.getGrid(),
         waterVersion: () => water.waterVersion(),
         lifeFire: () => meadow.lifeFire(),
-        fireTiles: () => {
-            const burning = meadow.burningTiles();
-            const trees = meadow.treeFires().map(({ x, y }) => ({ x, y }));
-            return burning || trees.length > 0
-                ? {
-                      width: burning?.width ?? 0,
-                      height: burning?.height ?? 0,
-                      burning: burning?.burning ?? new Uint8Array(0),
-                      trees,
-                  }
-                : undefined;
-        },
+        fireTiles: () => meadow.toldFire(),
         iceAt: (tileX, tileY) => meadow.iceAt(tileX, tileY),
         hasMeadow: () => meadow.hasMeadow(),
         catchingUp: () => meadow.catchingUp(),

@@ -1506,6 +1506,56 @@ describe("CatastropheManager, a horde of zombies", () => {
         expect(after.some((entry) => entry.fireOff?.join() === patch.join())).toBe(true);
     });
 
+    it("keeps its log within bounds with a fire that spreads over the whole map, and tells a fast one bit by bit", () => {
+        // A map of 640 x 480 px (20 x 15 tiles): a ring of fire from its middle, a tile a second, 4 tiles deep; then
+        // all of it at once, then out.
+        const { manager, sent } = zombieHarness();
+        const burning = new Uint8Array(20 * 15);
+        let ring = 0;
+        manager.zombieFireWith(() => ({ width: 20, height: 15, burning, trees: [] }));
+        manager.startZombies({ ...ask, minutes: 3 });
+        for (let second = 1; second < 40; second++) {
+            ring = second;
+            burning.fill(0);
+            for (let y = 0; y < 15; y++) {
+                for (let x = 0; x < 20; x++) {
+                    const d = Math.sqrt((x - 10) ** 2 + (y - 7) ** 2);
+                    if (d <= ring && d > ring - 4) burning[y * 20 + x] = 1;
+                }
+            }
+            vi.advanceTimersByTime(ZOMBIE_TELL_MS);
+        }
+        const entries = decodeZombieLog(manager.zombies()?.avatars ?? "");
+        // Each tile took fire once and went out once.
+        expect(entries.reduce((sum, entry) => sum + (entry.fireOn?.length ?? 0), 0)).toBe(300);
+        expect(entries.reduce((sum, entry) => sum + (entry.fireOff?.length ?? 0), 0)).toBe(300);
+        expect(manager.zombies()?.avatars.length).toBeLessThan(2_000);
+        const tail = Math.max(
+            ...sent.filter((message) => message.zombies?.terrain === "").map((m) => m.zombies?.avatars.length ?? 0),
+        );
+        expect(tail).toBeLessThan(1_000);
+    });
+
+    it("tells 2048 tiles of fire a second at most, the others at the next readings", () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(0);
+        // A map of 4096 tiles across, all of it on fire at once.
+        const burning = new Uint8Array(4096 * 15).fill(1);
+        const big = new CatastropheManager(
+            { sendSubMessageToRoom: () => undefined },
+            () => ({ width: 8192 * 16, height: 480 }),
+            () => undefined,
+        );
+        big.zombieTerrainWith(() => ({ widthCells: 8192, heightCells: 30, cells: new Uint8Array(8192 * 30) }));
+        big.zombieFireWith(() => ({ width: 4096, height: 15, burning, trees: [] }));
+        big.startZombies(ask);
+        const told = () => decodeZombieLog(big.zombies()?.avatars ?? "").map((entry) => entry.fireOn?.length ?? 0);
+        expect(told()).toEqual([2048]);
+        vi.advanceTimersByTime(ZOMBIE_TELL_MS);
+        expect(told()).toEqual([2048, 2048]);
+        big.stop();
+    });
+
     it("sends no horde before the size of the map is read", () => {
         const { manager, sent } = harness();
         expect(manager.startZombies(ask)).toBe(false);

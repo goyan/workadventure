@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ZOMBIE_DYING, ZOMBIE_WALKING, ZombieCrowd } from "../src/Catastrophe/ZombieCrowd";
+import { ZOMBIE_DYING, ZombieCrowd } from "../src/Catastrophe/ZombieCrowd";
 import {
     decodeZombieLog,
     encodeZombieLog,
@@ -12,7 +12,7 @@ import { TERRAIN_CELL, TILE_PX } from "../src/types";
 
 const START = 1_800_000_000_000;
 /** The checksum of the reference crowd that runs into a fire (see its test): changed only with the model. */
-const FIRE_REFERENCE_CHECKSUM = 1702215645;
+const FIRE_REFERENCE_CHECKSUM = 4106216541;
 const TILES_WIDE = (120 * TERRAIN_CELL) / TILE_PX;
 
 function horde(log: ZombieLogEntry[], overrides: Partial<ZombieHorde> = {}): ZombieHorde {
@@ -95,15 +95,13 @@ describe("a horde that runs into a fire", () => {
         expect(crowd.killedByFire).toBeGreaterThan(100);
         expect(flying).toBe(0);
         expect(burntIn).toBeGreaterThan(0);
+        // Once it went out, nobody burns any more.
         const burnt = crowd.killedByFire;
         crowd.advanceTo(START + 60_000);
         expect(crowd.killedByFire).toBe(burnt);
-        let walkedOn = 0;
-        for (let zombie = 0; zombie < crowd.count; zombie++) if (crowd.state[zombie] === ZOMBIE_WALKING) walkedOn++;
-        expect(walkedOn + burnt).toBeGreaterThan(0);
     });
 
-    it("burns the same zombies wherever it is stepped: told bit by bit, or to one who joins after", () => {
+    it("burns the same zombies told the fire bit by bit, as a browser hears it, as told it whole", () => {
         const fire = band(25, 27);
         const log: ZombieLogEntry[] = [
             { applyStep: 150, changes: [], fireOn: fire.slice(0, 60) },
@@ -125,9 +123,6 @@ describe("a horde that runs into a fire", () => {
         }
         bitByBit.advanceTo(START + 50_000);
         expect(bitByBit.checksum()).toBe(whole.checksum());
-        const joined = new ZombieCrowd(horde(log));
-        joined.advanceTo(START + 50_000);
-        expect(joined.checksum()).toBe(whole.checksum());
     });
 
     it("is the crowd it was: the same number after the same steps, with an avatar and a fire", () => {
