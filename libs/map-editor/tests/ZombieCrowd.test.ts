@@ -31,7 +31,7 @@ import type { WAMFileFormat } from "../src/types";
 
 const START = 1_800_000_000_000;
 /** The checksum of the reference crowd (see its test): set once, changed only with the model. */
-const REFERENCE_CHECKSUM = 1127529049;
+const REFERENCE_CHECKSUM = 3754160857;
 
 /** The walls of a closed box of cells [x0, x1) x [y0, y1), with an opening of `door` cells in its east side. */
 function box(x0: number, y0: number, x1: number, y1: number, door = 0): { east: Set<string>; south: Set<string> } {
@@ -397,7 +397,7 @@ describe("a crowd of zombies", () => {
         }
     });
 
-    it("runs to an avatar near its way, comes within 5 tiles of it, then goes on and out", () => {
+    it("runs to an avatar near its way, every zombie, sticks to it, then runs out in time", () => {
         // An avatar standing 12 tiles off the middle of the way, from the first step.
         const avatarX = 60 * TERRAIN_CELL;
         const avatarY = 40 * TERRAIN_CELL + 12 * TILE_PX;
@@ -407,21 +407,25 @@ describe("a crowd of zombies", () => {
         });
         const crowd = new ZombieCrowd(told);
         let ran = false;
-        let came = false;
+        let mostNear = 0;
         for (let step = 0; step < crowd.lastStep - 1; step++) {
             crowd.step();
+            let near = 0;
             for (let zombie = 0; zombie < crowd.count; zombie++) {
                 if (crowd.state[zombie] !== ZOMBIE_WALKING) continue;
                 if (crowd.target[zombie] === 0) ran = true;
                 const dx = crowd.x[zombie] - (Math.floor(avatarX / TILE_PX) + 0.5) * TILE_PX;
                 const dy = crowd.y[zombie] - (Math.floor(avatarY / TILE_PX) + 0.5) * TILE_PX;
-                if (dx * dx + dy * dy < (5 * TILE_PX) ** 2) came = true;
+                if (dx * dx + dy * dy < (5 * TILE_PX) ** 2) near++;
             }
+            mostNear = Math.max(mostNear, near);
         }
         let gone = 0;
         for (let zombie = 0; zombie < crowd.count; zombie++) if (crowd.state[zombie] === ZOMBIE_GONE) gone++;
         expect(ran).toBe(true);
-        expect(came).toBe(true);
+        // Stuck to it: the whole horde round it at once, within 5 tiles (measured: 100; 10 at most before, when a
+        // zombie was done with an avatar within 5 tiles).
+        expect(mostNear).toBe(100);
         expect(gone / crowd.count).toBeGreaterThan(0.9);
     });
 
@@ -451,7 +455,7 @@ describe("a crowd of zombies", () => {
         expect(running).toBe(crowd.walking);
     });
 
-    it("goes into a closed room by its door to the avatar inside, comes within 5 tiles, comes out and crosses", () => {
+    it("goes into a closed room by its door to the avatar inside, packs round it, and lets the door decide the end", () => {
         const width = 120;
         const height = 80;
         // A room in the middle, its door (2 tiles) on its east side, the avatar against its west wall.
@@ -488,18 +492,21 @@ describe("a crowd of zombies", () => {
                 if (dx * dx + dy * dy < (5 * TILE_PX) ** 2) came++;
             }
         }
-        let gone = 0;
-        for (let zombie = 0; zombie < crowd.count; zombie++) if (crowd.state[zombie] === ZOMBIE_GONE) gone++;
-        expect(inside).toBeGreaterThan(20);
+        const left = crowd.walking;
+        crowd.step();
+        expect(crowd.walking).toBe(0);
+        // Measured: 447 of the 600 went in (82 before, forty at most on an avatar); its door of 2.2 m lets some 3.5 a
+        // second out once the horde runs out, and 291 are still in at the end: they fall to dust with the horde (none
+        // before). A choice of the user: every zombie sticks to its avatar.
+        expect(inside).toBeGreaterThan(400);
         expect(came).toBeGreaterThan(0);
-        // The door is a bottleneck: most get out all the same, in time.
-        expect(gone / crowd.count).toBeGreaterThan(0.85);
+        expect(left).toBeLessThan(crowd.count / 2);
     });
 
     // 1800 steps of 1500 zombies: some 1.3 s alone, 4.6 to 7 s among the other tests of the library at once.
     it("runs to every avatar of a meeting, not only to the one nearest the door", { timeout: 20_000 }, () => {
         // Twelve avatars in a closed room, its door on its east side: the one nearest the door is the nearest to the
-        // whole map outside. Once it has its share, or a zombie is done with it, the others are run to.
+        // whole map outside. Once the crowd packs the way to it, the others are nearer by the way and run to.
         const width = 160;
         const height = 80;
         const terrain = zombieTerrainOf(width, height, () => 0, undefined, box(40, 20, 80, 60, 4));
@@ -535,7 +542,7 @@ describe("a crowd of zombies", () => {
             mostAtOnce = Math.max(mostAtOnce, atOnce);
         }
         expect(runTo.size).toBeGreaterThanOrEqual(10);
-        // More than the share of a single avatar (40) at once.
+        // Far more than forty at once (the share of an avatar before).
         expect(mostAtOnce).toBeGreaterThan(120);
     });
 

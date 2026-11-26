@@ -58,9 +58,10 @@ import type { ZombieHorde, ZombieLogEntry } from "./ZombieHorde";
  *   the user: the avatars are nearly always in the buildings). Each zombie runs to the avatar nearest to it by the way
  *   the plan of the map allows: one distance field from all the avatars at once (a multi-source Dijkstra over the
  *   cells, through the doors and over the bridges), each cell knowing the avatar it is nearest to; made again only
- *   when an avatar changes tile. It runs until it is within ZOMBIE_SATISFIED_TILES tiles of it; then it is done with
- *   that avatar for a while (ZOMBIE_FORGET_STEPS), and goes on its way. One that gets no nearer for a while (a jam at a
- *   door) gives up on it too. When its time runs short, the way out wins over any avatar.
+ *   when an avatar changes tile. Every zombie runs to it, however many they are, and sticks to it (a choice of the
+ *   user): it follows it wherever it goes, round it in the crowd that packs there, and never gives up on it while it
+ *   can reach it. One that cannot reach any avatar goes on its way. When its time runs short, the way out wins over
+ *   any avatar.
  * - How fast: it runs, at its own pace (3 to 5 m/s: endurance running of humans, 2.3 to 6.5 m/s, Bramble and
  *   Lieberman 2004, Nature 432), held back by the crowd ahead of it by the fundamental diagram of Weidmann (1993,
  *   Schriftenreihe IVT 90): v = v0 (1 - exp(-1.913 (1/rho - 1/5.4))), rho the density within a metre ahead of it.
@@ -123,23 +124,23 @@ const SWAY_WANDER = 0.06;
 const ROOM_A_TILE = 3;
 const ENTRY_TRIES = 4;
 
-/** Within this many tiles of an avatar, a zombie is done with it. */
-export const ZOMBIE_SATISFIED_TILES = 5;
-const SATISFIED_PX = ZOMBIE_SATISFIED_TILES * TILE_PX;
-/** A zombie done with an avatar does not run after it again for this many steps (60 s of the horde). */
-export const ZOMBIE_FORGET_STEPS = 600;
-/** One that got no nearer an avatar for this many steps (5 s) gives up on it. */
-const GIVE_UP_STEPS = 50;
-/** Getting nearer is getting this much nearer (2 cells, in the units of the fields). */
-const NEARER = 20;
 /**
- * Within this many tiles of its avatar, in a press (this many others in the metre ahead, counted twice), a zombie is
- * done with it: it is in the crowd round it, it will get no nearer.
+ * Within this of its avatar by the way of the map (3 cells, in the units of the fields), a zombie runs straight at it
+ * (the field is flat on its tile); within ARRIVE_PX of it, slower and slower: it sticks to it without overrunning it.
  */
-const PRESS_TILES = 12;
-const PRESS_NEAR = 6;
-/** Each zombie looks again for an avatar to run to every this many steps, in turn. */
-const RETARGET_STEPS = 10;
+const CLOSE_FIELD = 30;
+const ARRIVE_PX = 1 * PX;
+/**
+ * The way to the avatars costs more through a crowd (a dynamic floor field, Burstedde et al. 2001, Physica A 295;
+ * the congestion term of Hughes 2002, Transportation Research B 36): a cell of a tile where more than CROWD_FREE
+ * zombies stand costs CROWD_COST more for each one more, CROWD_MOST at most (a free cell costs 10). The field is
+ * made again every CROWD_REFIELD_STEPS steps while a tile is crowded: a queue at a narrow bridge or a door sends those
+ * behind by another way when there is one, the crowd round an avatar spreads round it.
+ */
+const CROWD_FREE = 2;
+const CROWD_COST = 10;
+const CROWD_MOST = 240;
+const CROWD_REFIELD_STEPS = 20;
 /** The way out wins once the time to run out, this much longer, is more than the time left. */
 const URGENCY_MARGIN = 1.6;
 /**
@@ -147,13 +148,17 @@ const URGENCY_MARGIN = 1.6;
  * longer and a few seconds more: no avatar holds it past that (a jam at a door would hold it otherwise).
  */
 const RUSH_MARGIN = 2;
-/**
- * A zombie runs to an avatar that fewer than this many others run to already: those round it make a press, the
- * others hear it is taken and go on (a choice: without it the whole horde would pack into the room of one avatar,
- * and never get out by its door in time).
- */
-const MOST_ON_ONE = 40;
 const RUSH_SECONDS = 10;
+/**
+ * A crowd gets out of a narrow passage (a door, a narrow bridge) at so many a second for each metre of its width (the
+ * specific flow of a bottleneck, about 1.3 persons/(m s): Weidmann 1993, Seyfried et al. 2009, Transportation
+ * Science 43). The zombies whose way out goes through a passage narrower than NARROW_CELLS cells on each side of its
+ * middle wait their turn there: the whole horde runs out early enough for the slowest passage to let its own through,
+ * by no more than DRAIN_SHARE of its time. Those still in at the end fall to dust with the others.
+ */
+const BOTTLENECK_FLOW = 1.3;
+const NARROW_CELLS = 4;
+const DRAIN_SHARE = 0.5;
 /** A zombie that overlaps an avatar wholly shoves it at this speed (px/s), and carries it this share of its own. */
 const SHOVE_PX_S = 3 * PX;
 const SHOVE_CARRY = 0.5;
@@ -161,8 +166,6 @@ const SHOVE_CARRY = 0.5;
 export const ZOMBIE_SHOVE_MOST_M_S = 2.5;
 /** The avatars a horde follows, at most (the first seen). */
 export const ZOMBIE_MOST_AVATARS = 32;
-/** The fields of single avatars made at one step, at most: one asked for waits its turn. */
-const OWN_FIELDS_A_STEP = 1;
 /** The distance field counts 10 a cell across, 14 a cell on the diagonal; this is "out of reach". */
 const FAR = 0x7fffffff;
 
@@ -284,6 +287,14 @@ export class ZombieCrowd {
     private readonly wayX: Float32Array;
     private readonly wayY: Float32Array;
     private readonly exits: Uint8Array;
+    /**
+     * How narrow the way out of each cell gets at its narrowest (cells from the middle of the passage to its side,
+     * NARROW_CELLS where it never gets narrower): computed once with the potential.
+     */
+    private readonly narrowOut: Uint8Array;
+    /** The tile of the narrowest passage on the way out of each cell (-1 where none is narrow), and who waits there. */
+    private readonly narrowAt: Int32Array;
+    private readonly waiting: Float64Array;
     private readonly entries: Int32Array;
     private readonly pace: Float64Array;
     private readonly sway: Float64Array;
@@ -299,16 +310,8 @@ export class ZombieCrowd {
     private trampledAny = false;
     /** Running out, whatever it hears: its time runs short. */
     private readonly leaving: Uint8Array;
-    /** How many others were in the metre ahead of each zombie at the last step (counted twice). */
-    private readonly press: Uint8Array;
     /** The whole horde runs out. */
     private rushing = false;
-    private readonly onOne = new Int32Array(ZOMBIE_MOST_AVATARS);
-    /** Until which step each zombie is done with each avatar (zombie * ZOMBIE_MOST_AVATARS + slot). */
-    private readonly doneUntil: Int32Array;
-    /** How near it got to its avatar (its distance field), and at which step it last got nearer. */
-    private readonly nearest: Int32Array;
-    private readonly nearestAt: Int32Array;
     /**
      * The distance by the way of the map from each cell to the nearest avatar, and that avatar (its slot, -1 out of
      * reach); made again at the step an avatar changes tile (`fieldStale`). Undefined while there is no avatar.
@@ -316,18 +319,15 @@ export class ZombieCrowd {
     private field: Int32Array | undefined;
     private owner: Int8Array | undefined;
     private fieldStale = false;
-    /**
-     * The field of a single avatar, for a zombie whose nearest avatar is one it is done with or that has its share of
-     * zombies already: made when such a zombie asks for it (`wanted`, a bit a slot), OWN_FIELDS_A_STEP at most, and
-     * again when it is asked for after its avatar moved (`ownTile`, the tile it was made from).
-     */
-    private readonly own: (Int32Array | undefined)[] = new Array<Int32Array | undefined>(ZOMBIE_MOST_AVATARS);
-    private readonly ownTile = new Int32Array(ZOMBIE_MOST_AVATARS).fill(-1);
-    private wanted = 0;
     /** The ways out of each cell (waysOf), made the first time the field is. */
     private ways: Uint8Array | undefined;
-    /** The buckets of the Dijkstra, by distance modulo 16 (a step adds 10 or 14): kept from one making to the next. */
-    private readonly buckets: number[][] = Array.from({ length: 16 }, () => []);
+    /**
+     * The buckets of the Dijkstra, by distance modulo 256 (a step adds 10 or 14, and the crowd of the tile it goes
+     * into, CROWD_MOST at most): kept from one making to the next.
+     */
+    /** What the crowd of its tile adds to a step into each cell (spread). */
+    private readonly crowdCost: Int32Array;
+    private readonly buckets: number[][] = Array.from({ length: 256 }, () => []);
     /**
      * The grenades told that have not gone off yet (and those of the last step, drawn until it), by their entry
      * (shotKey), with their paths once computed; the blasts not yet taken.
@@ -404,23 +404,24 @@ export class ZombieCrowd {
         this.pace = new Float64Array(count);
         this.sway = new Float64Array(count);
         this.leaving = new Uint8Array(count);
-        this.press = new Uint8Array(count);
-        this.doneUntil = new Int32Array(count * ZOMBIE_MOST_AVATARS);
-        this.nearest = new Int32Array(count).fill(FAR);
-        this.nearestAt = new Int32Array(count);
         this.tileOf = new Int32Array(count);
         this.tileList = new Int32Array(count);
         this.tilesWide = Math.ceil(this.widthPx / TILE_PX);
         this.tilesHigh = Math.ceil(this.heightPx / TILE_PX);
         this.tileStart = new Int32Array(this.tilesWide * this.tilesHigh + 1);
+        this.crowdCost = new Int32Array(width * height);
         this.trampled = new Float32Array(this.tilesWide * this.tilesHigh);
         this.lastStep = zombieLastStep(horde);
         this.random = mulberry32(horde.seed);
         this.exits = new Uint8Array(width * height);
+        this.narrowOut = new Uint8Array(width * height);
+        this.narrowAt = new Int32Array(width * height).fill(-1);
+        this.waiting = new Float64Array(this.tilesWide * this.tilesHigh);
         this.potential = new Float64Array(width * height);
         this.wayX = new Float32Array(width * height);
         this.wayY = new Float32Array(width * height);
         this.march();
+        this.narrowWays();
         const frontPx = Math.max(LEAST_FRONT_PX, Math.sqrt((count * FRONT_ASPECT) / MARCH_DENSITY) * PX);
         this.entries = this.entryCells(frontPx);
         this.emitSteps = Math.max(1, Math.floor(this.lastStep * EMIT_SHARE));
@@ -1151,50 +1152,37 @@ export class ZombieCrowd {
     }
 
     /**
-     * The field of the avatars, made again when one changed tile (at the step its change is applied); then the fields
-     * of single avatars the zombies asked for at the step before.
+     * The field of the avatars, made again when one changed tile (at the step its change is applied), and every
+     * CROWD_REFIELD_STEPS steps while a tile holds a crowd (from where the zombies stood at the step before).
      */
     private makeFields(): void {
-        if (this.fieldStale) {
-            this.fieldStale = false;
-            const field = this.field ?? new Int32Array(this.width * this.height);
-            const owner = this.owner ?? new Int8Array(this.width * this.height);
-            const seeded = this.spread(field, owner, -1);
-            this.field = seeded ? field : undefined;
-            this.owner = seeded ? owner : undefined;
-        }
-        let made = 0;
-        for (let slot = 0; slot < ZOMBIE_MOST_AVATARS && this.wanted !== 0 && made < OWN_FIELDS_A_STEP; slot++) {
-            const bit = 1 << slot;
-            if ((this.wanted & bit) === 0) continue;
-            this.wanted &= ~bit;
-            const tile = this.avatarTile[slot];
-            if (tile < 0 || (this.own[slot] && this.ownTile[slot] === tile)) continue;
-            const own = this.own[slot] ?? new Int32Array(this.width * this.height);
-            this.own[slot] = this.spread(own, undefined, slot) ? own : undefined;
-            this.ownTile[slot] = tile;
-            made++;
-        }
+        if (!this.fieldStale && !(this.field && this.steps % CROWD_REFIELD_STEPS === 0 && this.crowded())) return;
+        this.fieldStale = false;
+        const field = this.field ?? new Int32Array(this.width * this.height);
+        const owner = this.owner ?? new Int8Array(this.width * this.height);
+        const seeded = this.spread(field, owner);
+        this.field = seeded ? field : undefined;
+        this.owner = seeded ? owner : undefined;
     }
 
     /**
-     * The distance from the avatars (all, or the one of slot `only`) to each cell (10 a cell across, 14 on a
-     * diagonal), by the open sides of the cells, round the water and the collisions, through the doors, and the avatar
-     * each cell is nearest to (`owner`): a Dijkstra from all of them at once, its queue in buckets (Dial 1969). The
+     * The distance from the avatars to each cell (10 a cell across, 14 on a diagonal, more through a crowd), by the
+     * open sides of the cells, round the water and the collisions, through the doors, and the avatar each cell is
+     * nearest to (`owner`): a Dijkstra from all of them at once, its queue in buckets (Dial 1969). The
      * same everywhere: the avatars are seeded in the order of their slots, the buckets read in the order they were
      * filled, and a cell keeps the first avatar to reach it at its distance. False when no avatar stands anywhere.
      */
-    private spread(field: Int32Array, owner: Int8Array | undefined, only: number): boolean {
+    private spread(field: Int32Array, owner: Int8Array): boolean {
         const { width, height, buckets } = this;
         let seeded = false;
         field.fill(FAR);
-        owner?.fill(-1);
+        owner.fill(-1);
         for (const bucket of buckets) bucket.length = 0;
         let queued = 0;
         const cellsATile = TILE_PX / TERRAIN_CELL;
         for (let slot = 0; slot < ZOMBIE_MOST_AVATARS; slot++) {
             const tile = this.avatarTile[slot];
-            if (tile < 0 || (only >= 0 && slot !== only)) continue;
+            if (tile < 0) continue;
             const tileX = tile % this.tilesWide;
             const tileY = (tile - tileX) / this.tilesWide;
             for (let dy = 0; dy < cellsATile; dy++) {
@@ -1204,7 +1192,7 @@ export class ZombieCrowd {
                     const cell = cellY * width + cellX;
                     if (cellX >= width || cellY >= height || this.blockedCell(cell) || field[cell] === 0) continue;
                     field[cell] = 0;
-                    if (owner) owner[cell] = slot;
+                    owner[cell] = slot;
                     buckets[0].push(cell);
                     queued++;
                     seeded = true;
@@ -1216,22 +1204,40 @@ export class ZombieCrowd {
         const ways = this.waysOf();
         const steps = [1, -1, width, -width, width + 1, width - 1, -width + 1, -width - 1];
         const costs = [10, 10, 10, 10, 14, 14, 14, 14];
+        // What the crowd of each tile adds to a step into one of its cells.
+        const { tileStart, tilesWide } = this;
+        const crowdCost = this.crowdCost;
+        crowdCost.fill(0);
+        for (let tile = 0; tile < tilesWide * this.tilesHigh; tile++) {
+            const over = tileStart[tile + 1] - tileStart[tile] - CROWD_FREE;
+            if (over <= 0) continue;
+            const cost = Math.min(CROWD_MOST, over * CROWD_COST);
+            const tileX = tile % tilesWide;
+            const tileY = (tile - tileX) / tilesWide;
+            for (let dy = 0; dy < cellsATile; dy++) {
+                for (let dx = 0; dx < cellsATile; dx++) {
+                    const cellX = tileX * cellsATile + dx;
+                    const cellY = tileY * cellsATile + dy;
+                    if (cellX < width && cellY < height) crowdCost[cellY * width + cellX] = cost;
+                }
+            }
+        }
         for (let distance = 0; queued > 0; distance++) {
-            const bucket = buckets[distance & 15];
+            const bucket = buckets[distance & 255];
             for (let at = 0; at < bucket.length; at++) {
                 const cell = bucket[at];
                 queued--;
                 if (field[cell] !== distance) continue;
-                const slot = owner ? owner[cell] : only;
+                const slot = owner[cell];
                 const open = ways[cell];
                 for (let way = 0; way < 8; way++) {
                     if ((open & (1 << way)) === 0) continue;
                     const next = cell + steps[way];
-                    const reached = distance + costs[way];
+                    const reached = distance + costs[way] + crowdCost[next];
                     if (reached >= field[next]) continue;
                     field[next] = reached;
-                    if (owner) owner[next] = slot;
-                    buckets[reached & 15].push(next);
+                    owner[next] = slot;
+                    buckets[reached & 255].push(next);
                     queued++;
                 }
             }
@@ -1316,6 +1322,15 @@ export class ZombieCrowd {
         tileStart[0] = 0;
     }
 
+    /** Whether a tile holds more than CROWD_FREE zombies (at the step before). */
+    private crowded(): boolean {
+        const { tileStart } = this;
+        for (let tile = 0; tile < this.tilesWide * this.tilesHigh; tile++) {
+            if (tileStart[tile + 1] - tileStart[tile] > CROWD_FREE) return true;
+        }
+        return false;
+    }
+
     private crowdOfTile(tile: number): number {
         return this.tileStart[tile + 1] - this.tileStart[tile];
     }
@@ -1362,9 +1377,9 @@ export class ZombieCrowd {
     }
 
     /**
-     * Each zombie, in its turn (every RETARGET_STEPS steps), chooses where it runs: to the nearest avatar it hears and
-     * is not done with, by the way the map allows, or out. Every step it checks whether it reached its avatar (then
-     * it is done with it), gave up on it, or must run out now.
+     * What each zombie runs to: the avatar nearest to it by the way of the map (the owner of its cell in the field of
+     * the avatars), every zombie, however many run to it already, for as long as it can reach one; else its way. Once
+     * its time runs short (or the whole horde's), out, whatever it hears.
      */
     private choose(): void {
         const { count, state, x, y, target, steps } = this;
@@ -1381,92 +1396,44 @@ export class ZombieCrowd {
             }
             // Those still to come in have the whole crossing to run.
             if (this.nextIn < count) furthest = Math.max(furthest, this.widthPx / SLOWEST_RUN_PX);
-            if (furthest * RUSH_MARGIN + RUSH_SECONDS >= remainingSeconds) this.rushing = true;
+            const needed = Math.max(furthest * RUSH_MARGIN, furthest + this.drainSeconds()) + RUSH_SECONDS;
+            if (needed >= remainingSeconds) this.rushing = true;
         }
-        // How many run to each avatar, from the step before: counted as the choices change.
-        const onOne = this.onOne;
-        onOne.fill(0);
-        for (let zombie = 0; zombie < count; zombie++) if (target[zombie] >= 0) onOne[target[zombie]]++;
+        const field = this.field;
+        const owner = this.owner;
         for (let zombie = 0; zombie < count; zombie++) {
             if (state[zombie] !== ZOMBIE_WALKING) continue;
             const cell = this.cellAt(x[zombie], y[zombie]);
-            if (this.rushing && !this.leaving[zombie]) {
-                this.leaving[zombie] = 1;
-                target[zombie] = -1;
-            }
+            if (this.rushing && !this.leaving[zombie]) this.leaving[zombie] = 1;
             if (!this.leaving[zombie]) {
                 const out = this.potential[cell] - this.exitLevel;
                 const secondsOut = (out * TERRAIN_CELL) / this.pace[zombie];
                 if (out !== Number.POSITIVE_INFINITY && secondsOut * URGENCY_MARGIN + 2 >= remainingSeconds) {
                     this.leaving[zombie] = 1;
-                    target[zombie] = -1;
                 }
             }
-            const slot = target[zombie];
-            const field = this.field;
-            const owner = this.owner;
-            if (slot >= 0) {
-                const tile = this.avatarTile[slot];
-                if (tile < 0 || !field) {
-                    target[zombie] = -1;
-                } else {
-                    const ax = ((tile % this.tilesWide) + 0.5) * TILE_PX;
-                    const ay = (Math.floor(tile / this.tilesWide) + 0.5) * TILE_PX;
-                    const dx = ax - x[zombie];
-                    const dy = ay - y[zombie];
-                    // Nearer by the way of the map, where the field leads to it; else as the crow flies.
-                    const own = this.own[slot];
-                    const distance =
-                        owner?.[cell] === slot
-                            ? field[cell]
-                            : own
-                              ? own[cell]
-                              : Math.floor((Math.sqrt(dx * dx + dy * dy) / TERRAIN_CELL) * 10);
-                    if (distance + NEARER <= this.nearest[zombie]) {
-                        this.nearest[zombie] = distance;
-                        this.nearestAt[zombie] = steps;
-                    }
-                    const d2 = dx * dx + dy * dy;
-                    // Reached (within 5 tiles), in the press round it, or no nearer for a while: done with it.
-                    if (
-                        d2 < SATISFIED_PX * SATISFIED_PX ||
-                        (d2 < PRESS_TILES * PRESS_TILES * TILE_PX * TILE_PX && this.press[zombie] >= PRESS_NEAR) ||
-                        steps - this.nearestAt[zombie] > GIVE_UP_STEPS
-                    ) {
-                        this.doneUntil[zombie * ZOMBIE_MOST_AVATARS + slot] = steps + ZOMBIE_FORGET_STEPS;
-                        target[zombie] = -1;
-                    }
-                }
-            }
-            if (this.leaving[zombie] || (zombie + steps) % RETARGET_STEPS !== 0) continue;
-            // The avatar nearest to it by the way it would run: that of its cell, unless it is done with it or too many
-            // run to it already; then the nearest of the others, by their own fields (asked for, made at the next
-            // steps); none within reach, and it goes on its way.
-            const nearestOne = owner && field && field[cell] !== FAR ? owner[cell] : -1;
-            const free = (slot: number): boolean =>
-                this.doneUntil[zombie * ZOMBIE_MOST_AVATARS + slot] <= steps &&
-                (slot === target[zombie] || onOne[slot] < MOST_ON_ONE);
-            let best = nearestOne >= 0 && free(nearestOne) ? nearestOne : -1;
-            if (nearestOne >= 0 && best < 0) {
-                let bestDistance = FAR;
-                for (let other = 0; other < ZOMBIE_MOST_AVATARS; other++) {
-                    if (other === nearestOne || this.avatarTile[other] < 0 || !free(other)) continue;
-                    const own = this.own[other];
-                    if (!own || this.ownTile[other] !== this.avatarTile[other]) this.wanted |= 1 << other;
-                    if (own && own[cell] < bestDistance) {
-                        bestDistance = own[cell];
-                        best = other;
-                    }
-                }
-            }
-            if (best !== target[zombie]) {
-                if (target[zombie] >= 0) onOne[target[zombie]]--;
-                if (best >= 0) onOne[best]++;
-                target[zombie] = best;
-                this.nearest[zombie] = FAR;
-                this.nearestAt[zombie] = steps;
-            }
+            target[zombie] = !this.leaving[zombie] && owner && field && field[cell] !== FAR ? owner[cell] : -1;
         }
+    }
+
+    /**
+     * How long the zombies wait their turn at the narrow passage on their way out that lets its own through the
+     * slowest (BOTTLENECK_FLOW): DRAIN_SHARE of the time of the horde at most.
+     */
+    private drainSeconds(): number {
+        const { count, state, x, y, narrowOut, narrowAt, waiting } = this;
+        waiting.fill(0);
+        let seconds = 0;
+        for (let zombie = 0; zombie < count; zombie++) {
+            if (state[zombie] !== ZOMBIE_WALKING) continue;
+            const cell = this.cellAt(x[zombie], y[zombie]);
+            const at = narrowAt[cell];
+            if (at < 0) continue;
+            const metres = ((2 * narrowOut[cell] - 1) * TERRAIN_CELL) / PX;
+            waiting[at] += 1 / (BOTTLENECK_FLOW * metres);
+            seconds = Math.max(seconds, waiting[at]);
+        }
+        return Math.min(seconds, this.lastStep * DT * DRAIN_SHARE);
     }
 
     /** The way down the potential at a point (atX, atY), between the four cells around it; the heading where none. */
@@ -1532,16 +1499,25 @@ export class ZombieCrowd {
             if (state[zombie] !== ZOMBIE_WALKING) continue;
             const zx = x[zombie];
             const zy = y[zombie];
-            // Down the field of the avatars while it runs to the nearest, that of its avatar alone while it runs to
-            // another (made from where it stood, until made again), else out.
+            // Down the field of the avatars to the nearest, straight at it once close (its tile is flat in the field),
+            // else out.
             const slot = this.target[zombie];
-            const field =
-                slot < 0
-                    ? undefined
-                    : this.owner?.[this.cellAt(zx, zy)] === slot
-                      ? this.field
-                      : (this.own[slot] ?? this.field);
-            if (!field || !this.wayTo(field, zx, zy)) this.wayOut(zx, zy);
+            const field = slot < 0 ? undefined : this.field;
+            let arrive = 1;
+            if (field && field[this.cellAt(zx, zy)] < CLOSE_FIELD) {
+                const tile = this.avatarTile[slot];
+                const dx = ((tile % tilesWide) + 0.5) * TILE_PX - zx;
+                const dy = (Math.floor(tile / tilesWide) + 0.5) * TILE_PX - zy;
+                const d = Math.sqrt(dx * dx + dy * dy);
+                if (d > 1e-6) {
+                    this.atX = dx / d;
+                    this.atY = dy / d;
+                } else {
+                    this.atX = this.horde.dirX;
+                    this.atY = this.horde.dirY;
+                }
+                arrive = Math.min(1, d / ARRIVE_PX);
+            } else if (!field || !this.wayTo(field, zx, zy)) this.wayOut(zx, zy);
             // It sways from its way, a slow wander of its own: its way turned by a share of its square.
             let sway = this.sway[zombie] + (this.random() * 2 - 1) * SWAY_WANDER;
             sway = Math.min(SWAY, Math.max(-SWAY, sway));
@@ -1599,8 +1575,7 @@ export class ZombieCrowd {
                 const ay = (Math.floor(tile / tilesWide) + 0.5) * TILE_PX - zy;
                 if (ax * ax + ay * ay < reach2 * 4) feel(ax, ay, ZOMBIE_RADIUS_PX + AVATAR_RADIUS_PX, 2);
             }
-            this.press[zombie] = Math.min(255, near);
-            const wanted = this.pace[zombie] * WEIDMANN[Math.min(WEIDMANN.length - 1, near)];
+            const wanted = this.pace[zombie] * WEIDMANN[Math.min(WEIDMANN.length - 1, near)] * arrive;
             let ax = (wanted * wayX - vx[zombie]) / RELAX_SECONDS + SOCIAL_ACCEL * pushX;
             let ay = (wanted * wayY - vy[zombie]) / RELAX_SECONDS + SOCIAL_ACCEL * pushY;
             if (along > 0) {
@@ -1860,6 +1835,92 @@ export class ZombieCrowd {
                 } else if (length > 1e-9) {
                     this.wayX[cell] = -gx / length;
                     this.wayY[cell] = -gy / length;
+                }
+            }
+        }
+    }
+
+    /**
+     * How narrow the way out of each cell gets (narrowOut): the room each cell has, in cells to the nearest closed side
+     * (a wall, water, a collision; NARROW_CELLS at most), then from the exits inwards the widest way's narrowest room
+     * (a widest path, the widest first, in buckets by room).
+     */
+    private narrowWays(): void {
+        const { width, height, exits, narrowOut, narrowAt } = this;
+        const cellsATile = TILE_PX / TERRAIN_CELL;
+        const size = width * height;
+        const room = new Uint8Array(size);
+        let ring: number[] = [];
+        const sides: [number, number][] = [
+            [1, 0],
+            [-1, 0],
+            [0, 1],
+            [0, -1],
+        ];
+        const inside = (cellX: number, cellY: number): boolean =>
+            cellX >= 0 && cellY >= 0 && cellX < width && cellY < height;
+        for (let cell = 0; cell < size; cell++) {
+            if (this.blockedCell(cell)) continue;
+            const cellX = cell % width;
+            const cellY = (cell - cellX) / width;
+            for (const [dx, dy] of sides) {
+                if (!inside(cellX + dx, cellY + dy)) continue;
+                if (!this.canGo(cell, dx, dy) || this.blockedCell(cell + dy * width + dx)) {
+                    room[cell] = 1;
+                    ring.push(cell);
+                    break;
+                }
+            }
+        }
+        for (let reach = 2; reach <= NARROW_CELLS && ring.length > 0; reach++) {
+            const next: number[] = [];
+            for (const cell of ring) {
+                const cellX = cell % width;
+                const cellY = (cell - cellX) / width;
+                for (const [dx, dy] of sides) {
+                    if (!inside(cellX + dx, cellY + dy) || !this.canGo(cell, dx, dy)) continue;
+                    const other = cell + dy * width + dx;
+                    if (room[other] !== 0 || this.blockedCell(other)) continue;
+                    room[other] = reach;
+                    next.push(other);
+                }
+            }
+            ring = next;
+        }
+        for (let cell = 0; cell < size; cell++)
+            if (room[cell] === 0 && !this.blockedCell(cell)) room[cell] = NARROW_CELLS;
+        const buckets: number[][] = Array.from({ length: NARROW_CELLS + 1 }, () => []);
+        narrowOut.fill(0);
+        for (let cell = 0; cell < size; cell++) {
+            if (!exits[cell]) continue;
+            narrowOut[cell] = room[cell];
+            buckets[room[cell]].push(cell);
+        }
+        for (let wide = NARROW_CELLS; wide >= 1; wide--) {
+            const bucket = buckets[wide];
+            for (let at = 0; at < bucket.length; at++) {
+                const cell = bucket[at];
+                if (narrowOut[cell] !== wide) continue;
+                const cellX = cell % width;
+                const cellY = (cell - cellX) / width;
+                for (const [dx, dy] of sides) {
+                    if (!inside(cellX + dx, cellY + dy)) continue;
+                    const other = cell + dy * width + dx;
+                    // One comes from the other cell into this one.
+                    if (this.blockedCell(other) || !this.canGo(other, -dx, -dy)) continue;
+                    const through = Math.min(wide, room[other]);
+                    if (through <= narrowOut[other]) continue;
+                    narrowOut[other] = through;
+                    // Narrower here than on the way beyond: this is the passage; else that of the way beyond.
+                    const otherX = other % width;
+                    narrowAt[other] =
+                        through >= NARROW_CELLS
+                            ? -1
+                            : room[other] < wide
+                              ? Math.floor((other - otherX) / width / cellsATile) * this.tilesWide +
+                                Math.floor(otherX / cellsATile)
+                              : narrowAt[cell];
+                    buckets[through].push(other);
                 }
             }
         }
