@@ -63,6 +63,7 @@ export * from "./Catastrophe/ZombieHorde";
 export * from "./Catastrophe/ZombieCrowd";
 export * from "./Catastrophe/ZombieGrenade";
 export * from "./Catastrophe/ZombieDart";
+export * from "./Catastrophe/ZombieImpact";
 export * from "./Life/WaterBodies";
 export * from "./Life/LandPlaces";
 export * from "./Terrain/LandTrees";

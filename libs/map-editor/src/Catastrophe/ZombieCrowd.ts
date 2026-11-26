@@ -36,6 +36,7 @@ import {
     zombieDartWay,
 } from "./ZombieDart";
 import type { ZombieDart, ZombieDartHit } from "./ZombieDart";
+import { zombieImpactRadii } from "./ZombieImpact";
 import type { ZombieHorde, ZombieLogEntry } from "./ZombieHorde";
 
 /**
@@ -329,6 +330,8 @@ export class ZombieCrowd {
      */
     private shots = new Map<string, { explodeStep: number; shot: ZombieGrenadeShot; path?: ZombieGrenadePath }>();
     private explosions: { x: number; y: number; step: number; killed: number }[] = [];
+    /** How many zombies the comets and the burning meteors that landed in the horde killed (ZombieImpact). */
+    public killedByImpacts = 0;
     /**
      * Where each zombie walked at each of the last ZOMBIE_DART_HISTORY_STEPS steps (in half pixels, PAST_NONE where it
      * did not walk), a step after the other in a ring: where the darts the log applies met them. Written at one place,
@@ -742,7 +745,10 @@ export class ZombieCrowd {
             for (const shot of entry.grenades ?? []) {
                 const grenade = this.shots.get(shotKey(entry.applyStep, shot)) ?? { shot };
                 const path = this.pathOf(grenade);
-                this.explode(path.x[ZOMBIE_GRENADE_FUSE_STEPS], path.y[ZOMBIE_GRENADE_FUSE_STEPS]);
+                const px = path.x[ZOMBIE_GRENADE_FUSE_STEPS];
+                const py = path.y[ZOMBIE_GRENADE_FUSE_STEPS];
+                const killed = this.blow(px, py, ZOMBIE_GRENADE_LETHAL_M * PX, ZOMBIE_GRENADE_BLAST_M * PX);
+                this.explosions.push({ x: px, y: py, step: this.steps, killed });
             }
             // The darts whose flight is over: every zombie each went through, as the zombies walked then, is killed.
             for (const dart of entry.darts ?? []) {
@@ -754,6 +760,12 @@ export class ZombieCrowd {
                 const cameIn = this.pastIn[dart.shotStep % ZOMBIE_DART_HISTORY_STEPS];
                 this.meet(dart, way, candidates, cameIn, 0, ZOMBIE_DART_TICKS, passed, hits);
                 for (const hit of hits) this.shoot(hit, way.ux, way.uy);
+            }
+            // The comets and the burning meteors that land now: their own burst is drawn by the meteor, their fire set
+            // by the server; they are not blasts of grenades.
+            for (const impact of entry.impacts ?? []) {
+                const { lethal, blast } = zombieImpactRadii(impact);
+                this.killedByImpacts += this.blow(impact.x, impact.y, lethal, blast);
             }
             this.logAt++;
         }
@@ -1024,12 +1036,11 @@ export class ZombieCrowd {
     }
 
     /**
-     * A grenade goes off at a point: the zombies within ZOMBIE_GRENADE_LETHAL_M are thrown up and away, burning, and
-     * are gone; those within ZOMBIE_GRENADE_BLAST_M are shoved away, the more the nearer.
+     * A blast at a point (a grenade that goes off, a meteor that lands): the zombies within `lethal` (map pixels) are
+     * thrown up and away, burning, and are gone; those within `blast` are shoved away, the more the nearer. How many it
+     * killed.
      */
-    private explode(px: number, py: number): void {
-        const lethal = ZOMBIE_GRENADE_LETHAL_M * PX;
-        const blast = ZOMBIE_GRENADE_BLAST_M * PX;
+    private blow(px: number, py: number, lethal: number, blast: number): number {
         let killed = 0;
         for (let zombie = 0; zombie < this.count; zombie++) {
             if (this.state[zombie] !== ZOMBIE_WALKING) continue;
@@ -1057,7 +1068,7 @@ export class ZombieCrowd {
                 this.vy[zombie] += ny * SHOVE_AWAY_M_S * falloff * PX;
             }
         }
-        this.explosions.push({ x: px, y: py, step: this.steps, killed });
+        return killed;
     }
 
     /**
