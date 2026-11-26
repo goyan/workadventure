@@ -5,7 +5,7 @@ import { DOWNPOUR_PX_PER_SECOND, DOWNPOUR_REPORT_MS } from "../Catastrophe/Downp
 import type { Downpour } from "../Catastrophe/Downpour";
 import { warmedCold } from "../Catastrophe/Cold";
 import type { ColdMass } from "../Catastrophe/Cold";
-import { FIREBALL_EMBER_PATCH_TILES, fireballEmbers } from "../Catastrophe/Fireball";
+import { FIREBALL_EMBER_PATCH_TILES, FIREBALL_OPEN_ICE_SECONDS, fireballEmbers } from "../Catastrophe/Fireball";
 import { lifeFireOf } from "../Life/FireFear";
 import type { LifeFire } from "../Life/FireFear";
 import { liquidRainRate, snowRainRate, snowShareOf } from "../Weather/Precipitation";
@@ -952,6 +952,8 @@ export class MeadowSimulation {
         const tileY = Math.floor(y / TILE_PX);
         // The snow and the ice of the crater are gone in steam, as the water the fireball fell into.
         this.meadow.melt(tileX, tileY, radiusTiles);
+        // The crater stays open water for a while: the water that flows back into it must not freeze over at once.
+        this.meadow.openIce(tileX, tileY, radiusTiles, FIREBALL_OPEN_ICE_SECONDS);
         this.snowMoved = true;
         if (!{ ...DEFAULT_MEADOW_SETTINGS, ...settings?.meadow }.enabled) return 0;
         // The ground first: a tree takes only where its foot is not wet.

@@ -7,6 +7,11 @@ export const FIREBALL_EMBER_PATCH_TILES = 1;
 /** A fireball throws this many embers for each tile of the radius of its crater, and never more than that many. */
 export const FIREBALL_EMBERS_PER_TILE = 3;
 export const FIREBALL_MAX_EMBERS = 48;
+/**
+ * How long the ice of the crater of a fireball stays open water (seconds of the room): the boiling water and the
+ * heat of the impact keep the frost off, whatever the speed of the freeze of the map.
+ */
+export const FIREBALL_OPEN_ICE_SECONDS = 90;
 
 /** A draw from 0 to 1 that only depends on its seed: the embers of a fireball are the same wherever they are read. */
 function drawsOf(seed: number): () => number {

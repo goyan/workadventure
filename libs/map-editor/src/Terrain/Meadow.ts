@@ -271,6 +271,8 @@ export class Meadow {
     /** The ice over the water of each tile, in mm (see Ice.ts), and whether any of it changed at the last step. */
     private readonly ice: Float32Array;
     private iceChanged = false;
+    /** The seconds left to the tiles whose ice was broken and held open (openIce): no ice takes on them meanwhile. */
+    private readonly iceOpen: Float32Array;
     /**
      * The air of the tiles a mass of cold air reaches at this step (°C), not a number elsewhere, and those tiles:
      * neither exists on a map where no cold air ever lay.
@@ -330,6 +332,7 @@ export class Meadow {
         this.melted = new Float32Array(tiles);
         this.heat = new Float32Array(tiles);
         this.ice = new Float32Array(tiles);
+        this.iceOpen = new Float32Array(tiles);
         this.hotPool = new Uint8Array(tiles);
         this.poolTile = new Uint8Array(tiles);
         this.fringe = new Uint8Array(tiles);
@@ -439,6 +442,20 @@ export class Meadow {
             this.ice[index] = 0;
         });
         if (broken > 0) this.iceChanged = true;
+        return broken;
+    }
+
+    /**
+     * The ice of the tiles within `radius` tiles of a tile is broken and held open for `seconds` (of the room, not of
+     * its fast clock): no ice takes on them meanwhile, whatever the cold, so that the crater of an impact is seen as
+     * open water before the frost closes it. Returns how much ice went, in mm over all the tiles.
+     */
+    public openIce(tileX: number, tileY: number, radius: number, seconds: number): number {
+        const broken = this.breakIce(tileX, tileY, radius);
+        if (!(seconds > 0)) return broken;
+        this.forTilesAround(tileX, tileY, radius, (index) => {
+            this.iceOpen[index] = Math.max(this.iceOpen[index], seconds);
+        });
         return broken;
     }
 
@@ -1015,6 +1032,15 @@ export class Meadow {
         for (let index = 0; index < ice.length; index++) {
             if (!outdoor[index]) continue;
             const before = ice[index];
+            // A crater held open takes no ice until its time is up.
+            if (this.iceOpen[index] > 0) {
+                this.iceOpen[index] = Math.max(0, this.iceOpen[index] - seconds);
+                if (before !== 0) {
+                    ice[index] = 0;
+                    changed = true;
+                }
+                continue;
+            }
             let thick = before;
             // The water lying on the tile, a pool's as a lake's; the hot water of a heated pool takes no ice.
             const lying = hotPool[index] === 1 ? 0 : water[index];

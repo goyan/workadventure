@@ -34,6 +34,29 @@ const run = (meadow: Meadow, steps: number, input: MeadowStepInput): void => {
     for (let step = 0; step < steps; step++) meadow.step(input);
 };
 
+describe("the ice of a crater held open", () => {
+    it("takes no ice for the time it is held, then freezes again by the law of the ice", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        run(meadow, 10, under(frost));
+        expect(meadow.iceAt(10, 10)).toBeGreaterThan(0);
+        // 30 s held open: fifteen steps of the meadow.
+        expect(meadow.openIce(10, 10, 1, 30)).toBeGreaterThan(0);
+        run(meadow, 14, under(frost));
+        expect(meadow.iceAt(10, 10)).toBe(0);
+        run(meadow, 6, under(frost));
+        expect(meadow.iceAt(10, 10)).toBeGreaterThan(0);
+    });
+
+    it("breaks the ice at once and holds nothing open for a time that is not a number of seconds", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        run(meadow, 10, under(frost));
+        expect(meadow.openIce(10, 10, 1, Number.NaN)).toBeGreaterThan(0);
+        expect(meadow.iceAt(10, 10)).toBe(0);
+        run(meadow, 1, under(frost));
+        expect(meadow.iceAt(10, 10)).toBeGreaterThan(0);
+    });
+});
+
 describe("the water freezing", () => {
     it("takes in ice from its surface in the frost, thicker with time, and only where water lies", () => {
         const meadow = new Meadow(size, undefined, undefined);
