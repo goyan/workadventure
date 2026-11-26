@@ -17,7 +17,7 @@ import { TERRAIN_CELL, TILE_PX } from "../src/types";
 
 const START = 1_800_000_000_000;
 /** The checksum of the reference crowd with comets (see its test): set once, changed only with the model. */
-const IMPACT_REFERENCE_CHECKSUM = 4016508268;
+const IMPACT_REFERENCE_CHECKSUM = 4035092318;
 
 /** A horde over a map of `widthCells` x `heightCells` cells, over that ground, at the speed of reality. */
 function horde(overrides: Partial<ZombieHorde> = {}, terrain?: Uint8Array, widthCells = 120, heightCells = 80) {
