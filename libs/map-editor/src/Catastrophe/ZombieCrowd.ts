@@ -53,7 +53,8 @@ import type { ZombieHorde, ZombieLogEntry } from "./ZombieHorde";
  *   by the fast marching method (Sethian 1996, PNAS 93). Its exits lie along a line beyond the map, square to the
  *   heading: on open ground it sends every zombie straight on; around a building, a lake or a river, by the shortest
  *   way round, over the bridges, through the doors (the "floor field" of crowd models, Kirchner and Schadschneider
- *   2002, Physica A 312). Water, walls and the collisions of the map are never entered.
+ *   2002, Physica A 312). Water, walls and the collisions of the map are never entered; nor are the desks of the
+ *   players and the locked areas (ZombieZones, told by the log): one that finds itself in one walks out of it.
  * - Or towards an avatar: the horde senses every avatar of the map, wherever it is, through the walls (a choice of
  *   the user: the avatars are nearly always in the buildings). Each zombie runs to the avatar nearest to it by the way
  *   the plan of the map allows: one distance field from all the avatars at once (a multi-source Dijkstra over the
@@ -299,7 +300,8 @@ export class ZombieCrowd {
     /** The tile of the narrowest passage on the way out of each cell (-1 where none is narrow), and who waits there. */
     private readonly narrowAt: Int32Array;
     private readonly waiting: Float64Array;
-    private readonly entries: Int32Array;
+    private entries: Int32Array;
+    private readonly frontPx: number;
     private readonly pace: Float64Array;
     private readonly sway: Float64Array;
     private readonly nextVx: Float64Array;
@@ -325,6 +327,30 @@ export class ZombieCrowd {
     private fieldStale = false;
     /** The ways out of each cell (waysOf), made the first time the field is. */
     private ways: Uint8Array | undefined;
+    /**
+     * The cells the horde keeps out of (1), as the log tells them (forbidOn, forbidOff: the desks, the locked areas and
+     * their doors, a tile at a time), how many, and whether the ground is to be made again since they changed
+     * (reground).
+     */
+    private readonly forbidden: Uint8Array;
+    private forbiddenCells = 0;
+    private groundStale = false;
+    /** What the potential and the narrow passages are made with (march, narrowWays), kept: made again now and then. */
+    private marchDone: Uint8Array | undefined;
+    private marchHeap: Int32Array | undefined;
+    private marchWhere: Int32Array | undefined;
+    private narrowRoom: Uint8Array | undefined;
+    /** The tiles whose forbidden cells changed since the ground was last made. */
+    private changedTiles: number[] = [];
+    /**
+     * From each forbidden cell, how many cells away the nearest cell it may be in is (by the open sides, FAR where none
+     * can be reached): the way out for a zombie that finds itself in a desk. Made with the ground; undefined while no
+     * cell is forbidden.
+     */
+    private escape: Int32Array | undefined;
+    /** The cells of a forbidden area an avatar sits in, met while the field is made (spread), marked by the making. */
+    private readonly regionMark: Int32Array;
+    private regionStamp = 0;
     /** What the crowd of its tile adds to a step into each cell (spread). */
     private readonly crowdCost: Int32Array;
     /**
@@ -418,6 +444,8 @@ export class ZombieCrowd {
         this.tilesHigh = Math.ceil(this.heightPx / TILE_PX);
         this.tileStart = new Int32Array(this.tilesWide * this.tilesHigh + 1);
         this.crowdCost = new Int32Array(width * height);
+        this.forbidden = new Uint8Array(width * height);
+        this.regionMark = new Int32Array(width * height);
         this.onFire = new Uint8Array(this.tilesWide * this.tilesHigh);
         this.trampled = new Float32Array(this.tilesWide * this.tilesHigh);
         this.lastStep = zombieLastStep(horde);
@@ -429,18 +457,29 @@ export class ZombieCrowd {
         this.potential = new Float64Array(width * height);
         this.wayX = new Float32Array(width * height);
         this.wayY = new Float32Array(width * height);
+        this.safeStep = -1;
+        if (horde.log) this.setLogEntries(horde.log, horde.safeStep);
+        else this.setLog(horde.avatars, horde.safeStep);
+        // The desks of the map as the horde began: its ground made with them at once, not made again at its first step.
+        for (const entry of this.log) {
+            if (entry.applyStep > 0) break;
+            for (const tile of entry.forbidOn ?? [])
+                if (tile >= 0 && tile < this.onFire.length) this.forbidTile(tile, 1);
+            for (const tile of entry.forbidOff ?? [])
+                if (tile >= 0 && tile < this.onFire.length) this.forbidTile(tile, 0);
+        }
+        this.groundStale = false;
+        this.changedTiles = [];
         this.march();
         this.narrowWays();
-        const frontPx = Math.max(LEAST_FRONT_PX, Math.sqrt((count * FRONT_ASPECT) / MARCH_DENSITY) * PX);
-        this.entries = this.entryCells(frontPx);
+        this.makeEscape();
+        this.frontPx = Math.max(LEAST_FRONT_PX, Math.sqrt((count * FRONT_ASPECT) / MARCH_DENSITY) * PX);
+        this.entries = this.entryCells(this.frontPx);
         this.emitSteps = Math.max(1, Math.floor(this.lastStep * EMIT_SHARE));
         for (let zombie = 0; zombie < count; zombie++) {
             this.pace[zombie] = SLOWEST_RUN_PX + (FASTEST_RUN_PX - SLOWEST_RUN_PX) * this.random();
             this.sway[zombie] = (this.random() * 2 - 1) * SWAY;
         }
-        this.safeStep = -1;
-        if (horde.log) this.setLogEntries(horde.log, horde.safeStep);
-        else this.setLog(horde.avatars, horde.safeStep);
         this.recordPast();
     }
 
@@ -717,6 +756,7 @@ export class ZombieCrowd {
     public step(): void {
         if (this.steps >= this.lastStep) return;
         this.applyLog();
+        if (this.groundStale) this.reground();
         this.makeFields();
         this.steps++;
         const { count, state } = this;
@@ -804,8 +844,132 @@ export class ZombieCrowd {
                 this.onFire[tile] = 0;
                 this.tilesOnFire--;
             }
+            // The desks and the locked areas as the server read them: the tiles kept out of, those let go.
+            for (const tile of entry.forbidOn ?? []) if (tile >= 0 && tile < tiles) this.forbidTile(tile, 1);
+            for (const tile of entry.forbidOff ?? []) if (tile >= 0 && tile < tiles) this.forbidTile(tile, 0);
             this.logAt++;
         }
+    }
+
+    /** The cells of a tile kept out of (1) or let go (0): the ground is made again before the next step (reground). */
+    private forbidTile(tile: number, value: 0 | 1): void {
+        const { width, height, forbidden } = this;
+        const cellsATile = TILE_PX / TERRAIN_CELL;
+        const tileX = tile % this.tilesWide;
+        const tileY = (tile - tileX) / this.tilesWide;
+        for (let dy = 0; dy < cellsATile; dy++) {
+            for (let dx = 0; dx < cellsATile; dx++) {
+                const cellX = tileX * cellsATile + dx;
+                const cellY = tileY * cellsATile + dy;
+                if (cellX >= width || cellY >= height) continue;
+                const cell = cellY * width + cellX;
+                if (forbidden[cell] === value) continue;
+                forbidden[cell] = value;
+                this.forbiddenCells += value === 1 ? 1 : -1;
+                if (!this.groundStale || this.changedTiles[this.changedTiles.length - 1] !== tile) {
+                    this.changedTiles.push(tile);
+                }
+                this.groundStale = true;
+            }
+        }
+    }
+
+    /**
+     * The forbidden cells changed: the way out (the potential, its narrow passages, the cells to come in by) goes round
+     * them now, the field of the avatars is made again, and the way out of them for those in one.
+     */
+    private reground(): void {
+        this.groundStale = false;
+        this.mendWays(this.changedTiles);
+        this.changedTiles = [];
+        this.march();
+        this.narrowWays();
+        this.entries = this.entryCells(this.frontPx);
+        this.makeEscape();
+        this.fieldStale = true;
+    }
+
+    /**
+     * How far each forbidden cell is from the nearest cell a zombie may be in (escape): a breadth-first search from the
+     * forbidden cells next to one, by the open sides of the cells (walls, water and collisions hold), in the order of
+     * the cells.
+     */
+    private makeEscape(): void {
+        const { width, height, forbidden } = this;
+        if (this.forbiddenCells === 0) {
+            this.escape = undefined;
+            return;
+        }
+        const escape = this.escape ?? new Int32Array(width * height);
+        escape.fill(FAR);
+        let ring: number[] = [];
+        const sides: [number, number][] = [
+            [1, 0],
+            [-1, 0],
+            [0, 1],
+            [0, -1],
+        ];
+        const inside = (cellX: number, cellY: number): boolean =>
+            cellX >= 0 && cellY >= 0 && cellX < width && cellY < height;
+        for (let cell = 0; cell < width * height; cell++) {
+            if (forbidden[cell] === 0 || this.blockedGround(cell)) continue;
+            const cellX = cell % width;
+            const cellY = (cell - cellX) / width;
+            for (const [dx, dy] of sides) {
+                if (!inside(cellX + dx, cellY + dy) || !this.canGoOver(cell, dx, dy)) continue;
+                if (forbidden[cell + dy * width + dx] !== 0) continue;
+                escape[cell] = 1;
+                ring.push(cell);
+                break;
+            }
+        }
+        for (let reach = 2; ring.length > 0; reach++) {
+            const next: number[] = [];
+            for (const cell of ring) {
+                const cellX = cell % width;
+                const cellY = (cell - cellX) / width;
+                for (const [dx, dy] of sides) {
+                    if (!inside(cellX + dx, cellY + dy) || !this.canGoOver(cell, dx, dy)) continue;
+                    const other = cell + dy * width + dx;
+                    if (forbidden[other] === 0 || escape[other] !== FAR) continue;
+                    escape[other] = reach;
+                    next.push(other);
+                }
+            }
+            ring = next;
+        }
+        this.escape = escape;
+    }
+
+    /**
+     * The way out of a forbidden cell for a zombie in it (atX, atY): down the escape across the open sides of its cell,
+     * a cell it may be in counting nothing. False when none leads out (a desk walled in).
+     */
+    private wayFromForbidden(cell: number): boolean {
+        const { escape, forbidden, width, height } = this;
+        if (!escape) return false;
+        const here = escape[cell];
+        if (here === FAR) return false;
+        const cellX = cell % width;
+        const cellY = (cell - cellX) / width;
+        const side = (other: number, open: boolean): number =>
+            !open ? here : forbidden[other] !== 0 ? Math.min(here, escape[other]) : 0;
+        const east = cellX < width - 1 ? side(cell + 1, this.canGoOver(cell, 1, 0)) : here;
+        const west = cellX > 0 ? side(cell - 1, this.canGoOver(cell, -1, 0)) : here;
+        const south = cellY < height - 1 ? side(cell + width, this.canGoOver(cell, 0, 1)) : here;
+        const north = cellY > 0 ? side(cell - width, this.canGoOver(cell, 0, -1)) : here;
+        const gx = Math.min(0, east - here) - Math.min(0, west - here);
+        const gy = Math.min(0, south - here) - Math.min(0, north - here);
+        const length = Math.sqrt(gx * gx + gy * gy);
+        if (length < 1e-9) return false;
+        this.atX = -gx / length;
+        this.atY = -gy / length;
+        return true;
+    }
+
+    /** Whether the horde keeps out of the point (px, py) now: a desk, a locked area or its door. */
+    public forbiddenAt(px: number, py: number): boolean {
+        return this.forbiddenCells > 0 && this.forbidden[this.cellAt(px, py)] !== 0;
     }
 
     /** The way of a dart over the ground of the horde: its unit vector, its length, how far it flies before a wall. */
@@ -1194,6 +1358,9 @@ export class ZombieCrowd {
     /** Whether a body thrown goes from a cell to its neighbour: no wall nor collision between; water it falls into. */
     private canGoFlying(cell: number, dx: number, dy: number): boolean {
         const { terrain, width } = this;
+        // Nor into a desk or a locked area from outside it.
+        if (this.forbiddenCells > 0 && this.forbidden[cell] === 0 && this.forbidden[cell + dx + dy * width] !== 0)
+            return false;
         if (dx === 1) return (terrain[cell] & ZOMBIE_EAST) === 0 && (terrain[cell + 1] & ZOMBIE_SOLID) === 0;
         if (dx === -1) return (terrain[cell - 1] & (ZOMBIE_EAST | ZOMBIE_SOLID)) === 0;
         if (dy === 1) return (terrain[cell] & ZOMBIE_SOUTH) === 0 && (terrain[cell + width] & ZOMBIE_SOLID) === 0;
@@ -1229,24 +1396,33 @@ export class ZombieCrowd {
         for (const bucket of buckets) bucket.length = 0;
         let queued = 0;
         const cellsATile = TILE_PX / TERRAIN_CELL;
+        const seed = (cell: number, slot: number): void => {
+            if (field[cell] === 0) return;
+            field[cell] = 0;
+            owner[cell] = slot;
+            buckets[0].push(cell);
+            queued++;
+            seeded = true;
+        };
         for (let slot = 0; slot < ZOMBIE_MOST_AVATARS; slot++) {
             const tile = this.avatarTile[slot];
             if (tile < 0) continue;
             const tileX = tile % this.tilesWide;
             const tileY = (tile - tileX) / this.tilesWide;
+            let inDesk: number[] | undefined;
             for (let dy = 0; dy < cellsATile; dy++) {
                 for (let dx = 0; dx < cellsATile; dx++) {
                     const cellX = tileX * cellsATile + dx;
                     const cellY = tileY * cellsATile + dy;
                     const cell = cellY * width + cellX;
-                    if (cellX >= width || cellY >= height || this.blockedCell(cell) || field[cell] === 0) continue;
-                    field[cell] = 0;
-                    owner[cell] = slot;
-                    buckets[0].push(cell);
-                    queued++;
-                    seeded = true;
+                    if (cellX >= width || cellY >= height || this.blockedGround(cell)) continue;
+                    if (this.forbidden[cell] !== 0) (inDesk ??= []).push(cell);
+                    else seed(cell, slot);
                 }
             }
+            // An avatar at its desk (or in a locked area): the horde runs to the edge of it, where it may be, and packs
+            // there.
+            if (inDesk) for (const cell of this.edgeOf(inDesk)) seed(cell, slot);
         }
         if (!seeded) return false;
         // The buckets in turn, by growing distance: each holds the cells at a distance with these last eight bits.
@@ -1296,6 +1472,39 @@ export class ZombieCrowd {
     }
 
     /**
+     * The cells a zombie may be in next to the forbidden area the cells `from` are in (all its cells reached from them
+     * by the open sides of the cells, walls, water and collisions holding), in the order they are met.
+     */
+    private edgeOf(from: readonly number[]): number[] {
+        const { width, height, forbidden, regionMark } = this;
+        const stamp = ++this.regionStamp;
+        const edge: number[] = [];
+        const queue: number[] = [];
+        for (const cell of from) {
+            if (regionMark[cell] === stamp) continue;
+            regionMark[cell] = stamp;
+            queue.push(cell);
+        }
+        for (let at = 0; at < queue.length; at++) {
+            const cell = queue[at];
+            const cellX = cell % width;
+            const cellY = (cell - cellX) / width;
+            for (let side = 0; side < 4; side++) {
+                const dx = side === 0 ? 1 : side === 1 ? -1 : 0;
+                const dy = side === 2 ? 1 : side === 3 ? -1 : 0;
+                if (cellX + dx < 0 || cellY + dy < 0 || cellX + dx >= width || cellY + dy >= height) continue;
+                if (!this.canGoOver(cell, dx, dy)) continue;
+                const other = cell + dy * width + dx;
+                if (regionMark[other] === stamp) continue;
+                regionMark[other] = stamp;
+                if (forbidden[other] !== 0) queue.push(other);
+                else edge.push(other);
+            }
+        }
+        return edge;
+    }
+
+    /**
      * The ways out of each cell (bits: east, west, south, north, then the diagonals south-east, south-west, north-east,
      * north-west), by the open sides of the cells; a diagonal only where both sides round its corner are open. The
      * ground is frozen for the horde: made once.
@@ -1304,26 +1513,89 @@ export class ZombieCrowd {
         if (this.ways) return this.ways;
         const { width, height } = this;
         const ways = new Uint8Array(width * height);
-        for (let cell = 0; cell < width * height; cell++) {
-            const cellX = cell % width;
-            const cellY = (cell - cellX) / width;
-            const east = cellX < width - 1 && this.canGo(cell, 1, 0);
-            const west = cellX > 0 && this.canGo(cell, -1, 0);
-            const south = cellY < height - 1 && this.canGo(cell, 0, 1);
-            const north = cellY > 0 && this.canGo(cell, 0, -1);
-            let open = (east ? 1 : 0) | (west ? 2 : 0) | (south ? 4 : 0) | (north ? 8 : 0);
-            if (east && south && this.canGo(cell + 1, 0, 1) && this.canGo(cell + width, 1, 0)) open |= 16;
-            if (west && south && this.canGo(cell - 1, 0, 1) && this.canGo(cell + width, -1, 0)) open |= 32;
-            if (east && north && this.canGo(cell + 1, 0, -1) && this.canGo(cell - width, 1, 0)) open |= 64;
-            if (west && north && this.canGo(cell - 1, 0, -1) && this.canGo(cell - width, -1, 0)) open |= 128;
-            ways[cell] = open;
-        }
+        for (let cell = 0; cell < width * height; cell++) ways[cell] = this.waysOfCell(cell);
         this.ways = ways;
         return ways;
     }
 
+    private waysOfCell(cell: number): number {
+        const { width, height } = this;
+        const cellX = cell % width;
+        const cellY = (cell - cellX) / width;
+        const east = cellX < width - 1 && this.canGo(cell, 1, 0);
+        const west = cellX > 0 && this.canGo(cell, -1, 0);
+        const south = cellY < height - 1 && this.canGo(cell, 0, 1);
+        const north = cellY > 0 && this.canGo(cell, 0, -1);
+        let open = (east ? 1 : 0) | (west ? 2 : 0) | (south ? 4 : 0) | (north ? 8 : 0);
+        if (east && south && this.canGo(cell + 1, 0, 1) && this.canGo(cell + width, 1, 0)) open |= 16;
+        if (west && south && this.canGo(cell - 1, 0, 1) && this.canGo(cell + width, -1, 0)) open |= 32;
+        if (east && north && this.canGo(cell + 1, 0, -1) && this.canGo(cell - width, 1, 0)) open |= 64;
+        if (west && north && this.canGo(cell - 1, 0, -1) && this.canGo(cell - width, -1, 0)) open |= 128;
+        return open;
+    }
+
+    /**
+     * The ways out of the cells round the tiles whose forbidden cells changed, made again (a cell's ways depend on its
+     * eight neighbours only): the same as made whole.
+     */
+    private mendWays(tiles: readonly number[]): void {
+        const ways = this.ways;
+        if (!ways) return;
+        const { width, height } = this;
+        const cellsATile = TILE_PX / TERRAIN_CELL;
+        for (const tile of tiles) {
+            const tileX = tile % this.tilesWide;
+            const tileY = (tile - tileX) / this.tilesWide;
+            const toY = Math.min(height - 1, (tileY + 1) * cellsATile);
+            const toX = Math.min(width - 1, (tileX + 1) * cellsATile);
+            for (let cellY = Math.max(0, tileY * cellsATile - 1); cellY <= toY; cellY++) {
+                for (let cellX = Math.max(0, tileX * cellsATile - 1); cellX <= toX; cellX++) {
+                    const cell = cellY * width + cellX;
+                    ways[cell] = this.waysOfCell(cell);
+                }
+            }
+        }
+    }
+
+    /** Whether no zombie goes into a cell: water, a collision, a desk or a locked area. */
     private blockedCell(cell: number): boolean {
+        return (this.terrain[cell] & (ZOMBIE_WATER | ZOMBIE_SOLID)) !== 0 || this.forbidden[cell] !== 0;
+    }
+
+    /** Whether the ground of a cell keeps a zombie out (water, a collision), whatever is forbidden. */
+    private blockedGround(cell: number): boolean {
         return (this.terrain[cell] & (ZOMBIE_WATER | ZOMBIE_SOLID)) !== 0;
+    }
+
+    /**
+     * Whether a zombie in a cell goes to its neighbour: by canGo; from a forbidden cell (a desk it finds itself in),
+     * into any neighbour its ground lets it into (canGoOver), so that it walks out.
+     */
+    private canStep(cell: number, dx: number, dy: number): boolean {
+        return this.forbidden[cell] !== 0 ? this.canGoOver(cell, dx, dy) : this.canGo(cell, dx, dy);
+    }
+
+    /**
+     * Whether one goes from a cell to its neighbour (dx, dy, one of them 0) over the ground: no wall between, nor
+     * water, nor collision, whatever is forbidden.
+     */
+    private canGoOver(cell: number, dx: number, dy: number): boolean {
+        const { terrain, width } = this;
+        let next: number;
+        if (dx === 1) {
+            if (terrain[cell] & ZOMBIE_EAST) return false;
+            next = cell + 1;
+        } else if (dx === -1) {
+            next = cell - 1;
+            if (terrain[next] & ZOMBIE_EAST) return false;
+        } else if (dy === 1) {
+            if (terrain[cell] & ZOMBIE_SOUTH) return false;
+            next = cell + width;
+        } else {
+            next = cell - width;
+            if (terrain[next] & ZOMBIE_SOUTH) return false;
+        }
+        return !this.blockedGround(next);
     }
 
     /** Whether one goes from a cell to its neighbour (dx, dy, one of them 0): no wall between, not into the blocked. */
@@ -1577,7 +1849,14 @@ export class ZombieCrowd {
             const slot = this.target[zombie];
             const field = slot < 0 ? undefined : this.field;
             let arrive = 1;
-            if (field && field[this.cellAt(zx, zy)] < CLOSE_FIELD) {
+            const at = this.cellAt(zx, zy);
+            // In a desk (made one while it was in it): out of it first, whatever it runs to, through the crowd that
+            // packs at its edge (it feels only those in the desk with it: they make way for it, move).
+            const inDesk = this.forbiddenCells > 0 && this.forbidden[at] !== 0;
+            const outOfDesk = inDesk && this.wayFromForbidden(at);
+            if (outOfDesk) {
+                // Its way is out of the desk (atX, atY), at its pace.
+            } else if (field && field[at] < CLOSE_FIELD) {
                 const tile = this.avatarTile[slot];
                 const dx = ((tile % tilesWide) + 0.5) * TILE_PX - zx;
                 const dy = (Math.floor(tile / tilesWide) + 0.5) * TILE_PX - zy;
@@ -1630,6 +1909,7 @@ export class ZombieCrowd {
                     for (let at = tileStart[tile]; at < tileStart[tile + 1]; at++) {
                         const other = tileList[at];
                         if (other === zombie) continue;
+                        if (inDesk && this.forbidden[this.cellAt(x[other], y[other])] === 0) continue;
                         const dx = x[other] - zx;
                         const dy = y[other] - zy;
                         if (dx * dx + dy * dy >= reach2) continue;
@@ -1714,10 +1994,20 @@ export class ZombieCrowd {
                             ny = dy / d;
                         }
                         const half = 0.5 * CONTACT_STIFFNESS * (touch - d);
-                        x[zombie] -= nx * half;
-                        y[zombie] -= ny * half;
-                        x[other] += nx * half;
-                        y[other] += ny * half;
+                        let mine = half;
+                        let theirs = half;
+                        // One in a desk, walking out of it, the other not: the one outside makes way, wholly.
+                        if (this.forbiddenCells > 0) {
+                            const mineIn = this.forbidden[this.cellAt(lastX[zombie], lastY[zombie])] !== 0;
+                            if (mineIn !== (this.forbidden[this.cellAt(lastX[other], lastY[other])] !== 0)) {
+                                mine = mineIn ? 0 : 2 * half;
+                                theirs = mineIn ? 2 * half : 0;
+                            }
+                        }
+                        x[zombie] -= nx * mine;
+                        y[zombie] -= ny * mine;
+                        x[other] += nx * theirs;
+                        y[other] += ny * theirs;
                     }
                 }
             }
@@ -1738,7 +2028,7 @@ export class ZombieCrowd {
                         continue;
                     }
                     toX = Math.min(this.widthPx - 0.5, Math.max(0.5, toX));
-                } else if (!this.canGo(cellY * this.width + cellX, nextX - cellX, 0)) toX = fromX;
+                } else if (!this.canStep(cellY * this.width + cellX, nextX - cellX, 0)) toX = fromX;
             }
             const columnNow = Math.floor(toX / TERRAIN_CELL);
             const nextY = Math.floor(toY / TERRAIN_CELL);
@@ -1749,7 +2039,7 @@ export class ZombieCrowd {
                         continue;
                     }
                     toY = Math.min(this.heightPx - 0.5, Math.max(0.5, toY));
-                } else if (!this.canGo(cellY * this.width + columnNow, 0, nextY - cellY)) toY = fromY;
+                } else if (!this.canStep(cellY * this.width + columnNow, 0, nextY - cellY)) toY = fromY;
             }
             x[zombie] = toX;
             y[zombie] = toY;
@@ -1787,9 +2077,16 @@ export class ZombieCrowd {
         const { dirX, dirY } = this.horde;
         const size = width * height;
         potential.fill(Number.POSITIVE_INFINITY);
-        const done = new Uint8Array(size);
-        const heap = new Int32Array(size + 4);
-        const where = new Int32Array(size).fill(-1);
+        // Made again when the forbidden cells change (reground): nothing of the last making is kept but its arrays.
+        exits.fill(0);
+        this.exitLevel = Number.POSITIVE_INFINITY;
+        this.wayX.fill(0);
+        this.wayY.fill(0);
+        const done = (this.marchDone ??= new Uint8Array(size));
+        const heap = (this.marchHeap ??= new Int32Array(size + 4));
+        const where = (this.marchWhere ??= new Int32Array(size));
+        done.fill(0);
+        where.fill(-1);
         let heapSize = 0;
         const less = (a: number, b: number): boolean =>
             potential[a] < potential[b] || (potential[a] === potential[b] && a < b);
@@ -1915,14 +2212,16 @@ export class ZombieCrowd {
 
     /**
      * How narrow the way out of each cell gets (narrowOut): the room each cell has, in cells to the nearest closed side
-     * (a wall, water, a collision; NARROW_CELLS at most), then from the exits inwards the widest way's narrowest room
-     * (a widest path, the widest first, in buckets by room).
+     * (a wall, water, a collision; NARROW_CELLS at most: a desk is not a wall, the crowd that packs at its edge does
+     * not stand in a passage), then from the exits inwards the widest way's narrowest room (a widest path, the widest
+     * first, in buckets by room), never through a desk.
      */
     private narrowWays(): void {
         const { width, height, exits, narrowOut, narrowAt } = this;
         const cellsATile = TILE_PX / TERRAIN_CELL;
         const size = width * height;
-        const room = new Uint8Array(size);
+        const room = (this.narrowRoom ??= new Uint8Array(size));
+        room.fill(0);
         let ring: number[] = [];
         const sides: [number, number][] = [
             [1, 0],
@@ -1933,12 +2232,12 @@ export class ZombieCrowd {
         const inside = (cellX: number, cellY: number): boolean =>
             cellX >= 0 && cellY >= 0 && cellX < width && cellY < height;
         for (let cell = 0; cell < size; cell++) {
-            if (this.blockedCell(cell)) continue;
+            if (this.blockedGround(cell)) continue;
             const cellX = cell % width;
             const cellY = (cell - cellX) / width;
             for (const [dx, dy] of sides) {
                 if (!inside(cellX + dx, cellY + dy)) continue;
-                if (!this.canGo(cell, dx, dy) || this.blockedCell(cell + dy * width + dx)) {
+                if (!this.canGoOver(cell, dx, dy) || this.blockedGround(cell + dy * width + dx)) {
                     room[cell] = 1;
                     ring.push(cell);
                     break;
@@ -1951,9 +2250,9 @@ export class ZombieCrowd {
                 const cellX = cell % width;
                 const cellY = (cell - cellX) / width;
                 for (const [dx, dy] of sides) {
-                    if (!inside(cellX + dx, cellY + dy) || !this.canGo(cell, dx, dy)) continue;
+                    if (!inside(cellX + dx, cellY + dy) || !this.canGoOver(cell, dx, dy)) continue;
                     const other = cell + dy * width + dx;
-                    if (room[other] !== 0 || this.blockedCell(other)) continue;
+                    if (room[other] !== 0 || this.blockedGround(other)) continue;
                     room[other] = reach;
                     next.push(other);
                 }
@@ -1961,9 +2260,10 @@ export class ZombieCrowd {
             ring = next;
         }
         for (let cell = 0; cell < size; cell++)
-            if (room[cell] === 0 && !this.blockedCell(cell)) room[cell] = NARROW_CELLS;
+            if (room[cell] === 0 && !this.blockedGround(cell)) room[cell] = NARROW_CELLS;
         const buckets: number[][] = Array.from({ length: NARROW_CELLS + 1 }, () => []);
         narrowOut.fill(0);
+        narrowAt.fill(-1);
         for (let cell = 0; cell < size; cell++) {
             if (!exits[cell]) continue;
             narrowOut[cell] = room[cell];

@@ -2555,7 +2555,8 @@ export class GameScene extends DirtyScene {
             raised.push({ character: { ...position, silent: true }, elevation }),
         );
         const locks = this._knockManager?.getDoorLocks();
-        this.doorAnimator.update(time, characters, listener, locks);
+        // The zombies of a horde open them too, as they are drawn (none in Basique).
+        this.doorAnimator.update(time, characters, listener, locks, this.zombieView);
         this.upperDoors ??= new UpperDoors(
             this,
             () => this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(),

@@ -1548,6 +1548,39 @@ describe("CatastropheManager, a horde of zombies", () => {
         expect(decodeZombieLog(manager.zombies()?.avatars ?? "")).toHaveLength(entries);
     });
 
+    it("keeps the horde out of the desks from its first step, and out of an area locked since, 2.5 s later", () => {
+        const { manager, sent } = zombieHarness();
+        // The tiles of the room (20 x 15 tiles) a horde keeps out of, as the room reads them.
+        let forbidden = [3 * 20 + 4, 3 * 20 + 5];
+        const asked: [number, number][] = [];
+        manager.zombieForbiddenWith((tilesWide, tilesHigh) => {
+            asked.push([tilesWide, tilesHigh]);
+            return forbidden;
+        });
+        manager.startZombies(ask);
+        expect(asked[0]).toEqual([20, 15]);
+        // The desks at its first step, before the avatars (applied 2.5 s later).
+        const first = decodeZombieLog(sent[0].zombies?.avatars ?? "");
+        expect(first[0]).toEqual({ applyStep: 0, changes: [], forbidOn: [3 * 20 + 4, 3 * 20 + 5] });
+        expect(first[1]).toMatchObject({ applyStep: 25 });
+        expect(first[1].forbidOn).toBeUndefined();
+        // A second later, an area locked, a desk removed: told at their step, with the avatars.
+        forbidden = [3 * 20 + 5, 8 * 20 + 1, 8 * 20 + 2];
+        vi.advanceTimersByTime(ZOMBIE_TELL_MS);
+        const told = decodeZombieLog(sent[sent.length - 1].zombies?.avatars ?? "");
+        expect(told.at(-1)).toEqual({
+            applyStep: 35,
+            changes: [],
+            forbidOn: [8 * 20 + 1, 8 * 20 + 2],
+            forbidOff: [3 * 20 + 4],
+        });
+        // Nothing changed: nothing written; tiles off the map, never.
+        forbidden = [...forbidden, -1, 20 * 15, 2.5];
+        const entries = decodeZombieLog(manager.zombies()?.avatars ?? "").length;
+        vi.advanceTimersByTime(ZOMBIE_TELL_MS);
+        expect(decodeZombieLog(manager.zombies()?.avatars ?? "")).toHaveLength(entries);
+    });
+
     it("burns the zombies under a patch of fire a player holds, whatever takes fire there", () => {
         const { manager } = zombieHarness();
         manager.startZombies(ask);
