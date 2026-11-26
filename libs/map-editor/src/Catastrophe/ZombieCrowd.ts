@@ -125,8 +125,9 @@ const ROOM_A_TILE = 3;
 const ENTRY_TRIES = 4;
 
 /**
- * Within this of its avatar by the way of the map (3 cells, in the units of the fields), a zombie runs straight at it
- * (the field is flat on its tile); within ARRIVE_PX of it, slower and slower: it sticks to it without overrunning it.
+ * Within this of its avatar by the way of the map (under 3 cells, in the units of the fields), a zombie runs straight
+ * at it (the field is flat on its tile); within ARRIVE_PX of it, slower and slower: it sticks to it without overrunning
+ * it.
  */
 const CLOSE_FIELD = 30;
 const ARRIVE_PX = 1 * PX;
@@ -321,12 +322,12 @@ export class ZombieCrowd {
     private fieldStale = false;
     /** The ways out of each cell (waysOf), made the first time the field is. */
     private ways: Uint8Array | undefined;
+    /** What the crowd of its tile adds to a step into each cell (spread). */
+    private readonly crowdCost: Int32Array;
     /**
      * The buckets of the Dijkstra, by distance modulo 256 (a step adds 10 or 14, and the crowd of the tile it goes
      * into, CROWD_MOST at most): kept from one making to the next.
      */
-    /** What the crowd of its tile adds to a step into each cell (spread). */
-    private readonly crowdCost: Int32Array;
     private readonly buckets: number[][] = Array.from({ length: 256 }, () => []);
     /**
      * The grenades told that have not gone off yet (and those of the last step, drawn until it), by their entry
@@ -1200,7 +1201,7 @@ export class ZombieCrowd {
             }
         }
         if (!seeded) return false;
-        // The buckets in turn, by growing distance: each holds the cells at a distance with these last four bits.
+        // The buckets in turn, by growing distance: each holds the cells at a distance with these last eight bits.
         const ways = this.waysOf();
         const steps = [1, -1, width, -width, width + 1, width - 1, -width + 1, -width - 1];
         const costs = [10, 10, 10, 10, 14, 14, 14, 14];
@@ -1483,9 +1484,33 @@ export class ZombieCrowd {
         gx = Math.min(0, east - here) - Math.min(0, west - here);
         gy = Math.min(0, south - here) - Math.min(0, north - here);
         const length = Math.sqrt(gx * gx + gy * gy);
-        if (length < 1e-9) return false;
+        if (length < 1e-9) return this.wayToCorner(field, cell, here);
         this.atX = -gx / length;
         this.atY = -gy / length;
+        return true;
+    }
+
+    /**
+     * Where no side of its cell is lower (the field reached it by a diagonal, round a crowd that costs its sides more):
+     * by the lowest open diagonal (waysOf), if one is lower.
+     */
+    private wayToCorner(field: Int32Array, cell: number, here: number): boolean {
+        const { width } = this;
+        const open = this.waysOf()[cell];
+        const corners = [width + 1, width - 1, -width + 1, -width - 1];
+        let best = -1;
+        let lowest = here;
+        for (let corner = 0; corner < 4; corner++) {
+            if ((open & (1 << (corner + 4))) === 0) continue;
+            const value = field[cell + corners[corner]];
+            if (value < lowest) {
+                lowest = value;
+                best = corner;
+            }
+        }
+        if (best < 0) return false;
+        this.atX = (best === 0 || best === 2 ? 1 : -1) * Math.SQRT1_2;
+        this.atY = (best < 2 ? 1 : -1) * Math.SQRT1_2;
         return true;
     }
 
