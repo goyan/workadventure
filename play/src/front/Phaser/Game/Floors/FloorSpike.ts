@@ -31,6 +31,7 @@ import {
     ABOVE_ALPHA,
     ABOVE_TINT,
     aboveLevelShows,
+    roofOver,
     editorLevelAlpha,
     STAIR_OVER_AVATAR_ALPHA,
     stairCoversAvatar,
@@ -84,6 +85,16 @@ export function shownFloorAt(
         if (level.cells.has(`${column}:${Math.floor((y + level.elevation) / TILE)}`)) found = level.elevation;
     }
     return found;
+}
+
+/**
+ * The altitudes of the storeys of buildings, lowest first: the floors with a slab over a room of the ground. A floor in
+ * the open air (the deck of a bridge: no room under any of its slabs) is none.
+ */
+export function storeyLevels(levels: readonly { elevation: number; roomsUnder: ReadonlySet<number> }[]): number[] {
+    return [...new Set(levels.filter((level) => level.roomsUnder.size > 0).map((level) => level.elevation))].sort(
+        (a, b) => a - b,
+    );
 }
 
 interface LevelDrawing {
@@ -573,6 +584,11 @@ export class FloorSpike {
                 : viewed === undefined
                   ? currentLevels(this.state, model.getStairs())
                   : new Set([viewed]);
+        // The roof over the avatar: the floors from it up stay hidden indoors, the ones under it show (a mezzanine).
+        const roof = roofOver(
+            this.levels.map((level) => ({ elevation: level.elevation, covers: level.cells.has(groundCell) })),
+            current,
+        );
         for (const level of this.levels) {
             let target = 1;
             if (editor.open) {
@@ -587,6 +603,7 @@ export class FloorSpike {
                     hidesAvatar: level.slabEntities.some((slab) => slabCoversAvatar(slab, p)),
                     openAir: level.roomsUnder.size === 0,
                     coversRoom: room !== undefined && level.roomsCovered.has(room),
+                    roofed: level.elevation >= roof,
                 });
                 target = shows.alpha;
                 if (shows.window) windowed.add(level);
@@ -708,6 +725,20 @@ export class FloorSpike {
                 const covered = this.roomAt(centreX, centreY - level.elevation);
                 if (covered !== undefined) level.roomsCovered.add(covered);
             }
+        }
+        this.publishStoreys();
+    }
+
+    /**
+     * The stack of floors under the clock lists the storeys of buildings only (see storeyLevels): the deck of a bridge
+     * is a floor too (level 1, 20 px), counted as "Étage 1" it pushed the first storey of every building to
+     * "Étage 2", and choosing it hid every building above it.
+     */
+    private publishStoreys(): void {
+        const storeys = storeyLevels(this.levels);
+        const shown = get(floorLevelsBuiltStore);
+        if (storeys.length !== shown.length || storeys.some((level, index) => level !== shown[index])) {
+            floorLevelsBuiltStore.set(storeys);
         }
     }
 

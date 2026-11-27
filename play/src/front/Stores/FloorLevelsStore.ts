@@ -73,7 +73,9 @@ export function floorLevelStack(
 ): FloorLevelStack | undefined {
     if (built.length === 0 && altitude === undefined) return undefined;
     const chosen = editor === undefined || editor.choice === "auto" ? undefined : editor.choice;
-    const levels = [...new Set([0, ...built, ...(chosen === undefined ? [] : [chosen])])].sort((a, b) => b - a);
+    // In game, the floor of the avatar is in the stack even when it is no storey (on the deck of a bridge).
+    const own = editor === undefined && current > 0 ? [current] : [];
+    const levels = [...new Set([0, ...built, ...own, ...(chosen === undefined ? [] : [chosen])])].sort((a, b) => b - a);
     return {
         levels: levels.map((elevation) => ({ elevation, name: name(elevation) })),
         current: editor === undefined ? current : (chosen ?? editor.level),
