@@ -7,9 +7,16 @@ import {
     perspectiveFlakes,
     project,
     TOP_SHARE,
+    uprightTail,
 } from "@wa/front/Phaser/Game/Weather/PerspectiveFall";
-import { RAIN_FALL_SPEEDS, rainDropsExpected } from "@wa/front/Phaser/Game/Weather/Rain";
-import { FLAKE_KINDS, flakeCapacity, FLAKES_PER_CAPACITY, PX_PER_METRE } from "@wa/front/Phaser/Game/Weather/Snowfall";
+import { RAIN_FALL_SPEEDS, rainDropsExpected, rainLeanOf } from "@wa/front/Phaser/Game/Weather/Rain";
+import {
+    FLAKE_KINDS,
+    flakeCapacity,
+    FLAKES_PER_CAPACITY,
+    groundWind,
+    PX_PER_METRE,
+} from "@wa/front/Phaser/Game/Weather/Snowfall";
 
 // The usual view: 1097 x 617 map pixels (a 1920 x 1080 screen at zoom 1.75), about 38 x 21 m.
 const SCREEN = { x: 4000, y: 2000, width: 1097, height: 617 };
@@ -63,17 +70,14 @@ describe("the drops in perspective", () => {
         expect(dropShares(20)[2]).toBeGreaterThan(dropShares(1)[2]);
     });
 
-    it("streak along the line to the middle, the tail farther out (higher), the head where the drop is", () => {
+    // It lay along the line to the middle of the screen, across it near the sides (see uprightTail): in still air it now
+    // stands above its head, as long as it was.
+    it("streak above its head in still air, as long as along the line to the middle", () => {
         const drops = perspectiveDrops(1_234_567, SCREEN, CAMERA, 1, STILL_AIR);
         expect(drops.length).toBeGreaterThan(100);
         for (const drop of drops.slice(0, 200)) {
-            const head = { x: drop.headX - CAMERA.x, y: drop.headY - CAMERA.y };
-            const tail = { x: drop.tailX - CAMERA.x, y: drop.tailY - CAMERA.y };
-            // On the same ray from the middle.
-            expect(Math.abs(head.x * tail.y - head.y * tail.x)).toBeLessThan(
-                1e-6 * (1 + Math.hypot(tail.x, tail.y)) ** 2,
-            );
-            expect(Math.hypot(tail.x, tail.y) + 1e-9).toBeGreaterThanOrEqual(Math.hypot(head.x, head.y));
+            expect(Math.abs(drop.tailX - drop.headX)).toBeLessThan(1e-6);
+            expect(drop.tailY).toBeLessThanOrEqual(drop.headY + 1e-9);
         }
     });
 
@@ -136,5 +140,38 @@ describe("the flakes in perspective", () => {
         const a = perspectiveFlakes(10_000, SCREEN, CAMERA, fall, air, undefined, true);
         const b = perspectiveFlakes(90_000, SCREEN, CAMERA, fall, air, undefined, true);
         expect(b).toEqual(a);
+    });
+});
+
+// Seen from above the drops near the sides of the screen fall across it: with no wind at all a streak lay at 45 degrees
+// and more (median 61 degrees from the vertical, measured at the usual zoom). The lean with the wind is all it keeps.
+describe("the lean of the rain seen from above", () => {
+    const EPOCH = 1_763_700_000_000;
+    const angle = (drop: { headX: number; headY: number; tailX: number; tailY: number }) =>
+        Math.atan(Math.abs(drop.tailX - drop.headX) / Math.max(1e-9, Math.abs(drop.tailY - drop.headY)));
+
+    it("turns a streak that leans more than the slant to it, keeping its length", () => {
+        const head = { x: 100, y: 100 };
+        const tail = uprightTail(head, { x: 130, y: 90 }, 0.25);
+        expect(Math.hypot(tail.x - head.x, tail.y - head.y)).toBeCloseTo(Math.hypot(30, 10));
+        expect((tail.x - head.x) / Math.abs(tail.y - head.y)).toBeCloseTo(0.25);
+        expect(tail.y).toBeLessThan(head.y);
+        expect(uprightTail(head, { x: 101, y: 80 }, 0.25)).toEqual({ x: 101, y: 80 });
+        expect(uprightTail(head, { x: 130, y: 90 }, 0)).toEqual({ x: 100, y: 100 - Math.hypot(30, 10) });
+    });
+
+    it("lies upright without wind, and leans no more than the flat rain does with it", () => {
+        const calm = perspectiveDrops(EPOCH, SCREEN, CAMERA, 0.6, STILL_AIR);
+        expect(calm.length).toBeGreaterThan(500);
+        for (const drop of calm) expect(angle(drop)).toBeLessThan(1e-6);
+        const wind = groundWind(270, 41, rainLeanOf(1));
+        const leaning = perspectiveDrops(EPOCH, SCREEN, CAMERA, 0.6, { shift: { x: 0, y: 0 }, wind });
+        expect(leaning.length).toBeGreaterThan(500);
+        const most = Math.atan(Math.abs(wind.x) / (RAIN_FALL_SPEEDS[0] * PX_PER_METRE));
+        for (const drop of leaning)
+            expect(angle(drop)).toBeLessThanOrEqual(
+                Math.atan(Math.abs(wind.x) / (RAIN_FALL_SPEEDS[drop.size] * PX_PER_METRE)) + 1e-6,
+            );
+        expect(most).toBeLessThan(Math.PI / 4);
     });
 });

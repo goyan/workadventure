@@ -16,6 +16,8 @@ import {
     USUAL_RAIN,
     PERSPECTIVE_RAIN_SHARE,
     perspectiveThinning,
+    RAIN_LEAN_MOST,
+    rainLeanOf,
     precipitationThinning,
     RAIN_NATIVE_SCALE,
     rainCell,
@@ -368,5 +370,29 @@ describe("perspectiveThinning", () => {
             last = cover(scale);
         }
         expect(cover(8)).toBeLessThan(usual * 0.6);
+    });
+});
+
+describe("rainLeanOf", () => {
+    // The setting went to 200 % and the rain fell at 45 degrees and more with a strong wind: its 100 % is what 25 % gave.
+    it("gives at most the lean the setting gave at 25 %, whatever the setting", () => {
+        expect(RAIN_LEAN_MOST).toBe(0.25);
+        expect(rainLeanOf(1)).toBe(0.25);
+        expect(rainLeanOf(0.5)).toBe(0.125);
+        expect(rainLeanOf(0)).toBe(0);
+        // What an older version kept over 1.
+        expect(rainLeanOf(2)).toBe(0.25);
+        expect(rainLeanOf(-1)).toBe(0);
+        expect(rainLeanOf(Number.NaN)).toBe(0.25);
+    });
+
+    it("keeps the drops of the flat rain at no more than the slant of that lean, in any wind", () => {
+        for (const kmh of [10, 41, 90, 200]) {
+            const wind = groundWind(270, kmh, rainLeanOf(2));
+            for (let layer = 0; layer < 3; layer++) {
+                const old = rainSlant(groundWind(270, kmh, 0.25), layer);
+                expect(rainSlant(wind, layer)).toEqual(old);
+            }
+        }
     });
 });

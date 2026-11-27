@@ -85,7 +85,11 @@ export const rainAmountStepStore: Writable<number> = {
     set: (step) => rainAmountStore.set(rainAmountOfStep(step)),
     update: (updater) => rainAmountStore.set(rainAmountOfStep(updater(rainAmountStep(get(rainAmountStore))))),
 };
-export const rainLeanStore = createPersistedNumberStore("weatherRainLean", 1, 0, 2);
+/**
+ * How much the rain leans with the wind, 0 to 1 (100 % by default and at the most): see rainLeanOf. It was 0 to 2, and
+ * what an older version kept over 1 is brought back to 1.
+ */
+export const rainLeanStore = createPersistedNumberStore("weatherRainLean", 1, 0, 1);
 export const rainSplashesStore = createPersistedNumberStore("weatherRainSplashes", 1, 0, 2);
 export const rainPuddlesStore = createPersistedNumberStore("weatherRainPuddles", 1, 0, 2);
 export const rainCloudsStore = createPersistedNumberStore("weatherRainClouds", 1, 0, 1);
