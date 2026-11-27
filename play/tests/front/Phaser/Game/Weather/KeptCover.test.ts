@@ -126,4 +126,18 @@ describe("explainKeptSnow", () => {
         expect(explainKeptSnow({ mm: 0, weather: cairo }).trend).toBe("none");
         expect(explainKeptSnow({ mm: 5, weather: undefined }).trend).toBe("unknown");
     });
+
+    it("says a snow that falls holds up to about +2 °C, and over that goes at the melt of 2 °C less", () => {
+        // Montréal on 2026-11-27 as the user saw it: +1 °C, 96 %, 18 km/h.
+        const montreal = { temperature: 1, humidity: 96, windSpeed: 18 };
+        expect(explainKeptSnow({ mm: 3, weather: montreal, building: true }).trend).toBe("growing");
+        expect(explainKeptSnow({ mm: 3, weather: { ...montreal, temperature: 2 }, building: true }).trend).toBe(
+            "growing",
+        );
+        const mild = explainKeptSnow({ mm: 3, weather: { ...montreal, temperature: 3 }, building: true });
+        expect(mild.trend).toBe("thawing");
+        expect(mild.meltMmPerHour).toBeCloseTo(snowMeltMmPerHour(montreal), 9);
+        // Once it stops falling, the melt of the air itself.
+        expect(explainKeptSnow({ mm: 3, weather: montreal }).meltMmPerHour).toBeCloseTo(snowMeltMmPerHour(montreal), 9);
+    });
 });

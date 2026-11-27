@@ -3,8 +3,10 @@ import {
     frostPoint,
     RAIN_FROM_WET_BULB,
     SNOW_FULL_MM,
+    SNOW_HOLDS_WHILE_FALLING_C,
     SNOW_UNDER_WET_BULB,
     snowMeltMmPerHour,
+    snowMeltWeather,
     snowShare,
     snowShareOf,
     SOIL_FROZEN_UNDER,
@@ -205,8 +207,11 @@ export interface SoilExplained {
     thawedFrom: number;
 }
 
-/** Nothing to say; a snow falls on the map; it melts; it holds; the air of the map is not known. */
-export type SnowTrend = "none" | "building" | "melting" | "holding" | "unknown";
+/**
+ * Nothing to say; a snow falls on the map and holds; a snow falls on the map in an air too mild for it to hold; it
+ * melts; it holds; the air of the map is not known.
+ */
+export type SnowTrend = "none" | "building" | "fallingMelts" | "melting" | "holding" | "unknown";
 
 export interface SnowExplained {
     air: AirOwner;
@@ -225,6 +230,8 @@ export interface SnowExplained {
     temperature?: number;
     /** Melting: the seconds a ground all white lasts under the air of the room. */
     whiteGroundMeltsIn?: number;
+    /** While snow falls it holds on the ground up to this air temperature, °C (Terrain/Snow.ts). */
+    holdsUntil: number;
     /** How many times faster than reality it goes: the speed of the water of the map. */
     times: number;
 }
@@ -430,16 +437,22 @@ function explainSnow(input: WeatherBoardInput): SnowExplained {
         shown: input.city === undefined,
         snowShare: share,
         temperature: roomAir?.temperature,
+        holdsUntil: SNOW_HOLDS_WHILE_FALLING_C,
         times:
             input.snowTimes !== undefined && Number.isFinite(input.snowTimes) && input.snowTimes > 0
                 ? input.snowTimes
                 : 1,
     };
-    if (input.mapFalling && share > 0) return { ...base, trend: "building" };
-    if (base.mapCover <= 0) return { ...base, trend: "none" };
-    if (!roomAir || input.roomWind === undefined) return { ...base, trend: "unknown" };
     // What the server melts the snow by: the air of the room and the wind of its conditions (GameRoom, snowUnder).
-    const melt = snowMeltMmPerHour({ ...roomAir, windSpeed: input.roomWind });
+    const roomWeather = roomAir && input.roomWind !== undefined ? { ...roomAir, windSpeed: input.roomWind } : undefined;
+    if (input.mapFalling && share > 0) {
+        // While it snows, the snow lying melts by an air SNOW_HOLDS_WHILE_FALLING_C colder (Meadow.stepSnow).
+        const mild = roomWeather !== undefined && snowMeltMmPerHour(snowMeltWeather(roomWeather, true)) > 0;
+        return { ...base, trend: mild ? "fallingMelts" : "building" };
+    }
+    if (base.mapCover <= 0) return { ...base, trend: "none" };
+    if (!roomWeather) return { ...base, trend: "unknown" };
+    const melt = snowMeltMmPerHour(roomWeather);
     if (melt <= 0) return { ...base, trend: "holding" };
     return { ...base, trend: "melting", whiteGroundMeltsIn: (SNOW_FULL_MM / (melt * base.times)) * 3600 };
 }
@@ -474,7 +487,7 @@ export function explainWeather(input: WeatherBoardInput): WeatherBoard {
                   mm: input.peaks.snowMm,
                   weather: roomWeather,
                   times: snow.times,
-                  building: snow.trend === "building",
+                  building: snow.trend === "building" || snow.trend === "fallingMelts",
               }),
               catchingUp: input.peaks.catchingUp === true,
           }

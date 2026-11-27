@@ -291,7 +291,7 @@ describe("WeatherBoard", () => {
             "De la neige sur 60 % de la carte ; sous ton avatar, le sol est blanc à 100 %.",
         );
         expect(text("weather-board-snow")).toContain(
-            "Il neige sur la carte (100 % de flocons) : la couche s'épaissit.",
+            "Il neige sur la carte (100 % de flocons) : la couche s'épaissit. Tant qu'il neige, elle tient au sol jusqu'à 2 °C.",
         );
         expect(text("weather-board-snow-server")).toBe(
             "Tu ne la vois pas : tu suis Dakar, et cette neige est celle de la carte. Reviens au temps du serveur pour la voir.",
@@ -499,6 +499,22 @@ describe("WeatherBoard", () => {
         );
         expect(text("weather-board-snow-server")).toContain("Tu ne la vois pas : tu suis Auckland");
         expect(text("weather-board-snow")).toContain("24 °C sur la carte : elle fond.");
+    });
+
+    /** A snow falls on the map, and some lies on it already. */
+    const SNOWING = { mapFalling: true, falling: true, snow: { map: 0.2, here: 0 }, peaks: { iceMm: 0, snowMm: 5 } };
+
+    it("says a snow that falls holds on the ground up to 2 °C", () => {
+        // Montréal on 2026-11-27 as the user saw it: +1 °C, 96 %, 18 km/h.
+        render(input({ ...SNOWING, roomAir: { temperature: 1, humidity: 96 }, roomWind: 18 }));
+        expect(text("weather-board-snow")).toContain("Tant qu'il neige, elle tient au sol jusqu'à 2 °C.");
+    });
+
+    it("says a snow that falls in a milder air melts as it falls", () => {
+        render(input({ ...SNOWING, roomAir: { temperature: 4, humidity: 40 }, roomWind: 0 }));
+        expect(text("weather-board-snow")).toContain(
+            "mais à 4 °C elle fond en tombant : tant qu'il neige, elle ne tient au sol que jusqu'à 2 °C.",
+        );
     });
 
     it("says what is drawn lags behind the air", () => {
