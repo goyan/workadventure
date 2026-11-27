@@ -239,7 +239,20 @@ describe("LocalTerrainSimulation, the snow of the chosen place under a fire of t
         const tiles = 16;
         const snowy: WAMFileFormat = {
             ...wam,
-            settings: { ...wam.settings, water: { ...wam.settings?.water, freezeThawSpeed: 600 } },
+            settings: {
+                ...wam.settings,
+                water: {
+                    runoff: 10,
+                    evaporation: 0,
+                    speed: 1,
+                    absorption: 0,
+                    current: 1,
+                    maxSurface: 18,
+                    indoorDrain: 0,
+                    impactReach: 1,
+                    freezeThawSpeed: 600,
+                },
+            },
             terrain: withHeights(undefined, new Map([[cellKey(0, 0), 1]])),
         };
         const told: LocalTerrainTold[] = [];
