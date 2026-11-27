@@ -136,9 +136,10 @@ export function perspectiveDropPlanes(
     shift: RainWind,
     local: boolean,
     copies: number,
+    thin = 1,
 ): AirPlane[] {
     if (!(intensity > 0)) return [];
-    const wanted = rainDropsExpected(view, intensity);
+    const wanted = rainDropsExpected(view, intensity) * thin;
     const shares = dropShares(rainRateOfLevel(intensity));
     const planes: AirPlane[] = [];
     shares.forEach((share, size) => {
@@ -217,10 +218,11 @@ export function perspectiveDrops(
     air: { shift: RainWind; wind: RainWind },
     local?: RainLocal,
     copies = 1,
+    thin = 1,
 ): PerspectiveDrop[] {
     const seconds = fallSeconds(epoch);
     const drops: PerspectiveDrop[] = [];
-    for (const plane of perspectiveDropPlanes(view, camera, intensity, air.shift, local !== undefined, copies)) {
+    for (const plane of perspectiveDropPlanes(view, camera, intensity, air.shift, local !== undefined, copies, thin)) {
         for (let copy = 0; copy < plane.copies; copy++) {
             for (let row = plane.firstRow; row < plane.firstRow + plane.rows; row++) {
                 for (let column = plane.firstColumn; column < plane.firstColumn + plane.columns; column++) {
@@ -261,12 +263,13 @@ export function perspectiveFlakePlanes(
     shift: RainWind,
     local: boolean,
     copies: number,
+    thin = 1,
 ): AirPlane[] {
     if (!(fall.level > 0)) return [];
     const area = view.width * view.height;
     const planes: AirPlane[] = [];
     FLAKE_KINDS.forEach((kind, kindIndex) => {
-        const wanted = fall.level * (fall.mix[kindIndex] ?? 0) * flakeCapacity(kind) * FLAKES_PER_CAPACITY;
+        const wanted = fall.level * (fall.mix[kindIndex] ?? 0) * flakeCapacity(kind) * FLAKES_PER_CAPACITY * thin;
         if (!(wanted > 0)) return;
         // Cells enough for the heaviest fall of this kind alone, a power of two (a zoom keeps the same grid).
         const most = (flakeCapacity(kind) * FLAKES_PER_CAPACITY) / SEEN_SHARE;
@@ -353,10 +356,11 @@ export function perspectiveFlakes(
     local?: RainLocal,
     still = false,
     copies = 1,
+    thin = 1,
 ): PerspectiveFlake[] {
     const seconds = still ? 0 : fallSeconds(epoch);
     const flakes: PerspectiveFlake[] = [];
-    for (const plane of perspectiveFlakePlanes(view, fall, air.shift, local !== undefined, copies)) {
+    for (const plane of perspectiveFlakePlanes(view, fall, air.shift, local !== undefined, copies, thin)) {
         for (let copy = 0; copy < plane.copies; copy++) {
             for (let row = plane.firstRow; row < plane.firstRow + plane.rows; row++) {
                 for (let column = plane.firstColumn; column < plane.firstColumn + plane.columns; column++) {

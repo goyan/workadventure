@@ -50,6 +50,9 @@ import {
     forcedRainLevel,
     parseRainLevel,
     rainDrops,
+    precipitationThinning,
+    perspectiveThinning,
+    RAIN_NATIVE_SCALE,
     rainFineness,
     rainIntensity,
     RAIN_FALL_SPEEDS,
@@ -93,7 +96,7 @@ import { rainbowPlacement, rainbowStrength } from "./Rainbow";
 import { contrailZoomFade, contrails } from "./Contrails";
 import type { Contrail } from "./Contrails";
 import type { CloudSky } from "./CloudLayer";
-import { screenScale, seenFromFar } from "./ScreenScale";
+import { finestGrid, screenScale, seenFromFar } from "./ScreenScale";
 import type { BlockCanvasArea, BlockSurface } from "./BlockSurface";
 import { WeatherSounds } from "./WeatherSounds";
 import {
@@ -1037,13 +1040,14 @@ export class WeatherManager {
         // Seen from very close the rain is worked out on a finer grid than the map, then brought back to it: the
         // drops keep on screen the size and the number they have at a usual zoom.
         const scale = this.screenScale();
-        const fine = rainFineness(scale);
+        const fine = this.fineness(scale);
         const finer =
             fine === 1
                 ? view
                 : { x: view.x * fine, y: view.y * fine, width: view.width * fine, height: view.height * fine };
         const localFine: RainLocal | undefined = local && fine !== 1 ? (x, y) => local(x / fine, y / fine) : local;
-        const onScreen = fine === 1 ? undefined : scale / fine;
+        // Past the usual size (the canvas cannot draw finer) the drops thin out: the rain covers the screen as usual.
+        const onScreen = fine === 1 && scale <= RAIN_NATIVE_SCALE ? undefined : scale / fine;
         const particles = this.gpuParticles();
         if (particles) {
             // The personal amount adds drops to the rain as it is (the same sizes, the same wind), it does not make it
@@ -1193,7 +1197,9 @@ export class WeatherManager {
             ? { shift: { x: 0, y: 0 }, velocity }
             : { shift: this.snowDrift.at(epoch, velocity), velocity };
         // Seen from very close, worked out on a finer grid like the rain: a flake keeps its size on the screen.
-        const fine = rainFineness(this.screenScale());
+        const scale = this.screenScale();
+        const fine = this.fineness(scale);
+        const thin = precipitationThinning(scale / fine);
         const finer =
             fine === 1
                 ? view
@@ -1209,7 +1215,16 @@ export class WeatherManager {
         if (particles) {
             // The personal amount adds flakes to the snow as it is, it does not make it heavier (see drawRain).
             const copies = cellCopies(this.seenAmount());
-            const planes = snowPlanes(finer, fall, air, still ? 0 : epoch / 1000, local !== undefined, still, copies);
+            const planes = snowPlanes(
+                finer,
+                fall,
+                air,
+                still ? 0 : epoch / 1000,
+                local !== undefined,
+                still,
+                copies,
+                thin,
+            );
             particles.snow(planes, {
                 seconds: still ? 0 : fallSeconds(epoch),
                 copies,
@@ -1222,7 +1237,7 @@ export class WeatherManager {
         }
         const copies = cellCopies(this.seenAmount(), this.drawnCopies);
         const pixel = 1 / fine;
-        for (const flake of snowflakes(epoch, finer, fall, air, localFine, still, copies)) {
+        for (const flake of snowflakes(epoch, finer, fall, air, localFine, still, copies, thin)) {
             const x = flake.x / fine;
             const y = flake.y / fine;
             if (isOutdoor && !isOutdoor(x, y)) continue;
@@ -1247,12 +1262,15 @@ export class WeatherManager {
         const still = this.reducedMotion;
         const air = { shift: still ? { x: 0, y: 0 } : this.rainDrift.at(epoch, wind), wind };
         // Screen pixels a map pixel: the widths are set on the screen.
-        const pixel = 1 / this.screenScale();
+        const scale = this.screenScale();
+        const pixel = 1 / scale;
+        // Zoomed in the streaks are longer and, on a stretched canvas, never thinner than a pixel of it: fewer of them.
+        const thin = perspectiveThinning(scale);
         const particles = this.gpuParticles();
         if (particles) {
             const copies = cellCopies(this.seenAmount());
             particles.rainInPerspective(
-                perspectiveDropPlanes(view, camera, intensity, air.shift, local !== undefined, copies),
+                perspectiveDropPlanes(view, camera, intensity, air.shift, local !== undefined, copies, thin),
                 {
                     seconds: still ? 0 : fallSeconds(epoch),
                     copies,
@@ -1270,8 +1288,12 @@ export class WeatherManager {
             return;
         }
         const copies = cellCopies(this.seenAmount(), this.drawnCopies);
-        const drops = perspectiveDrops(still ? 0 : epoch, view, camera, intensity, air, local, copies).filter(
-            (drop) => !isOutdoor || isOutdoor(drop.landX, drop.landY),
+        const drops = perspectiveDrops(still ? 0 : epoch, view, camera, intensity, air, local, copies, thin).filter(
+            (drop) =>
+                !isOutdoor ||
+                (isOutdoor(drop.landX, drop.landY) &&
+                    isOutdoor(drop.headX, drop.headY) &&
+                    isOutdoor(drop.tailX, drop.tailY)),
         );
         // Grouped by how they are drawn: a few lines styles for the whole rain.
         const groups = new Map<string, { width: number; alpha: number; drops: typeof drops }>();
@@ -1318,27 +1340,33 @@ export class WeatherManager {
     ): void {
         const camera = perspectiveCamera(this.screenView());
         // The pixel of a flake on the ground, as the flat snow draws it (finer seen from very close).
-        const pixel = 1 / rainFineness(this.screenScale());
+        const scale = this.screenScale();
+        const fine = this.fineness(scale);
+        const pixel = 1 / fine;
+        const thin = precipitationThinning(scale / fine);
         const still = this.reducedMotion;
         const particles = this.gpuParticles();
         if (particles) {
             const copies = cellCopies(this.seenAmount());
-            particles.snowInPerspective(perspectiveFlakePlanes(view, fall, air.shift, local !== undefined, copies), {
-                seconds: still ? 0 : fallSeconds(epoch),
-                copies,
-                view,
-                camera,
-                air,
-                pixel,
-                biggest: PERSPECTIVE_FLAKE_BIGGEST,
-                still,
-                tones,
-            });
+            particles.snowInPerspective(
+                perspectiveFlakePlanes(view, fall, air.shift, local !== undefined, copies, thin),
+                {
+                    seconds: still ? 0 : fallSeconds(epoch),
+                    copies,
+                    view,
+                    camera,
+                    air,
+                    pixel,
+                    biggest: PERSPECTIVE_FLAKE_BIGGEST,
+                    still,
+                    tones,
+                },
+            );
             return;
         }
         const copies = cellCopies(this.seenAmount(), this.drawnCopies);
-        for (const flake of perspectiveFlakes(epoch, view, camera, fall, air, local, still, copies)) {
-            if (isOutdoor && !isOutdoor(flake.landX, flake.landY)) continue;
+        for (const flake of perspectiveFlakes(epoch, view, camera, fall, air, local, still, copies, thin)) {
+            if (isOutdoor && !(isOutdoor(flake.landX, flake.landY) && isOutdoor(flake.x, flake.y))) continue;
             const kind = FLAKE_KINDS[flake.kind];
             // The shape of the flake as on the ground, its pixels as many times bigger as the flake is near.
             const grown = Math.min(PERSPECTIVE_FLAKE_BIGGEST, flake.scale);
@@ -1422,6 +1450,11 @@ export class WeatherManager {
     /** How much of the clouds shows at this zoom, at the height this person set for them. */
     private zoomFade(): number {
         return cloudZoomFade(this.screenScale(), this.cloudsHeight);
+    }
+
+    /** How many times finer than the map the rain and the snow are drawn: the canvas holds no finer grid than its zoom. */
+    private fineness(scale: number): number {
+        return Math.min(rainFineness(scale), finestGrid(this.scene));
     }
 
     private screenScale(): number {

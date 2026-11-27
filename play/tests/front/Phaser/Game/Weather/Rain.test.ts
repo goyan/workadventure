@@ -14,6 +14,9 @@ import {
     rainUnderCloud,
     STORM_RAIN,
     USUAL_RAIN,
+    PERSPECTIVE_RAIN_SHARE,
+    perspectiveThinning,
+    precipitationThinning,
     RAIN_NATIVE_SCALE,
     rainCell,
     rainFineness,
@@ -328,5 +331,42 @@ describe("rainFineness", () => {
     it("stays at 1 for a scale that is not a number", () => {
         expect(rainFineness(Number.NaN)).toBe(1);
         expect(rainFineness(Number.POSITIVE_INFINITY)).toBe(1);
+    });
+});
+
+describe("precipitationThinning", () => {
+    it("draws all of them up to the usual zooms, and as many fewer as their pixel is wider past them", () => {
+        expect(precipitationThinning(0.5)).toBe(1);
+        expect(precipitationThinning(RAIN_NATIVE_SCALE)).toBe(1);
+        // Twice as wide on the screen as the usual 1.25: a quarter of them cover the screen as before.
+        expect(precipitationThinning(2.5)).toBeCloseTo(0.25);
+        expect(precipitationThinning(8)).toBeCloseTo((1.25 / 8) ** 2);
+        expect(precipitationThinning(Number.NaN)).toBe(1);
+    });
+});
+
+describe("perspectiveThinning", () => {
+    // At a personal amount of x1 the rain seen from above covered 32 % of the screen at a usual zoom: 0.22 of its drops
+    // cover 13 % (measured at the bench, 1920 x 1080, stretched canvas, wind 41 km/h).
+    it("keeps a share of the drops at the usual zooms", () => {
+        expect(PERSPECTIVE_RAIN_SHARE).toBe(0.22);
+        for (const scale of [0.3, 1, 1.25, RAIN_NATIVE_SCALE]) expect(perspectiveThinning(scale)).toBe(0.22);
+        expect(perspectiveThinning(Number.NaN)).toBe(0.22);
+    });
+
+    // The cover of a share grows as the scale to the 0.85 (59 % of it per unit at 1.25, 268 % at 8): the cover of the
+    // share kept, which is that growth times the share, never rises with the zoom and ends under the usual one.
+    it("thins further as the zoom grows, so that the rain covers no more of the screen", () => {
+        const cover = (scale: number) => perspectiveThinning(scale) * 59 * (scale / 1.25) ** 0.85;
+        const usual = cover(1.25);
+        expect(usual).toBeCloseTo(13, 0);
+        let last = Infinity;
+        for (const scale of [1.6, 2, 3, 4, 6, 8, 16]) {
+            expect(perspectiveThinning(scale)).toBeLessThan(0.22);
+            expect(cover(scale)).toBeLessThan(usual * 1.2);
+            expect(cover(scale)).toBeLessThanOrEqual(last + 1e-9);
+            last = cover(scale);
+        }
+        expect(cover(8)).toBeLessThan(usual * 0.6);
     });
 });

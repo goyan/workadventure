@@ -139,10 +139,12 @@ const RAIN_LAYERS: readonly RainLayer[] = [
 
 /**
  * How many drops rainDrops draws over the view at this intensity, on the mean (no local factor): what the rain in
- * perspective draws too, the same density of water on the screen.
+ * perspective draws too, the same density of water on the screen. The base cell is not rounded to a power of two
+ * (rainCell) here: the cell of the flat rain makes it four times thicker at some zooms than at others, which a rain
+ * seen from above, thinned to a share of the screen (perspectiveThinning), cannot follow.
  */
 export function rainDropsExpected(view: WeatherView, intensity: number): number {
-    const base = rainCell(view);
+    const base = Math.sqrt((view.width * view.height) / RAIN_CELLS);
     return RAIN_LAYERS.reduce((sum, layer) => {
         const shown = Math.max(0, Math.min(1, (Math.min(1, intensity) - layer.from) / (layer.full - layer.from)));
         const cell = base / layer.split;
@@ -192,7 +194,44 @@ const SMALLEST_CELL = 16;
  * Screen pixels a pixel of a finer grid takes (rainFineness) for which its base cell is the one the same view has at a
  * usual zoom, the middle of the range the pixel keeps past them.
  */
-const RAIN_USUAL_PIXEL = 1.25;
+export const RAIN_USUAL_PIXEL = 1.25;
+
+/**
+ * The share of the drops and flakes of a usual zoom (1 at it) to draw when their pixel takes `onScreen` screen pixels:
+ * past RAIN_NATIVE_SCALE they are `onScreen` times wider and as many times longer, so they thin out by the square, and
+ * the rain and the snow cover the screen as at a usual zoom. Seen from close, the canvas cannot draw them finer (the
+ * zoom stretches it, see ScreenScale.finestGrid), which is when this counts.
+ */
+export function precipitationThinning(onScreen: number): number {
+    if (!Number.isFinite(onScreen) || onScreen <= RAIN_NATIVE_SCALE) return 1;
+    return (RAIN_USUAL_PIXEL / onScreen) ** 2;
+}
+
+/**
+ * The share of the drops of the rain seen from above (PerspectiveFall) kept at a usual zoom: with all of them the rain
+ * covered 32 % of the screen at a personal amount of x1 (measured at the bench), more than the map can be read through;
+ * 0.22 of them cover 13 %.
+ */
+export const PERSPECTIVE_RAIN_SHARE = 0.22;
+
+/**
+ * The share of the drops seen from above to draw at `scale` screen pixels a map pixel. PERSPECTIVE_RAIN_SHARE at the
+ * usual zooms. Past them the same share would cover more of the screen, as the streaks are longer and, on a stretched
+ * canvas, a whole pixel of the canvas wide: measured at the bench, the cover of a fixed share grows as the scale to
+ * the 0.85 (59 % of it at a scale of 1.25, 268 % at 8, per unit of share). So the share falls as that power, and again
+ * with the square root of the scale: seen from near the rain covers less (about 12 % at 2, 10 % at 4, 8 % at 8).
+ */
+export function perspectiveThinning(scale: number): number {
+    if (!Number.isFinite(scale) || scale <= RAIN_NATIVE_SCALE) return PERSPECTIVE_RAIN_SHARE;
+    return (
+        PERSPECTIVE_RAIN_SHARE *
+        (RAIN_NATIVE_SCALE / scale) ** 0.85 *
+        Math.min(1, Math.sqrt(RAIN_PERSPECTIVE_NEAR / scale))
+    );
+}
+
+/** The scale from which the rain seen from above covers less of the screen than at a usual zoom. */
+const RAIN_PERSPECTIVE_NEAR = 1.5;
 
 /**
  * Side of the base cell for this view: a power of two, so a small scroll or zoom keeps the same grid. `onScreen`
