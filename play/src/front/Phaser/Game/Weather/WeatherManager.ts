@@ -51,6 +51,7 @@ import {
     parseRainLevel,
     rainDrops,
     precipitationThinning,
+    rainLeanOf,
     perspectiveThinning,
     RAIN_NATIVE_SCALE,
     rainFineness,
@@ -625,7 +626,7 @@ export class WeatherManager {
             // The drops go with the wind near the ground, as the flakes do: the same way in a sleet.
             const wind = this.rainWindAt(
                 now,
-                groundWind(settings?.windFrom, settings?.windSpeed, this.rainSettings.lean),
+                groundWind(settings?.windFrom, settings?.windSpeed, rainLeanOf(this.rainSettings.lean)),
             );
             // The part that falls as rain as drops, the part that falls as snow as flakes: both in a sleet.
             if (snow < 1) this.drawRain(epoch, view, rain * (1 - snow), wind, isOutdoor, underClouds);

@@ -202,7 +202,31 @@ export function perspectiveDropAt(
         y - air.wind.y * EXPOSURE_S,
         Math.min(camera.height * 0.99, z + speed * EXPOSURE_S),
     );
-    return { tailX: tail.x, tailY: tail.y, headX: head.x, headY: head.y, scale: head.scale, landX, landY, size };
+    // Seen from above a streak points away from the middle of the screen: no more across than the wind makes it lean.
+    const upright = uprightTail(head, tail, Math.abs(air.wind.x) / (RAIN_FALL_SPEEDS[size] * PX_PER_METRE));
+    return { tailX: upright.x, tailY: upright.y, headX: head.x, headY: head.y, scale: head.scale, landX, landY, size };
+}
+
+/**
+ * The tail of a streak from its head, turned to lean no more than `slant` (pixels across for one down) from the
+ * vertical, its length kept: the lean of the rain with the wind (the slant of the flat rain, Rain.rainSlant). Seen from
+ * above the drops near the sides of the screen fall across it: 45 degrees and more, however little the wind blew.
+ */
+export function uprightTail(
+    head: { x: number; y: number },
+    tail: { x: number; y: number },
+    slant: number,
+): { x: number; y: number } {
+    const across = tail.x - head.x;
+    const down = tail.y - head.y;
+    const length = Math.hypot(across, down);
+    if (!(length > 0) || !Number.isFinite(slant) || Math.abs(across) <= slant * Math.abs(down)) return tail;
+    const along = Math.hypot(slant, 1);
+    const sense = down > 0 ? 1 : -1;
+    return {
+        x: head.x + (Math.sign(across) * slant * length) / along,
+        y: head.y + (sense * length) / along,
+    };
 }
 
 /**

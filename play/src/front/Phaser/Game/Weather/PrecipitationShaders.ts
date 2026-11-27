@@ -183,6 +183,16 @@ vec3 project(vec2 point, float z) {
     return vec3(uCamera.xy + (point - uCamera.xy) * scale, scale);
 }
 
+// PerspectiveFall.uprightTail: the tail of a streak turned to lean no more than "slant" from the vertical.
+vec2 uprightTail(vec2 head, vec2 tail, float slant) {
+    vec2 d = tail - head;
+    float len = length(d);
+    if (!(len > 0.0) || abs(d.x) <= slant * abs(d.y)) return tail;
+    float along = sqrt(slant * slant + 1.0);
+    float sense = d.y > 0.0 ? 1.0 : -1.0;
+    return head + vec2(sign(d.x) * slant, sense) * (len / along);
+}
+
 void main() {
     #define CELL uSizeA[group].x
     ${groupOf(3)}
@@ -222,6 +232,7 @@ void main() {
         gl_Position = HIDDEN;
         return;
     }
+    tail.xy = uprightTail(head.xy, tail.xy, abs(uWind.x) / a.z);
     vec2 b = uSizeB[group];
     // Near the camera a drop is out of focus: wider and fainter as it grows (by steps, as the processor drew them).
     float width = max(1.0, floor(min(uLook.y, b.x * head.z) * 2.0 + 0.5) / 2.0);
