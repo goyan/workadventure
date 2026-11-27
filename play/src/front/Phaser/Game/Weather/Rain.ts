@@ -206,14 +206,21 @@ export function precipitationThinning(onScreen: number): number {
 }
 
 /**
- * The same for drops seen from above (PerspectiveFall), whose width is set on the screen and whose length goes with the
- * zoom: `scale` screen pixels a map pixel, `canvasPixel` those of a pixel of the canvas, which no streak is thinner than
- * (it then is that many times wider than the 1.5 pixels it was meant).
+ * The share of the drops of the rain seen from above (PerspectiveFall) kept at a usual zoom: with all of them the rain
+ * covered 32 % of the screen at a personal amount of x1 (measured at the bench), more than the map can be read through.
+ */
+export const PERSPECTIVE_RAIN_SHARE = 0.4;
+
+/**
+ * The share of the drops seen from above to draw: PERSPECTIVE_RAIN_SHARE at the usual zooms, and past them as many fewer
+ * as the zoom lengthens them (`scale` screen pixels a map pixel) and, on a stretched canvas, as it widens them
+ * (`canvasPixel` screen pixels a pixel of the canvas, which no streak is thinner than: it then is that many times wider
+ * than the 1.5 pixels it was meant), so that the rain covers the screen alike at every zoom.
  */
 export function perspectiveThinning(scale: number, canvasPixel: number): number {
-    if (!Number.isFinite(scale) || scale <= RAIN_NATIVE_SCALE) return 1;
+    if (!Number.isFinite(scale) || scale <= RAIN_NATIVE_SCALE) return PERSPECTIVE_RAIN_SHARE;
     const wider = Number.isFinite(canvasPixel) && canvasPixel > 1.5 ? 1.5 / canvasPixel : 1;
-    return Math.min(1, Math.sqrt((RAIN_USUAL_PIXEL / scale) * wider));
+    return Math.min(PERSPECTIVE_RAIN_SHARE, Math.sqrt((RAIN_USUAL_PIXEL / scale) * wider));
 }
 
 /**

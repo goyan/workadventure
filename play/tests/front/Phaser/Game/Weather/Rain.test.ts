@@ -14,6 +14,7 @@ import {
     rainUnderCloud,
     STORM_RAIN,
     USUAL_RAIN,
+    PERSPECTIVE_RAIN_SHARE,
     perspectiveThinning,
     precipitationThinning,
     RAIN_NATIVE_SCALE,
@@ -345,14 +346,19 @@ describe("precipitationThinning", () => {
 });
 
 describe("perspectiveThinning", () => {
-    it("thins the drops seen from above as the zoom lengthens them and the canvas widens them", () => {
-        expect(perspectiveThinning(1.5, 1.5)).toBe(1);
-        // A canvas of the usual size: the drops only grow longer.
+    // At a personal amount of x1 the rain seen from above covered 32 % of the screen at a usual zoom, 13 % is kept
+    // (measured at the bench, 1920 x 1080, stretched canvas, wind 41 km/h): 14 % at a scale of 1.25 and 12 % at 1.5.
+    it("keeps a share of the drops at the usual zooms", () => {
+        expect(PERSPECTIVE_RAIN_SHARE).toBe(0.4);
+        for (const scale of [0.3, 1, 1.25, RAIN_NATIVE_SCALE]) expect(perspectiveThinning(scale, 1)).toBe(0.4);
+    });
+
+    it("thins them further as the zoom lengthens them and the canvas widens them, never over that share", () => {
         expect(perspectiveThinning(5, 1)).toBeCloseTo(Math.sqrt(1.25 / 5));
-        // A stretched one: no streak thinner than its pixel, so fewer again. Never over 1, never rising with the zoom.
+        // A stretched canvas: no streak thinner than its pixel, so fewer again.
         expect(perspectiveThinning(8, 8)).toBeLessThan(perspectiveThinning(8, 1));
-        for (const scale of [2, 4, 8, 16]) expect(perspectiveThinning(scale, scale)).toBeLessThan(1);
+        for (const scale of [2, 4, 8, 16]) expect(perspectiveThinning(scale, scale)).toBeLessThanOrEqual(0.4);
         expect(perspectiveThinning(16, 16)).toBeLessThan(perspectiveThinning(2, 2));
-        expect(perspectiveThinning(Number.NaN, 1)).toBe(1);
+        expect(perspectiveThinning(Number.NaN, 1)).toBe(0.4);
     });
 });
