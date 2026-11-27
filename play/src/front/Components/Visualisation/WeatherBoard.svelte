@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { SNOW_MAX_MM } from "@workadventure/map-editor";
     import type {
         AirOwner,
         Audience,
@@ -267,8 +268,16 @@
         switch (snow.trend) {
             case "none":
                 return undefined;
-            case "building":
-                return t.snow.building({ share: share(snow.snowShare), holdsUntil: degreesOr(snow.holdsUntil) });
+            case "building": {
+                const building = t.snow.building({
+                    share: share(snow.snowShare),
+                    holdsUntil: degreesOr(snow.holdsUntil),
+                });
+                // Sped up, it falls no thicker than a ground all white (Terrain/Snow.ts, snowfallCapMm).
+                return snow.capMm < SNOW_MAX_MM
+                    ? `${building} ${t.snow.fastCap({ mm: whole.format(snow.capMm) })}`
+                    : building;
+            }
             case "fallingMelts":
                 return t.snow.fallingMelts({
                     share: share(snow.snowShare),

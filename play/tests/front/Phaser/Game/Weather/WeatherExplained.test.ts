@@ -351,7 +351,7 @@ describe("explainWeather: snow on the ground", () => {
                 snow: { map: 0.1, here: 0 },
             }),
         ).snow;
-        expect(montreal).toMatchObject({ trend: "building", holdsUntil: 2 });
+        expect(montreal).toMatchObject({ trend: "building", holdsUntil: 2, capMm: 600 });
         // A dry air at +4 °C: the snow still falls, but melts by the 2 °C over +2 °C.
         const mild = explainWeather(
             input({

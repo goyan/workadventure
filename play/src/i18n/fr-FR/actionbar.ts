@@ -464,6 +464,8 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
                 hidden: "Tu ne la vois pas : tu suis {city}, et cette neige est celle de la carte. Reviens au temps du serveur pour la voir.",
                 building:
                     "Il neige sur la carte ({share} % de flocons) : la couche s'épaissit. Tant qu'il neige, elle tient au sol jusqu'à {holdsUntil}.",
+                fastCap:
+                    "En accéléré, elle ne dépasse pas un sol tout blanc ({mm} mm d'eau) : sa fonte ne noie pas la carte.",
                 fallingMelts:
                     "Il neige sur la carte ({share} % de flocons), mais à {temperature} elle fond en tombant : tant qu'il neige, elle ne tient au sol que jusqu'à {holdsUntil}.",
                 melting: "{temperature} sur la carte : elle fond. Un sol tout blanc tient environ {duration}.",

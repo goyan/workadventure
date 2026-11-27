@@ -1,4 +1,4 @@
-import { freezeThawTimesOf, WeatherType } from "@workadventure/map-editor";
+import { freezeThawSpeedOf, freezeThawTimesOf, snowfallCapMm, WeatherType } from "@workadventure/map-editor";
 import type { FireConditionsMessage } from "@workadventure/messages";
 import { get } from "svelte/store";
 import { coldLyingStore } from "@wa/front/Stores/CatastropheStore";
@@ -113,5 +113,7 @@ export function weatherBoardNow(
                 : undefined,
         // The clock the snow melts and the ice takes and thaws by: the water of the map times its freeze and thaw speed.
         snowTimes: freezeThawTimesOf(settings?.water),
+        // ...and how thick its snow may fall: a ground all white while that cold goes faster (Terrain/Snow.ts).
+        snowfallCapMm: snowfallCapMm(freezeThawSpeedOf(settings?.water)),
     });
 }

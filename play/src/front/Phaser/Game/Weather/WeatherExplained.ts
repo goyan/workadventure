@@ -4,6 +4,7 @@ import {
     RAIN_FROM_WET_BULB,
     SNOW_FULL_MM,
     SNOW_HOLDS_WHILE_FALLING_C,
+    SNOW_MAX_MM,
     SNOW_UNDER_WET_BULB,
     snowMeltMmPerHour,
     snowMeltWeather,
@@ -95,6 +96,8 @@ export interface WeatherBoardInput {
     };
     /** How many times faster than reality the snow of the map goes: the speed of its water (1 when absent). */
     snowTimes?: number;
+    /** The most the snow that falls lays on a tile, mm of water (snowfallCapMm; SNOW_MAX_MM when absent). */
+    snowfallCapMm?: number;
 }
 
 export type PrecipitationForm = "rain" | "mix" | "snow";
@@ -232,6 +235,8 @@ export interface SnowExplained {
     whiteGroundMeltsIn?: number;
     /** While snow falls it holds on the ground up to this air temperature, °C (Terrain/Snow.ts). */
     holdsUntil: number;
+    /** The most the snow that falls lays on a tile, mm of water: a ground all white while the cold goes faster. */
+    capMm: number;
     /** How many times faster than reality it goes: the speed of the water of the map. */
     times: number;
 }
@@ -438,6 +443,10 @@ function explainSnow(input: WeatherBoardInput): SnowExplained {
         snowShare: share,
         temperature: roomAir?.temperature,
         holdsUntil: SNOW_HOLDS_WHILE_FALLING_C,
+        capMm:
+            input.snowfallCapMm !== undefined && Number.isFinite(input.snowfallCapMm)
+                ? Math.min(SNOW_MAX_MM, input.snowfallCapMm)
+                : SNOW_MAX_MM,
         times:
             input.snowTimes !== undefined && Number.isFinite(input.snowTimes) && input.snowTimes > 0
                 ? input.snowTimes

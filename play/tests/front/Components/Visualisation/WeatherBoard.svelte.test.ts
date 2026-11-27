@@ -508,6 +508,14 @@ describe("WeatherBoard", () => {
         // Montréal on 2026-11-27 as the user saw it: +1 °C, 96 %, 18 km/h.
         render(input({ ...SNOWING, roomAir: { temperature: 1, humidity: 96 }, roomWind: 18 }));
         expect(text("weather-board-snow")).toContain("Tant qu'il neige, elle tient au sol jusqu'à 2 °C.");
+        expect(text("weather-board-snow")).not.toContain("En accéléré");
+    });
+
+    it("says a snow that falls sped up grows no thicker than a ground all white", () => {
+        render(input({ ...SNOWING, roomAir: { temperature: 1, humidity: 96 }, roomWind: 18, snowfallCapMm: 15 }));
+        expect(text("weather-board-snow")).toContain(
+            "En accéléré, elle ne dépasse pas un sol tout blanc (15 mm d'eau) : sa fonte ne noie pas la carte.",
+        );
     });
 
     it("says a snow that falls in a milder air melts as it falls", () => {
