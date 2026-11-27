@@ -1,5 +1,5 @@
 import { gunzipSync } from "node:zlib";
-import { DEFAULT_WATER_SETTINGS, warmedCold, WeatherType } from "@workadventure/map-editor";
+import { DEFAULT_WATER_SETTINGS, SNOW_FULL_MM, snowByte, warmedCold, WeatherType } from "@workadventure/map-editor";
 import type { PrecipitationAir, SnowWeather, WAMFileFormat } from "@workadventure/map-editor";
 import type { MeadowMessage, SubToPusherRoomMessage } from "@workadventure/messages";
 import { describe, expect, it, vi } from "vitest";
@@ -760,6 +760,24 @@ describe("the snow of the MeadowManager", () => {
         // In real time the same rain lays far less in the same seconds.
         expect(snowOf(real.sent.at(-1))[centre]).toBeLessThan(laid[centre]);
         for (const { manager } of [fastWater, fastCold, real]) manager.stop();
+    });
+
+    it("lays no more than a ground all white at ×600 of the freeze and the thaw: its melt floods nothing", () => {
+        const fastCold = snowHarness({ weather: WeatherType.Rain, waterSpeed: 1 });
+        fastCold.wam.settings = {
+            ...fastCold.wam.settings,
+            water: { ...DEFAULT_WATER_SETTINGS, speed: 1, freezeThawSpeed: 600 },
+        };
+        fastCold.manager.mapChanged();
+        fastCold.steps(60);
+        expect(snowOf(fastCold.sent.at(-1)).every((byte) => byte === snowByte(SNOW_FULL_MM))).toBe(true);
+        // On a water at ×600 in real time of the cold, the same rain lies thicker: the cap is the freeze and the thaw's.
+        const fastWater = snowHarness({ weather: WeatherType.Rain });
+        fastWater.manager.mapChanged();
+        fastWater.steps(60);
+        expect(snowOf(fastWater.sent.at(-1))[centre]).toBeGreaterThan(snowByte(SNOW_FULL_MM));
+        fastCold.manager.stop();
+        fastWater.manager.stop();
     });
 
     it("lets no ice take where the water runs fast, when the water of the map has inertia", () => {

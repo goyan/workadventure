@@ -9,6 +9,23 @@ export const SNOW_MAX_MM = 600;
 /** The snow, in mm of water, from which the ground under it is all white. */
 export const SNOW_FULL_MM = 15;
 
+/**
+ * The most the snow that falls lays on a tile, in mm of water, at that speed of the freeze and the thaw of the map
+ * (WaterSettings.freezeThawSpeed): SNOW_MAX_MM in real time; a ground all white (SNOW_FULL_MM) as soon as it goes
+ * faster (« >> », « >>> »), where the snow falls as fast as the cold goes: the water of its melt, poured on the
+ * relief, then never floods the map (a choice of the user, 2026-11-27). A snow already thicker is kept, only no more
+ * falls on it; back to ×1 it thickens again at the pace of reality.
+ */
+export function snowfallCapMm(freezeThawSpeed: number): number {
+    return Number.isFinite(freezeThawSpeed) && freezeThawSpeed > 1 ? SNOW_FULL_MM : SNOW_MAX_MM;
+}
+
+/** `snowMm` lying, with `fallenMm` fallen on it, no thicker than `capMm` unless it was already. */
+export function snowLaid(snowMm: number, fallenMm: number, capMm = SNOW_MAX_MM): number {
+    const cap = Math.min(SNOW_MAX_MM, capMm);
+    return fallenMm > 0 && snowMm < cap ? Math.min(cap, snowMm + fallenMm) : snowMm;
+}
+
 /** Melt by degree and by hour: a degree-day factor of 4.8 mm/°C/day, within the usual 3 to 6. */
 const MELT_MM_PER_DEGREE_HOUR = 0.2;
 /** The wind (km/h) that doubles the melt: it brings the heat of the air to the snow. */

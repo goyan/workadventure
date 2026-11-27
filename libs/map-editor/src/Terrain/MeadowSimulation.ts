@@ -25,6 +25,7 @@ import { burnableTreesOf } from "./LandTrees";
 import { landWallsOf } from "./LandWalls";
 import { FIRE_THAW_MM_PER_SECOND, Meadow, MEADOW_STEP_SECONDS, pavedTilesOf } from "./Meadow";
 import type { MeadowStepInput } from "./Meadow";
+import { snowfallCapMm } from "./Snow";
 import type { SnowWeather } from "./Snow";
 import { TREE_FALL_GUST_KMH, TreeFire } from "./TreeFire";
 import type { Ember, ToldTree } from "./TreeFire";
@@ -688,11 +689,15 @@ export class MeadowSimulation {
     }
 
     /** What a step reads of the snow: the air over it, the snow of the map falling on every tile, and its clock. */
-    private snowInput(seconds: number): Pick<MeadowStepInput, "weather" | "snowfallMm" | "snowTimes"> {
+    private snowInput(
+        seconds: number,
+    ): Pick<MeadowStepInput, "weather" | "snowfallMm" | "snowfallCapMm" | "snowTimes"> {
         const times = this.snowClock();
         return {
             weather: this.replay?.weather ? this.replay.weather.snow : this.snowWeather(),
             snowfallMm: (this.snowRate * seconds * times) / 3600,
+            // Sped up, no thicker than a ground all white: its melt does not flood the relief.
+            snowfallCapMm: snowfallCapMm(freezeThawSpeedOf(this.room.getWam()?.settings?.water)),
             snowTimes: times,
         };
     }

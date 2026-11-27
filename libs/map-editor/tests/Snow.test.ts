@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
     rainMeltMm,
+    SNOW_FULL_MM,
+    SNOW_MAX_MM,
+    snowfallCapMm,
+    snowLaid,
     snowByte,
     snowCoverOf,
     SNOW_HOLDS_WHILE_FALLING_C,
@@ -78,5 +82,21 @@ describe("the snow lying on the ground while snow falls on it", () => {
         expect(snowMeltWeather(montreal, false)).toBe(montreal);
         // T × 0.2 × (1 + 18 / 20) × (0.5 + 0.96) at +1 °C (the rule of the melt, above).
         expect(snowMeltMmPerHour(snowMeltWeather(montreal, false))).toBeCloseTo(1 * 0.2 * 1.9 * 1.46, 9);
+    });
+});
+
+describe("the snow that falls while the cold of the map goes faster", () => {
+    it("lays no more than a ground all white sped up, and its usual most in real time (choice of the user, 2026-11-27)", () => {
+        expect(snowfallCapMm(1)).toBe(SNOW_MAX_MM);
+        expect(snowfallCapMm(Number.NaN)).toBe(SNOW_MAX_MM);
+        for (const speed of [10, 60, 600]) expect(snowfallCapMm(speed)).toBe(SNOW_FULL_MM);
+    });
+
+    it("keeps a snow already thicker, and lays none on it", () => {
+        expect(snowLaid(10, 8, SNOW_FULL_MM)).toBe(SNOW_FULL_MM);
+        expect(snowLaid(40, 8, SNOW_FULL_MM)).toBe(40);
+        expect(snowLaid(40, 8)).toBe(48);
+        expect(snowLaid(SNOW_MAX_MM - 1, 8)).toBe(SNOW_MAX_MM);
+        expect(snowLaid(10, 0, SNOW_FULL_MM)).toBe(10);
     });
 });

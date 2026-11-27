@@ -4,10 +4,13 @@ import {
     hoarFrost,
     rainRateAt,
     SNOW_MAX_MM,
+    snowfallCapMm,
+    snowLaid,
     snowMeltMmPerHour,
     snowMeltWeather,
     snowShare,
     snowSublimationMmPerHour,
+    freezeThawSpeedOf,
     freezeThawTimesOf,
     WeatherType,
 } from "@workadventure/map-editor";
@@ -101,6 +104,8 @@ export function ownSnowAfter(
     fallingMmPerHour: number,
     air: AirNow | undefined,
     times = 1,
+    /** The most the snow that falls lays (snowfallCapMm): a ground all white when the cold of the map goes faster. */
+    capMm = SNOW_MAX_MM,
 ): number {
     if (!Number.isFinite(seconds) || seconds <= 0 || !air || air.humidity === undefined) return snowMm;
     const weather = { temperature: air.temperature, humidity: air.humidity, windSpeed: air.windSpeed ?? 0 };
@@ -108,7 +113,7 @@ export function ownSnowAfter(
     const falling = Number.isFinite(fallingMmPerHour) ? Math.max(0, fallingMmPerHour) : 0;
     const gained = falling * snowShare(weather.temperature, weather.humidity) * hours;
     const lost = (snowMeltMmPerHour(snowMeltWeather(weather, gained > 0)) + snowSublimationMmPerHour(weather)) * hours;
-    return Math.min(SNOW_MAX_MM, Math.max(0, snowMm + gained - lost));
+    return Math.max(0, snowLaid(snowMm, gained, capMm) - lost);
 }
 
 /**
@@ -124,12 +129,13 @@ export function cycleAfterAbsence(
     air: AirNow | undefined,
     /** The clock of the cold of the map (freezeThawTimesOf): the frost, the ice and the snow go by it. */
     times = 1,
+    capMm = SNOW_MAX_MM,
 ): WaterCycle {
     return {
         frost: towards(kept.frost, target.frost, seconds * times, FROST_RATE, FROST_RATE),
         ice: towards(kept.ice, target.ice, seconds * times, ICE_RATE, ICE_RATE),
         wet: towards(kept.wet, target.wet, seconds, WET_RATE, DRY_RATE),
-        snowMm: ownSnowAfter(kept.snowMm, seconds, fallingMmPerHour, air, times),
+        snowMm: ownSnowAfter(kept.snowMm, seconds, fallingMmPerHour, air, times, capMm),
     };
 }
 
@@ -196,6 +202,8 @@ export function waterCycleNow(settings: MapSnowSettings | undefined): WaterCycle
     // The clock of the cold of the map (its water times its speed of the freeze and the thaw): the frost, the ice and
     // the snow of the city of the player go by it.
     const meltTimes = freezeThawTimesOf(settings?.water);
+    // ...no thicker than a ground all white when that cold goes faster than reality, as on the server.
+    const capMm = snowfallCapMm(freezeThawSpeedOf(settings?.water));
     const celsius = air?.temperature;
     const weather = shownWeatherSettings(settings, date)?.weather;
     const raining = weather === WeatherType.Rain || weather === WeatherType.Storm;
@@ -225,7 +233,7 @@ export function waterCycleNow(settings: MapSnowSettings | undefined): WaterCycle
         // Held as it was until the air of the city is known, then moved on by the time away.
         if (state.status === "known") {
             const away = Math.min(OWN_CYCLE_MAX_ABSENCE_S, Math.max(0, (Date.now() - restored.at) / 1000));
-            cycle = cycleAfterAbsence(cycle, away, target, falling, air, meltTimes);
+            cycle = cycleAfterAbsence(cycle, away, target, falling, air, meltTimes, capMm);
             restored = undefined;
         }
     } else {
@@ -235,7 +243,7 @@ export function waterCycleNow(settings: MapSnowSettings | undefined): WaterCycle
             frost: towards(cycle.frost, target.frost, elapsed * meltTimes, FROST_RATE, FROST_RATE),
             ice: towards(cycle.ice, target.ice, elapsed * meltTimes, ICE_RATE, ICE_RATE),
             wet: towards(cycle.wet, target.wet, elapsed, WET_RATE, DRY_RATE),
-            snowMm: place ? ownSnowAfter(cycle.snowMm, elapsed, falling, air, meltTimes) : 0,
+            snowMm: place ? ownSnowAfter(cycle.snowMm, elapsed, falling, air, meltTimes, capMm) : 0,
         };
     }
     if (city && !restored) keepCycle(city, cycle);

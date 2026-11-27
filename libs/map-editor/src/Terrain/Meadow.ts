@@ -10,6 +10,7 @@ import {
     snowByte,
     snowMeltMmPerHour,
     snowMeltTemperature,
+    snowLaid,
     snowMeltWeather,
     snowMmOfByte,
     snowSublimationMmPerHour,
@@ -232,6 +233,8 @@ export interface MeadowStepInput {
      * the snow lying melts by an air SNOW_HOLDS_WHILE_FALLING_C colder (snowMeltTemperature).
      */
     snowfallMm?: number;
+    /** The most that snow lays on a tile, in mm of water (snowfallCapMm); SNOW_MAX_MM when absent. */
+    snowfallCapMm?: number;
 }
 
 /** What one step of the meadow gives back: the water of the snow that melted on each tile, in mm. */
@@ -950,6 +953,10 @@ export class Meadow {
         const weather = input.weather;
         // While snow falls it holds on the ground up to about +2 °C: it and the rain with it melt it by a colder air.
         const snowing = falling > 0;
+        const cap =
+            input.snowfallCapMm !== undefined && Number.isFinite(input.snowfallCapMm)
+                ? input.snowfallCapMm
+                : SNOW_MAX_MM;
         const meltAir = weather ? snowMeltWeather(weather, snowing) : undefined;
         const mapMelting = meltAir
             ? snowMeltMmPerHour(meltAir) * hours + rainMeltMm(rain * hours, meltAir.temperature)
@@ -963,7 +970,7 @@ export class Meadow {
         let any = false;
         for (let index = 0; index < snow.length; index++) {
             if (!outdoor[index]) continue;
-            let lying = Math.min(SNOW_MAX_MM, snow[index] + falling);
+            let lying = snowLaid(snow[index], falling, cap);
             if (lying <= 0) continue;
             let melting = mapMelting;
             let freezing = mapFreezing;

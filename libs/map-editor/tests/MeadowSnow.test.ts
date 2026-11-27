@@ -217,6 +217,19 @@ describe("the snow that falls holds on the ground", () => {
     });
 });
 
+describe("the snow that falls sped up", () => {
+    it("lies no thicker than a ground all white, and leaves a thicker snow as it was", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.snowOn(10, 10, 0, 40);
+        for (let step = 0; step < 20; step++) meadow.step(under(frost, { snowfallMm: 3, snowfallCapMm: SNOW_FULL_MM }));
+        expect(meadow.snowAt(0, 0)).toBeCloseTo(SNOW_FULL_MM, 5);
+        expect(meadow.snowAt(10, 10)).toBeCloseTo(40, 5);
+        // Back to real time, the usual most: it thickens again.
+        meadow.step(under(frost, { snowfallMm: 3 }));
+        expect(meadow.snowAt(0, 0)).toBeCloseTo(SNOW_FULL_MM + 3, 5);
+    });
+});
+
 describe("the snow of a map without grass", () => {
     it("falls, melts and gives its water by itself, the grass untouched", () => {
         const meadow = new Meadow(size, undefined, undefined);

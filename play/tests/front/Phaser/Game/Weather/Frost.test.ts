@@ -104,6 +104,13 @@ describe("the snow of a player's own city", () => {
         expect(ownSnowAfter(0, 12, 8, montreal, THAW_SPEED)).toBeGreaterThan(SNOW_FULL_MM);
     });
 
+    it("lies no thicker than a ground all white while the cold of the map goes faster, as on the server", () => {
+        const frozen = { temperature: -10, humidity: 100, windSpeed: 0 };
+        expect(ownSnowAfter(0, 60, 8, frozen, THAW_SPEED, SNOW_FULL_MM)).toBe(SNOW_FULL_MM);
+        // A thicker snow, kept from real time, stays as it was.
+        expect(ownSnowAfter(40, 60, 8, frozen, THAW_SPEED, SNOW_FULL_MM)).toBe(40);
+    });
+
     it("holds in a still cold air without anything falling, and goes slowly in a dry wind", () => {
         expect(ownSnowAfter(20, 60, 0, { ...frost, humidity: 100 })).toBeCloseTo(20);
         expect(ownSnowAfter(20, 60, 0, { temperature: -5, humidity: 20, windSpeed: 30 })).toBeLessThan(20);
