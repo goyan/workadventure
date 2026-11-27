@@ -96,7 +96,7 @@ import { rainbowPlacement, rainbowStrength } from "./Rainbow";
 import { contrailZoomFade, contrails } from "./Contrails";
 import type { Contrail } from "./Contrails";
 import type { CloudSky } from "./CloudLayer";
-import { canvasPixel, finestGrid, screenScale, seenFromFar } from "./ScreenScale";
+import { finestGrid, screenScale, seenFromFar } from "./ScreenScale";
 import type { BlockCanvasArea, BlockSurface } from "./BlockSurface";
 import { WeatherSounds } from "./WeatherSounds";
 import {
@@ -1265,7 +1265,7 @@ export class WeatherManager {
         const scale = this.screenScale();
         const pixel = 1 / scale;
         // Zoomed in the streaks are longer and, on a stretched canvas, never thinner than a pixel of it: fewer of them.
-        const thin = perspectiveThinning(scale, canvasPixel(this.scene));
+        const thin = perspectiveThinning(scale);
         const particles = this.gpuParticles();
         if (particles) {
             const copies = cellCopies(this.seenAmount());
