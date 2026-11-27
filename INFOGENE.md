@@ -4962,11 +4962,18 @@ simulées) : avant, zoom et caméra immobiles depuis le nom ; après, la molette
   ponts (niveau 1, 20 px, le 2026-11-20), leurs tabliers comptaient comme « Étage 1 » : sur la carte d'entrée de la beta
   (7 ponts, 266 dalles `dalle-bois`), le premier étage du bureau s'appelait « Étage 2 » et choisir « Étage 1 » cachait tout
   le bureau. Un avatar sur un pont garde son repère dans la pile ; l'éditeur garde tous les niveaux.
-- **Mezzanine : étages visibles sous un espace ouvert** (`LevelFocus.roofOver`, `aboveLevelShows` `roofed`) : dans une pièce
-  ou à l'étage, les étages au-dessus ne sont cachés qu'à partir du « toit », le premier étage qui a une dalle juste
-  au-dessus de l'avatar. Sous un espace ouvert (hall sous une mezzanine, cage d'escalier), les étages jusqu'au toit
-  restent affichés, et un clic peut les viser ; toit fermé, rien ne change. Avant, tout étage au-dessus était caché dès
-  qu'on était dans une pièce.
+- **Mezzanine : étages visibles au-dessus des pièces ouvertes** (`LevelFocus.roomRoof`, `opensOver`,
+  `FloorSpike.readRoomCover`) : un étage qui couvre au moins les trois quarts d'une pièce du sol (trémies d'escalier
+  comptées comme couvertes) en est le toit : la pièce est fermée. Au sol à l'intérieur, un étage se voit s'il n'est
+  au-dessus que de pièces ouvertes (sous leur toit), quelle que soit la pièce où l'on se trouve : la mezzanine d'Hervé
+  se voit depuis son bureau, depuis le hall et depuis un bureau fermé voisin ; les étages d'un bureau fermé ne se
+  voient de nulle part, sauf un étage dessiné par-dessus la pièce fermée où l'on est, caché. Les pièces de moins de
+  9 cases (interstices entre murs) n'ouvrent ni ne ferment rien. À l'étage ou sur un escalier, tout étage au-dessus
+  reste caché. Historique : #582 jugeait case par case (une trémie « ouvrait » un bureau fermé) ; une version de #584
+  fermait une pièce couverte à moitié et ne montrait que les étages de la pièce de l'avatar : le bureau d'Hervé
+  (25 cases sur 36 sous l'étage 1, le reste ouvert) passait pour fermé et sa mezzanine restait cachée (signalé le
+  2026-11-27). Mesuré en local sur la carte d'entrée : bureau d'Hervé (pièce 17) ouvert, sa mezzanine visible ; bureau
+  fermé (pièce 19, 72 sur 72) caché de partout ; hall (44 sur 316) ouvert ; dehors inchangé.
 - **Trajet par double-clic et « Y aller »** (`FloorPath.ts`, `GameScene.floorWalkTo`) : dès que le départ ou
   l'arrivée est sur un palier, le trajet passe par les dalles et les escaliers, contourne les murs de chaque étage
   (les portes sont franchissables) et évite les cases d'escalier au sol. Sans escalier menant à l'arrivée, depuis un

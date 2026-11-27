@@ -67,9 +67,9 @@ export function aboveLevelShows(where: {
     openAir?: boolean;
     coversRoom?: boolean;
     /**
-     * Whether a roof closes the space over the avatar at this floor or under it: this floor, or a lower one above the
-     * avatar, has a slab right over it. Under an open space (a hall under a mezzanine, a stairwell), the floors up to
-     * the first one over the avatar show. Absent: closed.
+     * Whether this floor is out of sight from where the avatar stands: closed when it is the roof of the room of the
+     * avatar or above it (see roomRoof), or not over that room at all. In an open room (a hall under a mezzanine), the
+     * parts of the floors over that room show; the floors over the other rooms never do. Absent: closed.
      */
     roofed?: boolean;
 }): {
@@ -101,6 +101,41 @@ export function roofOver(
         if (level.covers && level.elevation > top && level.elevation < roof) roof = level.elevation;
     }
     return roof;
+}
+
+/**
+ * The roof of a room of the ground: the lowest floor above the avatar that covers at least three quarters of the room
+ * (`covered`: its cells under a slab of that floor or under the well of a stair reaching it, out of `size`). An office
+ * under a floor is closed even where an edge leaves a few cells open; an office under a mezzanine (two thirds of it
+ * covered, as Hervé's) and a hall are open.
+ */
+export function roomRoof(
+    levels: readonly { elevation: number; covered: number }[],
+    size: number,
+    current: ReadonlySet<number>,
+): number {
+    return roofOver(
+        levels.map(({ elevation, covered }) => ({ elevation, covers: size > 0 && covered * 4 >= size * 3 })),
+        current,
+    );
+}
+
+/** Rooms of the ground this small are slivers between walls, not rooms: they open or close nothing. */
+export const ROOM_MIN_SIZE = 9;
+
+/**
+ * Whether a floor of a building shows from the ground indoors: it lies over open rooms only (below the roof of each,
+ * see roomRoof), as the mezzanine of a hall or of an open office, seen from anywhere inside. A floor over a closed
+ * room stays hidden, and so does one drawn over the closed room of the avatar.
+ */
+export function opensOver(
+    level: { elevation: number; roomsUnder: ReadonlySet<number>; roomsCovered: ReadonlySet<number> },
+    roofOf: (room: number) => number,
+    room: number,
+): boolean {
+    if (level.roomsUnder.size === 0) return false;
+    for (const under of level.roomsUnder) if (level.elevation >= roofOf(under)) return false;
+    return !(level.roomsCovered.has(room) && level.elevation >= roofOf(room));
 }
 
 /** The veil fades in over LEVEL_FADE_MS; it goes at once, so that nothing steps back under a veil still there. */

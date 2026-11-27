@@ -31,7 +31,9 @@ import {
     ABOVE_ALPHA,
     ABOVE_TINT,
     aboveLevelShows,
-    roofOver,
+    opensOver,
+    ROOM_MIN_SIZE,
+    roomRoof,
     editorLevelAlpha,
     STAIR_OVER_AVATAR_ALPHA,
     stairCoversAvatar,
@@ -64,6 +66,8 @@ export interface FloorAvatar {
 const FEET_OFFSET_Y = 12;
 /** Opacity of a floor the avatar is under, or climbs to: a grey veil (LevelFocus). */
 const HIDDEN_ALPHA = ABOVE_ALPHA;
+/** A room of the ground is counted up to that many cells: beyond, no floor covers half of it anyway. */
+const ROOM_SIZE_CAP = 20_000;
 /** Opacity of the slabs that hide a stair. */
 const OVER_STAIR_ALPHA = 0.55;
 const FADE_MS = 200;
@@ -276,6 +280,9 @@ export class FloorSpike {
     /** The floor to put the avatar back on (`restore`), tried until the slabs of the map are read or it moved away. */
     private restoring: { elevation: number; x: number; y: number; left: number } | undefined;
     private readonly levels: LevelDrawing[] = [];
+    /** Cells of each room of the ground covered by each floor (`elevation:room`), and the size of those rooms. */
+    private readonly roomCovered = new Map<string, number>();
+    private readonly roomSizes = new Map<number, number>();
     private readonly railings: FloorRailingsView;
     private stairDrawings: StairDrawing[] = [];
     /** How opaque each slab in the window around the avatar is, by itself (1 when absent). */
@@ -584,11 +591,28 @@ export class FloorSpike {
                 : viewed === undefined
                   ? currentLevels(this.state, model.getStairs())
                   : new Set([viewed]);
-        // The roof over the avatar: the floors from it up stay hidden indoors, the ones under it show (a mezzanine).
-        const roof = roofOver(
-            this.levels.map((level) => ({ elevation: level.elevation, covers: level.cells.has(groundCell) })),
-            current,
-        );
+        // On the ground in a room: a floor shows over open rooms only (see opensOver), its own room or another. Up a
+        // floor or on a stair, every floor above is closed.
+        const groundRoom = this.state.elevation === 0 && this.state.stair === undefined ? room : undefined;
+        const elevations = [...new Set(this.levels.map((level) => level.elevation))];
+        const roofs = new Map<number, number>();
+        const roofOf = (under: number): number => {
+            const size = this.roomSizes.get(under) ?? 0;
+            if (size < ROOM_MIN_SIZE) return Number.POSITIVE_INFINITY;
+            let roof = roofs.get(under);
+            if (roof === undefined) {
+                roof = roomRoof(
+                    elevations.map((elevation) => ({
+                        elevation,
+                        covered: this.roomCovered.get(`${elevation}:${under}`) ?? 0,
+                    })),
+                    size,
+                    current,
+                );
+                roofs.set(under, roof);
+            }
+            return roof;
+        };
         for (const level of this.levels) {
             let target = 1;
             if (editor.open) {
@@ -603,7 +627,7 @@ export class FloorSpike {
                     hidesAvatar: level.slabEntities.some((slab) => slabCoversAvatar(slab, p)),
                     openAir: level.roomsUnder.size === 0,
                     coversRoom: room !== undefined && level.roomsCovered.has(room),
-                    roofed: level.elevation >= roof,
+                    roofed: groundRoom === undefined || !opensOver(level, roofOf, groundRoom),
                 });
                 target = shows.alpha;
                 if (shows.window) windowed.add(level);
@@ -726,7 +750,62 @@ export class FloorSpike {
                 if (covered !== undefined) level.roomsCovered.add(covered);
             }
         }
+        this.readRoomCover();
         this.publishStoreys();
+    }
+
+    /**
+     * How much of each room of the ground each floor covers (see roomRoof): its cells under a slab of the floor, or
+     * under the well of a stair reaching it (cut out of the floor, no open space for all that), and the size of the
+     * rooms concerned.
+     */
+    private readRoomCover(): void {
+        this.roomCovered.clear();
+        this.roomSizes.clear();
+        const seen = new Set<string>();
+        const count = (elevation: number, x: number, y: number): void => {
+            const key = `${elevation}:${x}:${y}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            const room = this.roomAt(x * TILE + TILE / 2, y * TILE + TILE / 2);
+            if (room === undefined) return;
+            const roomKey = `${elevation}:${room}`;
+            this.roomCovered.set(roomKey, (this.roomCovered.get(roomKey) ?? 0) + 1);
+            if (!this.roomSizes.has(room)) this.roomSizes.set(room, this.roomSize(room, x, y));
+        };
+        for (const level of this.levels) {
+            for (const cell of level.cells) {
+                const [x, y] = cell.split(":").map(Number);
+                count(level.elevation, x, y);
+            }
+        }
+        for (const stair of this.model?.getStairs() ?? []) {
+            const { ground } = stair;
+            for (let y = ground.y / TILE; y < (ground.y + ground.height) / TILE; y++) {
+                for (let x = ground.x / TILE; x < (ground.x + ground.width) / TILE; x++) count(stair.top, x, y);
+            }
+        }
+    }
+
+    /** The number of cells of a room of the ground, from one of its cells (capped: a huge room is open anyway). */
+    private roomSize(room: number, x: number, y: number): number {
+        const seen = new Set<string>([`${x}:${y}`]);
+        const queue = [[x, y]];
+        for (let head = 0; head < queue.length && seen.size < ROOM_SIZE_CAP; head++) {
+            const [cx, cy] = queue[head];
+            for (const [nx, ny] of [
+                [cx + 1, cy],
+                [cx - 1, cy],
+                [cx, cy + 1],
+                [cx, cy - 1],
+            ]) {
+                const key = `${nx}:${ny}`;
+                if (seen.has(key) || this.roomAt(nx * TILE + TILE / 2, ny * TILE + TILE / 2) !== room) continue;
+                seen.add(key);
+                queue.push([nx, ny]);
+            }
+        }
+        return seen.size;
     }
 
     /**
