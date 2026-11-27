@@ -42,8 +42,11 @@ export interface FloorPathInput {
     blocked?: (level: number, from: TilePoint, to: TilePoint) => boolean;
     /** Where the avatar is on the screen, and the floor it stands on (0: the ground). */
     from: { x: number; y: number; elevation: number };
-    /** The point of the screen to walk to: on the highest floor drawn there, the ground elsewhere. */
-    to: { x: number; y: number };
+    /**
+     * The point of the screen to walk to, and the floor it is on (0: the ground). Without `level`: the highest floor
+     * drawn there, the ground elsewhere.
+     */
+    to: { x: number; y: number; level?: number };
 }
 
 /** The tile before the first step of a stair, on the floor it starts from, and the one after its last step. */
@@ -156,7 +159,7 @@ export function floorPath(input: FloorPathInput): { x: number; y: number }[] | u
     const startLevel = levels.find((level) => Math.abs(level - from.elevation) < 2);
     if (startLevel === undefined) return undefined;
     const start: FloorNode = { level: startLevel, ...floorCellAt(from.x, from.y, startLevel) };
-    const endLevel = levelUnderPoint(model, to.x, to.y);
+    const endLevel = to.level ?? levelUnderPoint(model, to.x, to.y);
     const end: FloorNode = { level: endLevel, ...floorCellAt(to.x, to.y, endLevel) };
     const steps = floorRoute({
         model,

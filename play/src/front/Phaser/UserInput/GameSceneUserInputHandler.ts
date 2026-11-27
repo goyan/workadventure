@@ -356,6 +356,9 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         ) {
             return;
         }
+        // The floor seen under the pointer: not one hidden above the avatar, which a click on a lower floor would
+        // otherwise climb to (a multi-storey office, clicked from its first floor).
+        const clickedLevel = this.gameScene.clickedFloorLevelAt(worldPoint);
         // A double-click on a free seat (anywhere on the image of its object) runs there and sits: the only seat a
         // run sits on, since running does not pull the player onto the seats on its way.
         const seat = isDoubleClick
@@ -363,7 +366,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                   this.gameScene,
                   worldPoint,
                   (candidate) => !isSeatTaken(this.gameScene, candidate),
-                  this.gameScene.floorLevelAt(worldPoint),
+                  clickedLevel,
               )
             : undefined;
         // Otherwise a double-click ends at the center of the targeted tile, like the avatar does when it stops.
@@ -377,6 +380,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 {
                     x: target.x,
                     y: target.y,
+                    level: seat ? clickedLevel : this.gameScene.clickedFloorLevelAt(target),
                 },
                 true,
                 isDoubleClick ? WOKA_SPEED * 2.5 : undefined,

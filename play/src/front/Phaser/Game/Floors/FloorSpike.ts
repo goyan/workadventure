@@ -68,6 +68,24 @@ const OVER_STAIR_ALPHA = 0.55;
 const FADE_MS = 200;
 const TILE = MAP_LAYER_TILE_SIZE;
 
+/**
+ * The altitude of the highest floor shown at a point of the screen, the ground (0) where none is: a floor hidden
+ * above the avatar (indoors, up a floor, or above the floor chosen in the stack of floors) does not count.
+ */
+export function shownFloorAt(
+    levels: readonly { elevation: number; cells: ReadonlySet<string>; hidden?: boolean }[],
+    x: number,
+    y: number,
+): number {
+    const column = Math.floor(x / TILE);
+    let found = 0;
+    for (const level of levels) {
+        if (level.hidden || level.elevation <= found) continue;
+        if (level.cells.has(`${column}:${Math.floor((y + level.elevation) / TILE)}`)) found = level.elevation;
+    }
+    return found;
+}
+
 interface LevelDrawing {
     /** Names the floor among the floors of the map (see FloorGroup.key). */
     key: string;
@@ -89,6 +107,8 @@ interface LevelDrawing {
     slabEntities: FloorEntity[];
     /** Whether its slabs are greyed: a floor above the avatar. */
     tinted?: boolean;
+    /** Whether it is hidden above the avatar (LevelFocus): a click cannot aim at it. */
+    hidden?: boolean;
 }
 
 /** A slab or a stair placed on the map (an `Entity` fits). */
@@ -303,6 +323,15 @@ export class FloorSpike {
             .filter((level) => level.cells.has(`${column}:${Math.floor((y + level.elevation) / TILE)}`))
             .map((level) => level.elevation)
             .sort((a, b) => b - a);
+    }
+
+    /**
+     * The altitude of the floor a click on a point of the screen aims at: the highest one shown there, the ground (0)
+     * elsewhere. A floor hidden above the avatar (indoors or up a floor, see LevelFocus) does not count: a click on
+     * the floor one sees does not send the avatar up to the one hidden over it.
+     */
+    public shownFloorAt(x: number, y: number): number {
+        return shownFloorAt(this.levels, x, y);
     }
 
     /**
@@ -562,6 +591,7 @@ export class FloorSpike {
                 target = shows.alpha;
                 if (shows.window) windowed.add(level);
             }
+            level.hidden = target === 0;
             // The slabs over a stair only let it show through from under their floor: standing on that floor, or
             // above it, one sees a plain floor.
             const seeThrough = levelLook(level.elevation, current) === "above";

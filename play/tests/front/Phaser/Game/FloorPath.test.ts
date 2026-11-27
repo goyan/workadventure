@@ -48,6 +48,21 @@ describe("floorPath", () => {
         expect(path?.at(-1)).toEqual(middle(3, 10));
     });
 
+    it("walks to the floor it is told, not to a higher one drawn at the same point", () => {
+        // A second floor at 84 px drawn over the same point of the screen as the tile (2, 4) of the floor at 52 px,
+        // hidden above the avatar in game: a click there aims at the floor at 52 px, which the avatar sees.
+        const model = layout();
+        const to = middle(2, 4, 52);
+        const upper = Math.floor((to.y + 84) / 32);
+        model.setSlab(84, 2, upper, "parquet-clair");
+        const from = { ...middle(3, 10), elevation: 0 };
+        // The highest floor drawn there: no stair leads to it.
+        expect(floorPath({ model, groundWalkable: everywhere, from, to })).toBeUndefined();
+        const path = floorPath({ model, groundWalkable: everywhere, from, to: { ...to, level: 52 } });
+        expect(path?.at(-1)).toEqual(to);
+        expect(path?.some((p) => p.y === 7 * 32 - 52)).toBe(true);
+    });
+
     it("finds nothing to a floor no stair leads to", () => {
         expect(
             floorPath({

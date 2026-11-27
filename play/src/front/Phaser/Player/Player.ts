@@ -987,7 +987,16 @@ export class Player extends Character {
         this.scene.connection?.emitFollowConfirmation(get(followUsersStore)[0]);
     }
 
-    public setPathToFollow(path: { x: number; y: number }[], speed?: number): Promise<PathFollowResult> {
+    /**
+     * @param throughFloors The walk goes up or down the raised floors (see GameScene.floorWalkTo): its waypoints are
+     * points of the screen on their floor, which the collision grid of the ground does not describe.
+     */
+    public setPathToFollow(
+        path: { x: number; y: number }[],
+        speed?: number,
+        throughFloors = false,
+    ): Promise<PathFollowResult> {
+        this.pathThroughFloors = throughFloors;
         if (!this.isSlidingToSeat) {
             // Walking away (a click on the map, a script...) makes the player stand up.
             this.standUp();
@@ -1454,8 +1463,18 @@ export class Player extends Character {
      * lock lifted before the woka reaches the area never interrupts the walk. GameScene.moveTo() then
      * reroutes to the destination, or stops there when it is not reachable anymore.
      */
+    /** Whether the walk being followed goes through the raised floors (see setPathToFollow). */
+    private pathThroughFloors = false;
+
     protected onPathWaypointReached(): void {
         if (!this.pathToFollow || this.pathToFollow.length < 2) {
+            return;
+        }
+        // A walk through the floors: the next waypoint is drawn its altitude further north than the tile of the
+        // ground under it, often over a wall of the ground; checked against the ground, the walk stopped on a floor
+        // (a double-click on the top floor of a building left the avatar a floor or two below). FloorWalk keeps the
+        // avatar on the slabs and stairs.
+        if (this.pathThroughFloors) {
             return;
         }
         const gameMapFrontWrapper = this.scene.getGameMapFrontWrapper();
