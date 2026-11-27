@@ -1,4 +1,12 @@
-import { cellKey, WeatherType, withHeights } from "@workadventure/map-editor";
+import {
+    cellKey,
+    snowByte,
+    snowCoverOf,
+    snowMmOfByte,
+    TILE_PX,
+    WeatherType,
+    withHeights,
+} from "@workadventure/map-editor";
 import type { RealWeatherSlot, TerrainData, WAMFileFormat, WeatherLocation } from "@workadventure/map-editor";
 import type { TerrainWaterMessage } from "@workadventure/messages";
 import { describe, expect, it } from "vitest";
@@ -222,6 +230,51 @@ describe("LocalTerrainSimulation, the catastrophes of the room", () => {
                 start,
             ),
         ).not.toThrow();
+    });
+});
+
+describe("LocalTerrainSimulation, the snow of the chosen place under a fire of the room", () => {
+    it("melts around the flames as on the server, at « >>> » (×600)", () => {
+        // A flat map of 16 × 16 tiles all white, under the snow of the place (0.7 °C, 8 mm/h).
+        const tiles = 16;
+        const snowy: WAMFileFormat = {
+            ...wam,
+            settings: { ...wam.settings, water: { ...wam.settings?.water, freezeThawSpeed: 600 } },
+            terrain: withHeights(undefined, new Map([[cellKey(0, 0), 1]])),
+        };
+        const told: LocalTerrainTold[] = [];
+        const simulation = new LocalTerrainSimulation(
+            {
+                wam: snowy,
+                mapCells: { width: tiles * 2, height: tiles * 2 },
+                place: RIO,
+                slots: [{ ...slotAt(0.7, 8), humidity: 96 }],
+                fast: false,
+                meadow: {
+                    width: tiles,
+                    height: tiles,
+                    grass: new Uint8Array(tiles * tiles),
+                    moisture: new Uint8Array(tiles * tiles),
+                    snow: new Uint8Array(tiles * tiles).fill(snowByte(15)),
+                },
+            },
+            (message) => told.push(message),
+            () => NOW,
+            () => 1,
+        );
+        simulation.setWam(snowy);
+        simulation.step();
+        // The room sets a patch of fire two tiles wide in the middle, held three seconds (five patches a second).
+        for (let patch = 0; patch < 15; patch++) simulation.ignite(8 * TILE_PX + 16, 8 * TILE_PX + 16, 2);
+        simulation.step();
+        const last = told.filter((message) => message.kind === "meadow").at(-1);
+        const snow = last?.kind === "meadow" ? last.message.snow : new Uint8Array(0);
+        const seen = (tileX: number): number => snowCoverOf(snowMmOfByte(snow[8 * tiles + tileX] ?? 0));
+
+        expect(seen(8)).toBe(0);
+        // A tile beyond the flames: bare; farther, white still.
+        expect(seen(11)).toBeLessThan(0.5);
+        expect(seen(14)).toBeGreaterThan(0.5);
     });
 });
 

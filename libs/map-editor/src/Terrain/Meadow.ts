@@ -4,6 +4,8 @@ import { coldShare } from "../Catastrophe/Cold";
 import type { ColdMass } from "../Catastrophe/Cold";
 import { soilFrost } from "../Weather/SoilFrost";
 import {
+    FLAME_REACH_TILES,
+    flameMeltMmPerSecond,
     rainMeltMm,
     SNOW_FULL_MM,
     SNOW_MAX_MM,
@@ -105,6 +107,20 @@ const FIRE_MAX_ASH = 0.5;
 const RAIN_QUENCH_MM = 100;
 /** The snow (mm of water) a fire at its height melts a second, on its tile and on the eight around it. */
 export const FIRE_THAW_MM_PER_SECOND = 15;
+/**
+ * The tiles the flames of a tile on fire light from aside, by their offset (dx, dy), and the snow they melt there in
+ * mm of water a second (flameMeltMmPerSecond): read once for all.
+ */
+const FLAME_RAYS: readonly { dx: number; dy: number; mm: number }[] = (() => {
+    const rays: { dx: number; dy: number; mm: number }[] = [];
+    for (let dy = -FLAME_REACH_TILES; dy <= FLAME_REACH_TILES; dy++) {
+        for (let dx = -FLAME_REACH_TILES; dx <= FLAME_REACH_TILES; dx++) {
+            const mm = flameMeltMmPerSecond(Math.hypot(dx, dy));
+            if (mm > 0) rays.push({ dx, dy, mm });
+        }
+    }
+    return rays;
+})();
 /** A fire starts by itself, at the highest danger, about once in this many seconds, on grass this dry. */
 const SELF_START_SECONDS = 60;
 const SELF_START_DRYNESS = 0.9;
@@ -507,6 +523,43 @@ export class Meadow {
         this.forTilesAround(tileX, tileY, radius, (index) => {
             this.heat[index] += mm;
         });
+    }
+
+    /**
+     * Flames stand on the tiles within `radius` tiles of a tile for `seconds` of the clock of the cold of the map:
+     * what they radiate melts, at the next step, the snow around them up to FLAME_REACH_TILES farther (then the ice
+     * under it), as their heat (warm) does under them.
+     */
+    public radiate(tileX: number, tileY: number, radius: number, seconds: number): void {
+        if (!Number.isFinite(seconds) || seconds <= 0) return;
+        if (!Number.isFinite(tileX) || !Number.isFinite(tileY) || !Number.isFinite(radius)) return;
+        const reach = Math.max(0, radius);
+        for (
+            let y = Math.max(0, Math.floor(tileY - reach));
+            y <= Math.min(this.height - 1, Math.ceil(tileY + reach));
+            y++
+        ) {
+            for (
+                let x = Math.max(0, Math.floor(tileX - reach));
+                x <= Math.min(this.width - 1, Math.ceil(tileX + reach));
+                x++
+            ) {
+                if ((x - tileX) ** 2 + (y - tileY) ** 2 > reach * reach) continue;
+                this.lightAround(x, y, seconds);
+            }
+        }
+    }
+
+    /** The snow the flames of one tile melt around it in `seconds` of the clock of the cold, brought to the heat there. */
+    private lightAround(tileX: number, tileY: number, seconds: number): void {
+        const { width, height, heat, outdoor } = this;
+        for (const ray of FLAME_RAYS) {
+            const x = tileX + ray.dx;
+            const y = tileY + ray.dy;
+            if (x < 0 || y < 0 || x >= width || y >= height) continue;
+            const index = y * width + x;
+            if (outdoor[index]) heat[index] += ray.mm * seconds;
+        }
     }
 
     /**
@@ -931,8 +984,14 @@ export class Meadow {
 
     private stepSnow(input: MeadowStepInput, seconds: number, rain: number, wets: boolean): boolean {
         const { snow, melted, water, outdoor, moisture, hold, heat, fire, width, height, ice, hotPool } = this;
-        // A tile on fire warms itself and the eight around it.
+        const times =
+            input.snowTimes !== undefined && Number.isFinite(input.snowTimes) && input.snowTimes > 0
+                ? input.snowTimes
+                : 1;
+        // A tile on fire warms itself and the eight around it; its flames light the snow farther around, on the clock
+        // of the cold as the air melts it (only where there is snow or ice to melt).
         const flame = FIRE_THAW_MM_PER_SECOND * seconds;
+        let lights: boolean | undefined;
         for (let index = 0; index < fire.length; index++) {
             if (fire[index] <= 0) continue;
             const tileX = index % width;
@@ -942,13 +1001,11 @@ export class Meadow {
                     heat[y * width + x] += flame * fire[index];
                 }
             }
+            lights ??= this.snowy() || this.icy();
+            if (lights) this.lightAround(tileX, tileY, fire[index] * seconds * times);
         }
         const falling =
             input.snowfallMm !== undefined && Number.isFinite(input.snowfallMm) ? Math.max(0, input.snowfallMm) : 0;
-        const times =
-            input.snowTimes !== undefined && Number.isFinite(input.snowTimes) && input.snowTimes > 0
-                ? input.snowTimes
-                : 1;
         const hours = (seconds * times) / 3600;
         const weather = input.weather;
         // While snow falls it holds on the ground up to about +2 °C: it and the rain with it melt it by a colder air.
