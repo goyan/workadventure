@@ -14,6 +14,7 @@ import {
     rainUnderCloud,
     STORM_RAIN,
     USUAL_RAIN,
+    RAIN_NATIVE_SCALE,
     rainFineness,
 } from "../../../../../src/front/Phaser/Game/Weather/Rain";
 import { FLAKE_KINDS, groundWind, PX_PER_METRE } from "../../../../../src/front/Phaser/Game/Weather/Snowfall";
@@ -266,21 +267,24 @@ describe("rainFineness", () => {
     it("draws the rain in map pixels at the usual zooms", () => {
         expect(rainFineness(0.2)).toBe(1);
         expect(rainFineness(1)).toBe(1);
-        expect(rainFineness(2.5)).toBe(1);
+        expect(rainFineness(1.5)).toBe(1);
+        expect(RAIN_NATIVE_SCALE).toBe(1.5);
     });
 
-    // Zoomed in to the full a drop was a streak as thick as a finger, and the drops hid the map.
-    it("draws it finer and finer past them, so a drop keeps on screen the size it has at a usual zoom", () => {
+    // Zoomed in the flakes were each wider on the screen while their number stayed: 10 % of the screen covered at a
+    // scale of 2.5 and over, against 1.8 % at 1 and 3.8 % at 1.5 (measured, flat snow), and the map could not be read.
+    it("draws it finer and finer past them, so a drop or a flake keeps on screen the size it has at a usual zoom", () => {
+        expect(rainFineness(1.6)).toBe(2);
         expect(rainFineness(3)).toBe(2);
-        expect(rainFineness(5)).toBe(2);
-        expect(rainFineness(8)).toBe(4);
-        expect(rainFineness(10)).toBe(4);
-        expect(rainFineness(16)).toBe(8);
-        // On screen a map pixel of rain never takes more than at the usual zooms.
-        for (const scale of [3, 4.9, 7, 12, 19, 40]) {
+        expect(rainFineness(3.1)).toBe(4);
+        expect(rainFineness(5)).toBe(4);
+        expect(rainFineness(6.1)).toBe(8);
+        expect(rainFineness(16)).toBe(16);
+        // On screen a map pixel of rain never takes more than at the top of the usual zooms, nor much less.
+        for (const scale of [1.6, 2.5, 3, 3.1, 4.9, 7, 12, 19, 40]) {
             const onScreen = scale / rainFineness(scale);
-            expect(onScreen).toBeLessThanOrEqual(2.5);
-            expect(onScreen).toBeGreaterThan(1.25);
+            expect(onScreen).toBeLessThanOrEqual(1.5);
+            expect(onScreen).toBeGreaterThan(0.75);
         }
     });
 

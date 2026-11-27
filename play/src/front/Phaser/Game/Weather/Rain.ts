@@ -165,15 +165,20 @@ export function rainUnderCloud(thickness: number, effect = 1): number {
 export const UNDER_CLOUD_THICKEST = 0.9;
 export const UNDER_CLOUD_GAP = 0.5;
 
-/** Up to this many screen pixels a map pixel, the rain is drawn in map pixels: the size it was set at. */
-const RAIN_NATIVE_SCALE = 2.5;
+/**
+ * Up to this many screen pixels a map pixel, the rain and the snow are drawn in map pixels: the size they were set at.
+ * Measured on the screen (flat snow, 1920 x 1080, the share of pixels a flake covers): 1.8 % at a scale of 1, 3.8 % at
+ * 1.5 (the top of the usual zooms) but 10 % at 2.5, since the same number of flakes were each 2.5 times wider than at 1:
+ * the map was hidden. Past this scale the flakes keep the size and the cover they have between 0.75 and 1.5.
+ */
+export const RAIN_NATIVE_SCALE = 1.5;
 
 /**
  * How many times finer than the map the rain is drawn when the map is seen from this close (`screenScale`: screen
- * pixels a map pixel). The drops are sized in map pixels: zoomed in to the full, a drop was a streak as thick as a
- * finger and they hid the map. Past the usual zooms the rain is worked out on a grid this many times finer, so it
- * looks on screen as it does at a usual zoom: 1 up to RAIN_NATIVE_SCALE, then doubling with the zoom (by steps, so
- * the drops jump only when a step is crossed).
+ * pixels a map pixel). The drops and flakes are sized in map pixels: zoomed in, a drop was a streak as thick as a
+ * finger, a flake a big block, and they hid the map. Past the usual zooms the rain is worked out on a grid this many
+ * times finer, so it looks on screen as it does at a usual zoom: 1 up to RAIN_NATIVE_SCALE, then doubling with the zoom
+ * (by steps, so the drops jump only when a step is crossed).
  */
 export function rainFineness(screenScale: number): number {
     if (!Number.isFinite(screenScale) || screenScale <= RAIN_NATIVE_SCALE) return 1;
