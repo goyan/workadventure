@@ -3,6 +3,7 @@ import {
     LEVEL_FADE_MS,
     VEIL_ALPHA,
     aboveLevelShows,
+    roofOver,
     EDITOR_OPEN_AIR_ABOVE_ALPHA,
     editorLevelAlpha,
     currentLevels,
@@ -70,6 +71,38 @@ describe("the veil over the floors under the avatar", () => {
 });
 
 describe("a floor above the avatar", () => {
+    it("shows under an open space indoors, as a mezzanine seen from the hall, and hides under a roof", () => {
+        expect(aboveLevelShows({ indoors: true, raised: false, hidesAvatar: false, roofed: false })).toEqual({
+            alpha: 1,
+        });
+        expect(aboveLevelShows({ indoors: true, raised: false, hidesAvatar: true, roofed: false })).toEqual({
+            alpha: 1,
+            window: true,
+        });
+        expect(aboveLevelShows({ indoors: false, raised: true, hidesAvatar: false, roofed: false })).toEqual({
+            alpha: 1,
+        });
+        expect(aboveLevelShows({ indoors: true, raised: false, hidesAvatar: false, roofed: true })).toEqual({
+            alpha: 0,
+        });
+    });
+
+    it("finds the roof over the avatar: the lowest floor above it with a slab right over it", () => {
+        const levels = [
+            { elevation: 52, covers: false },
+            { elevation: 116, covers: true },
+            { elevation: 180, covers: true },
+            { elevation: 244, covers: false },
+        ];
+        // On the ground: open over it up to 116, which is its roof (116 and up hidden, 52 shown).
+        expect(roofOver(levels, new Set([0]))).toBe(116);
+        // On 116: its own floor is no roof, 180 is.
+        expect(roofOver(levels, new Set([116]))).toBe(180);
+        // Climbing a stair between 116 and 180: the roof is above both.
+        expect(roofOver(levels, new Set([116, 180]))).toBe(Number.POSITIVE_INFINITY);
+        expect(roofOver([{ elevation: 52, covers: false }], new Set([0]))).toBe(Number.POSITIVE_INFINITY);
+    });
+
     it("is hidden whole, what stands on it included, once the avatar is indoors or up a floor", () => {
         expect(aboveLevelShows({ indoors: true, raised: false, hidesAvatar: false })).toEqual({ alpha: 0 });
         expect(aboveLevelShows({ indoors: false, raised: true, hidesAvatar: false })).toEqual({ alpha: 0 });

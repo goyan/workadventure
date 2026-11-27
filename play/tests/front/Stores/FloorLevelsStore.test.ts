@@ -18,6 +18,14 @@ import { mapLayerLevelStore } from "../../../src/front/Stores/MapLayerStore";
 const name = (level: number): string => (level === 0 ? "Sol" : `Niveau ${level}`);
 
 describe("the stack of the floors", () => {
+    it("keeps the floor of an avatar standing on a bridge, which is no storey, marked in the stack", () => {
+        expect(floorLevelStack([52], 20, undefined, name)?.levels.map((level) => level.elevation)).toEqual([52, 20, 0]);
+        // In the map editor, the stack shows the level edited, not the floor of the avatar.
+        expect(
+            floorLevelStack([52], 20, { choice: "auto", level: 52 }, name)?.levels.map((level) => level.elevation),
+        ).toEqual([52, 0]);
+    });
+
     it("lists the floors of the map from the highest to the ground, the current one marked", () => {
         expect(floorLevelStack([52, 116], 52, undefined, name)).toEqual({
             levels: [

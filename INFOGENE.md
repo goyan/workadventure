@@ -4957,6 +4957,16 @@ simulées) : avant, zoom et caméra immobiles depuis le nom ; après, la molette
   pour le palier où ils sont posés ; une fléchette de Nerf vole à la hauteur du tireur (elle ne touche que les
   joueurs de ce palier, et les murs du sol seulement tirée du sol) ; on n'apprivoise un animal que depuis le sol ; les
   autres joueurs s'estompent avec leur palier.
+- **Pile des étages : les étages de bâtiment seulement** (`FloorSpike.storeyLevels`, `publishStoreys`) : la pile sous
+  l'horloge et les étiquettes d'escalier ne comptent que les niveaux qui ont une dalle au-dessus d'une pièce. Depuis les
+  ponts (niveau 1, 20 px, le 2026-11-20), leurs tabliers comptaient comme « Étage 1 » : sur la carte d'entrée de la beta
+  (7 ponts, 266 dalles `dalle-bois`), le premier étage du bureau s'appelait « Étage 2 » et choisir « Étage 1 » cachait tout
+  le bureau. Un avatar sur un pont garde son repère dans la pile ; l'éditeur garde tous les niveaux.
+- **Mezzanine : étages visibles sous un espace ouvert** (`LevelFocus.roofOver`, `aboveLevelShows` `roofed`) : dans une pièce
+  ou à l'étage, les étages au-dessus ne sont cachés qu'à partir du « toit », le premier étage qui a une dalle juste
+  au-dessus de l'avatar. Sous un espace ouvert (hall sous une mezzanine, cage d'escalier), les étages jusqu'au toit
+  restent affichés, et un clic peut les viser ; toit fermé, rien ne change. Avant, tout étage au-dessus était caché dès
+  qu'on était dans une pièce.
 - **Trajet par double-clic et « Y aller »** (`FloorPath.ts`, `GameScene.floorWalkTo`) : dès que le départ ou
   l'arrivée est sur un palier, le trajet passe par les dalles et les escaliers, contourne les murs de chaque étage
   (les portes sont franchissables) et évite les cases d'escalier au sol. Sans escalier menant à l'arrivée, depuis un

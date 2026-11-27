@@ -325,7 +325,7 @@ import { aquaticLifeShownStore, cloudsShownStore, weatherEffectsEnabledStore } f
 import { skyShadowCategoriesStore } from "../../Stores/SkyLightStore";
 import type { SkyShadowCategories } from "../../Stores/SkyLightStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
-import { avatarAltitudeStore, floorLevelsBuiltStore, showPointerGround } from "../../Stores/FloorLevelsStore";
+import { avatarAltitudeStore, showPointerGround } from "../../Stores/FloorLevelsStore";
 import { areaHighlightHiddenStore } from "../../Stores/NightStore";
 import {
     aquaticLifeSpeciesStore,
@@ -5107,8 +5107,8 @@ export class GameScene extends DirtyScene {
                             });
                         },
                         (levels) => {
+                            // The stack under the clock lists the storeys only: FloorSpike publishes them.
                             mapLayerBuiltLevelsStore.set(levels);
-                            floorLevelsBuiltStore.set(levels);
                         },
                         () => this.floorOccupants(),
                         (x, y) => this.getOutdoorGrid()?.roomAt(x, y),

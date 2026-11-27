@@ -50,7 +50,8 @@ export function fadeToward(value: number, target: number, delta: number, span: n
 
 /**
  * How a floor above the avatar shows. Indoors, or up a floor, it is hidden whole with what stands on it (the stairs going
- * up to it stay, see StairHints). Outdoors on the ground a building stays whole; a floor that hides the avatar lets it
+ * up to it stay, see StairHints) when a roof closes the space over the avatar (`roofed`, see roofOver); under an open
+ * space it shows, as a mezzanine seen from the hall. Outdoors on the ground a building stays whole; a floor that hides the avatar lets it
  * show through a window around it.
  *
  * A floor in the open air (`openAir`: no room under any of its slabs, as the deck of a bridge) is no storey of a
@@ -65,6 +66,12 @@ export function aboveLevelShows(where: {
     underFloor?: boolean;
     openAir?: boolean;
     coversRoom?: boolean;
+    /**
+     * Whether a roof closes the space over the avatar at this floor or under it: this floor, or a lower one above the
+     * avatar, has a slab right over it. Under an open space (a hall under a mezzanine, a stairwell), the floors up to
+     * the first one over the avatar show. Absent: closed.
+     */
+    roofed?: boolean;
 }): {
     alpha: number;
     window?: true;
@@ -73,8 +80,27 @@ export function aboveLevelShows(where: {
         if (where.indoors && where.coversRoom) return { alpha: 0 };
         return where.hidesAvatar || where.underFloor ? { alpha: 1, window: true } : { alpha: 1 };
     }
-    if (where.indoors || where.raised || where.underFloor) return { alpha: 0 };
+    if (where.indoors || where.raised || where.underFloor) {
+        if (where.roofed ?? true) return { alpha: 0 };
+        return where.hidesAvatar ? { alpha: 1, window: true } : { alpha: 1 };
+    }
     return where.hidesAvatar ? { alpha: 1, window: true } : { alpha: 1 };
+}
+
+/**
+ * The altitude of the roof over the avatar: the lowest floor above its own ones with a slab right over the tile of the
+ * ground it stands on (`covers`). Infinity under the open sky.
+ */
+export function roofOver(
+    levels: readonly { elevation: number; covers: boolean }[],
+    current: ReadonlySet<number>,
+): number {
+    const top = Math.max(...current);
+    let roof = Number.POSITIVE_INFINITY;
+    for (const level of levels) {
+        if (level.covers && level.elevation > top && level.elevation < roof) roof = level.elevation;
+    }
+    return roof;
 }
 
 /** The veil fades in over LEVEL_FADE_MS; it goes at once, so that nothing steps back under a veil still there. */
