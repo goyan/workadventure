@@ -4,6 +4,8 @@ import {
     VEIL_ALPHA,
     aboveLevelShows,
     roofOver,
+    roomRoof,
+    opensOver,
     EDITOR_OPEN_AIR_ABOVE_ALPHA,
     editorLevelAlpha,
     currentLevels,
@@ -85,6 +87,63 @@ describe("a floor above the avatar", () => {
         expect(aboveLevelShows({ indoors: true, raised: false, hidesAvatar: false, roofed: true })).toEqual({
             alpha: 0,
         });
+    });
+
+    it("closes a room covered at least three quarters by a floor, keeps a mezzanine office and a hall open", () => {
+        const ground = new Set([0]);
+        // An office of 36 cells, 29 under the floor at 52 px (a stairwell and an edge leave 7 open): closed by 52.
+        expect(
+            roomRoof(
+                [
+                    { elevation: 52, covered: 29 },
+                    { elevation: 116, covered: 36 },
+                ],
+                36,
+                ground,
+            ),
+        ).toBe(52);
+        // A hall of 315 cells with a mezzanine over 53 of them: open up to 116, which covers it.
+        expect(
+            roomRoof(
+                [
+                    { elevation: 52, covered: 53 },
+                    { elevation: 116, covered: 300 },
+                ],
+                315,
+                ground,
+            ),
+        ).toBe(116);
+        // Nothing over it.
+        expect(roomRoof([{ elevation: 52, covered: 0 }], 36, ground)).toBe(Number.POSITIVE_INFINITY);
+        // Hervé's office: 25 of its 36 cells under the floor at 52 px (stairwell counted), the rest open: a mezzanine.
+        expect(roomRoof([{ elevation: 52, covered: 25 }], 36, ground)).toBe(Number.POSITIVE_INFINITY);
+        // A closed office, wholly under its floor.
+        expect(roomRoof([{ elevation: 52, covered: 72 }], 72, ground)).toBe(52);
+        // Hall 11 and Hervé's office 17 are open, my office 19 is closed by its first floor.
+        const roofs = new Map([
+            [11, Number.POSITIVE_INFINITY],
+            [17, Number.POSITIVE_INFINITY],
+            [19, 52],
+        ]);
+        const roofOf = (room: number): number => roofs.get(room) ?? Number.POSITIVE_INFINITY;
+        const floor = (elevation: number, under: number[], covered: number[] = under) => ({
+            elevation,
+            roomsUnder: new Set(under),
+            roomsCovered: new Set(covered),
+        });
+        // Hervé's mezzanine shows from his office, from the hall and from my closed office.
+        expect(opensOver(floor(52, [17]), roofOf, 17)).toBe(true);
+        expect(opensOver(floor(116, [17, 11], [17]), roofOf, 11)).toBe(true);
+        expect(opensOver(floor(52, [17]), roofOf, 19)).toBe(true);
+        // The floors of my office never show, even partly over the hall.
+        expect(opensOver(floor(52, [19]), roofOf, 17)).toBe(false);
+        expect(opensOver(floor(116, [19, 11], [19]), roofOf, 11)).toBe(false);
+        // An open mezzanine drawn over my closed office does not show inside it.
+        expect(opensOver(floor(52, [17], [19, 17]), roofOf, 19)).toBe(false);
+        // A deck in the open air is no mezzanine.
+        expect(opensOver(floor(20, []), roofOf, 11)).toBe(false);
+        // An unknown room is open to nothing rather than divided by zero.
+        expect(roomRoof([{ elevation: 52, covered: 3 }], 0, ground)).toBe(Number.POSITIVE_INFINITY);
     });
 
     it("finds the roof over the avatar: the lowest floor above it with a slab right over it", () => {
