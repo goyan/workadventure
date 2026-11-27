@@ -36,3 +36,24 @@ export function distinguishable(
 export function seenFromFar(scene: Parameters<typeof screenScale>[0]): boolean {
     return !distinguishable(scene, SMALL_THING_PX);
 }
+
+/**
+ * Screen pixels a pixel of the canvas takes: nothing is drawn finer than that. WA zooms by stretching a canvas of the
+ * size of the game (a pixel of the canvas a map pixel, `displayScale` below 1), so a drop thinner than a map pixel is
+ * still a whole pixel of it, as wide on the screen as the zoom. 1 when the display scale is unknown.
+ */
+export function canvasPixel(scene: Parameters<typeof screenScale>[0]): number {
+    const scale = scene.scale?.displayScale?.x;
+    return typeof scale === "number" && Number.isFinite(scale) && scale > 0 ? 1 / scale : 1;
+}
+
+/**
+ * The finest grid the canvas can draw the rain and the snow on (rainFineness): how many times a map pixel holds its
+ * pixels, the camera zoom (1 when the canvas is stretched), as a power of two. A finer grid is drawn in whole pixels
+ * of the canvas all the same: the flakes and the drops stay as thick on the screen as a map pixel.
+ */
+export function finestGrid(scene: Parameters<typeof screenScale>[0]): number {
+    const zoom = scene.cameras?.main?.zoom;
+    if (typeof zoom !== "number" || !Number.isFinite(zoom) || zoom < 1) return 1;
+    return 2 ** Math.floor(Math.log2(zoom));
+}

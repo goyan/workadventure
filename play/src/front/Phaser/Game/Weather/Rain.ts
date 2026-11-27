@@ -192,7 +192,29 @@ const SMALLEST_CELL = 16;
  * Screen pixels a pixel of a finer grid takes (rainFineness) for which its base cell is the one the same view has at a
  * usual zoom, the middle of the range the pixel keeps past them.
  */
-const RAIN_USUAL_PIXEL = 1.25;
+export const RAIN_USUAL_PIXEL = 1.25;
+
+/**
+ * The share of the drops and flakes of a usual zoom (1 at it) to draw when their pixel takes `onScreen` screen pixels:
+ * past RAIN_NATIVE_SCALE they are `onScreen` times wider and as many times longer, so they thin out by the square, and
+ * the rain and the snow cover the screen as at a usual zoom. Seen from close, the canvas cannot draw them finer (the
+ * zoom stretches it, see ScreenScale.finestGrid), which is when this counts.
+ */
+export function precipitationThinning(onScreen: number): number {
+    if (!Number.isFinite(onScreen) || onScreen <= RAIN_NATIVE_SCALE) return 1;
+    return (RAIN_USUAL_PIXEL / onScreen) ** 2;
+}
+
+/**
+ * The same for drops seen from above (PerspectiveFall), whose width is set on the screen and whose length goes with the
+ * zoom: `scale` screen pixels a map pixel, `canvasPixel` those of a pixel of the canvas, which no streak is thinner than
+ * (it then is that many times wider than the 1.5 pixels it was meant).
+ */
+export function perspectiveThinning(scale: number, canvasPixel: number): number {
+    if (!Number.isFinite(scale) || scale <= RAIN_NATIVE_SCALE) return 1;
+    const wider = Number.isFinite(canvasPixel) && canvasPixel > 1.5 ? 1.5 / canvasPixel : 1;
+    return Math.min(1, Math.sqrt((RAIN_USUAL_PIXEL / scale) * wider));
+}
 
 /**
  * Side of the base cell for this view: a power of two, so a small scroll or zoom keeps the same grid. `onScreen`

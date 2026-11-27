@@ -254,6 +254,7 @@ export function snowPlanes(
     local: boolean,
     still: boolean,
     copies: number,
+    thin = 1,
 ): SnowPlaneCells[] {
     const planes: SnowPlaneCells[] = [];
     if (!(fall.level > 0)) return planes;
@@ -262,7 +263,7 @@ export function snowPlanes(
         if (!(share > 0)) return;
         const fallPx = kind.fallSpeed * PX_PER_METRE;
         SNOW_PLANES.forEach((plane, planeIndex) => {
-            const most = flakeCapacity(kind) * FLAKES_PER_CAPACITY * plane.share;
+            const most = flakeCapacity(kind) * FLAKES_PER_CAPACITY * plane.share * thin;
             const cell = snowCell(view, most);
             // The cells are smaller than a flake each at the heaviest fall: only that share of them ever shows one.
             const amount = (share * cell * cell * most) / Math.max(1, view.width * view.height);
@@ -383,7 +384,7 @@ export function snowPlaneAlpha(plane: number): number {
 /**
  * The flakes of a snow over the view (snowPlanes, snowflakeAt). `local` (1 the same) makes the snow thicker under a
  * cloud. `still` (reduced motion): the flakes stand still. `copies` (cellCopies): the most flakes each cell holds, 1
- * for the snow of the first version.
+ * for the snow of the first version. `thin` (precipitationThinning): the share of the flakes to draw.
  */
 export function snowflakes(
     epoch: number,
@@ -393,10 +394,11 @@ export function snowflakes(
     local?: (x: number, y: number) => number,
     still = false,
     copies = 1,
+    thin = 1,
 ): Snowflake[] {
     const flakes: Snowflake[] = [];
     // The grid moves with the whole time, the clock of each flake goes round with fallSeconds.
-    const planes = snowPlanes(view, fall, air, still ? 0 : epoch / 1000, local !== undefined, still, copies);
+    const planes = snowPlanes(view, fall, air, still ? 0 : epoch / 1000, local !== undefined, still, copies, thin);
     const seconds = still ? 0 : fallSeconds(epoch);
     for (const plane of planes) {
         for (let copy = 0; copy < plane.copies; copy++) {

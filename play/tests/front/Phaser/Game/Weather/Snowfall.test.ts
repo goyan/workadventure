@@ -8,6 +8,7 @@ import {
     flakeMix,
     PX_PER_METRE,
     snowflakes,
+    snowPlanes,
     snowLevel,
     snowTones,
     groundWind,
@@ -184,6 +185,18 @@ describe("snowfall", () => {
         }
         // Over 9 m, about the whole height of a screen of a usual zoom.
         expect(longest).toBeGreaterThan(250);
+    });
+
+    // The canvas of a zoom cannot draw a flake finer than a pixel of the map: fewer flakes, each as wide as the zoom.
+    it("draws only the share of the flakes it is asked for, in as many cells fewer", () => {
+        const fall = fallOf(2);
+        const all = snowflakes(EPOCH, view, fall, calm).length;
+        const quarter = snowflakes(EPOCH, view, fall, calm, undefined, false, 1, 0.25).length;
+        expect(all).toBeGreaterThan(100);
+        expect(quarter).toBeLessThan(all * 0.5);
+        expect(quarter).toBeGreaterThan(all * 0.1);
+        const cell = (thin: number) => snowPlanes(view, fall, calm, 0, false, true, 1, thin)[0].cell;
+        expect(cell(0.25)).toBeGreaterThan(cell(1));
     });
 
     it("stands still when motion is reduced", () => {
