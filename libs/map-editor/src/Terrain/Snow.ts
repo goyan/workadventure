@@ -1,3 +1,5 @@
+import { TILE_AREA_M2 } from "./Scale";
+
 /**
  * The snow lying on the ground of a map: how much of it whitens the ground, how fast it melts and how fast it goes
  * without melting. Kept in millimetres of water (what it gives back when it melts), so that what fell is what melts
@@ -109,4 +111,44 @@ export function snowByte(mm: number): number {
 /** The snow (mm of water) a byte tells. */
 export function snowMmOfByte(byte: number): number {
     return (byte / 255) ** 2 * SNOW_MAX_MM;
+}
+
+/**
+ * The heat that melts a kilogram of ice at 0 °C, in J: a mm of water over a square metre is a kilogram, so as many
+ * joules a square metre melt a mm of snow (a snow at -10 °C first takes some 6 % more to warm to 0 °C, left aside).
+ */
+const FUSION_J_PER_KG = 334_000;
+/** The Stefan-Boltzmann constant, W/m²/K⁴. */
+const STEFAN_BOLTZMANN = 5.670374e-8;
+/**
+ * What a square metre of the flames of a vegetation fire radiates, in W: a flame at 1090 K of emissivity 0.95, the
+ * values the Australian standard for building in bushfire areas takes (AS 3959), about 76 kW/m². The snow takes
+ * nearly all of it: it is almost black in the thermal infrared (Warren 1982, Optical properties of snow).
+ */
+export const FLAME_EMISSIVE_W_PER_M2 = STEFAN_BOLTZMANN * 0.95 * 1090 ** 4;
+/** How tall the flames of a tile on fire are, in m: those of a grass fire, about a metre (and a tile wide). */
+export const FLAME_HEIGHT_M = 1;
+/**
+ * The flames of a tile radiate on the snow up to this many tiles from it: farther, one tile on fire melts less than
+ * 0.0005 mm of water a second (0.15 kW/m²), under a fortieth of what it melts one tile away.
+ */
+export const FLAME_REACH_TILES = 4;
+/** The width of a tile, in m (TILE_AREA_M2). */
+const TILE_M = Math.sqrt(TILE_AREA_M2);
+
+/**
+ * How fast the flames of one tile on fire melt the snow lying `distanceTiles` tiles from them (from centre to
+ * centre), in mm of water a second: the heat they radiate onto the ground there, a vertical panel of flames a tile
+ * wide and FLAME_HEIGHT_M tall seen from a level ground (E·w·H²·d / 2π(d² + (H/2)²)²: about 7 kW/m² one tile
+ * away, 1.2 kW/m² two tiles away), melts it as it comes. Their own tile is under them, not lit from aside: 0 there,
+ * and beyond FLAME_REACH_TILES. The flames of a whole front add up to the radiation of a wall of fire. Kept for the
+ * clock of the real world: what goes faster with the cold of the map is for the caller.
+ */
+export function flameMeltMmPerSecond(distanceTiles: number): number {
+    if (!Number.isFinite(distanceTiles) || distanceTiles <= 0 || distanceTiles > FLAME_REACH_TILES) return 0;
+    const distance = distanceTiles * TILE_M;
+    const height = FLAME_HEIGHT_M;
+    const squared = distance * distance + (height / 2) ** 2;
+    const watts = (FLAME_EMISSIVE_W_PER_M2 * TILE_M * height * height * distance) / (2 * Math.PI * squared * squared);
+    return watts / FUSION_J_PER_KG;
 }

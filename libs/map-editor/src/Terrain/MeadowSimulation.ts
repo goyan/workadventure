@@ -6,6 +6,7 @@ import type { Downpour } from "../Catastrophe/Downpour";
 import { warmedCold } from "../Catastrophe/Cold";
 import type { ColdMass } from "../Catastrophe/Cold";
 import { FIREBALL_EMBER_PATCH_TILES, fireballEmbers } from "../Catastrophe/Fireball";
+import { FIRE_PATCHES_PER_SECOND } from "../Catastrophe/FirePatch";
 import { lifeFireOf } from "../Life/FireFear";
 import type { LifeFire } from "../Life/FireFear";
 import { liquidRainRate, snowRainRate, snowShareOf } from "../Weather/Precipitation";
@@ -85,6 +86,11 @@ const MAX_MEADOW_TILES = 1_000_000;
 const TREE_THAW_TILES = 2;
 /** Each patch of fire a player sets melts this much of the snow under it, in mm of water. */
 const FIRE_PATCH_THAW_MM = 60;
+/**
+ * How long the flames of a patch of fire stand, in seconds of the real clock: a player who holds the fire sets one
+ * every so often (FIRE_PATCHES_PER_SECOND), and its flames burn until the next.
+ */
+const FIRE_PATCH_FLAME_SECONDS = 1 / FIRE_PATCHES_PER_SECOND;
 
 /**
  * Keeps the meadow of a room (Meadow): the moisture of its soil and its grass, tile by tile over the whole map,
@@ -934,13 +940,17 @@ export class MeadowSimulation {
     public ignite(x: number, y: number, radiusTiles: number): number {
         const settings = this.room.getWam()?.settings;
         if (!this.meadow) return 0;
+        const tileX = Math.floor(x / TILE_PX);
+        const tileY = Math.floor(y / TILE_PX);
         // The fire melts the snow under it first: what it bares can burn at the next patch.
-        this.meadow.warm(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX), radiusTiles, FIRE_PATCH_THAW_MM);
+        this.meadow.warm(tileX, tileY, radiusTiles, FIRE_PATCH_THAW_MM);
+        // Its flames melt the snow around it, on the clock of the cold as the air does: sped up, the snow that falls
+        // meanwhile goes as fast.
+        this.meadow.radiate(tileX, tileY, radiusTiles, FIRE_PATCH_FLAME_SECONDS * this.snowClock());
         if (!{ ...DEFAULT_MEADOW_SETTINGS, ...settings?.meadow }.enabled) return 0;
         // The trees whose foot is in the patch take with the grass under them.
         const lit =
-            this.meadow.ignite(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX), radiusTiles) +
-            this.trees.ignite(x, y, Math.max(0, radiusTiles) * TILE_PX);
+            this.meadow.ignite(tileX, tileY, radiusTiles) + this.trees.ignite(x, y, Math.max(0, radiusTiles) * TILE_PX);
         if (lit > 0) this.wasBurning = true;
         return lit;
     }

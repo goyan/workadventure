@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { Meadow, MEADOW_STEP_SECONDS } from "../src/Terrain/Meadow";
 import type { MeadowStepInput } from "../src/Terrain/Meadow";
-import { SNOW_FULL_MM, SNOW_MAX_MM, snowMeltMmPerHour, snowSublimationMmPerHour } from "../src/Terrain/Snow";
+import {
+    FLAME_REACH_TILES,
+    flameMeltMmPerSecond,
+    SNOW_FULL_MM,
+    SNOW_MAX_MM,
+    snowMeltMmPerHour,
+    snowSublimationMmPerHour,
+} from "../src/Terrain/Snow";
 import { snowShare } from "../src/Weather/Precipitation";
 import type { SnowWeather } from "../src/Terrain/Snow";
 import { cellKey } from "../src/Terrain/TerrainGrid";
@@ -39,6 +46,13 @@ const total = (meadow: Meadow): number => {
     let sum = 0;
     for (let y = 0; y < size.height; y++) for (let x = 0; x < size.width; x++) sum += meadow.snowAt(x, y);
     return sum;
+};
+
+/** A dry meadow of straw on every tile: what a fire takes. */
+const dryPrairie = (): Meadow => {
+    const meadow = new Meadow(size, undefined, undefined);
+    for (let y = 0; y < size.height; y++) for (let x = 0; x < size.width; x++) meadow.set(x, y, 0.1, 1, 1);
+    return meadow;
 };
 
 describe("the snow falling on the meadow", () => {
@@ -273,12 +287,6 @@ describe("the snow and the fire", () => {
 });
 
 describe("the heat of a fire on the snow", () => {
-    const dryPrairie = (): Meadow => {
-        const meadow = new Meadow(size, undefined, undefined);
-        for (let y = 0; y < size.height; y++) for (let x = 0; x < size.width; x++) meadow.set(x, y, 0.1, 1, 1);
-        return meadow;
-    };
-
     it("melts the snow it is brought to, whatever the cold, without wetting the soil it dries", () => {
         const meadow = new Meadow(size, undefined, undefined);
         meadow.snowOn(10, 10, 3, 20);
@@ -308,10 +316,11 @@ describe("the heat of a fire on the snow", () => {
         const meadow = dryPrairie();
         expect(meadow.ignite(4, 4, 0)).toBe(1);
         meadow.snowOn(5, 4, 0, 40);
-        meadow.snowOn(8, 4, 0, 40);
+        // Out of the reach of its flames.
+        meadow.snowOn(4 + FLAME_REACH_TILES + 1, 4, 0, 40);
         meadow.step(under(frost));
         expect(meadow.snowAt(5, 4)).toBeLessThan(40);
-        expect(meadow.snowAt(8, 4)).toBeCloseTo(40);
+        expect(meadow.snowAt(4 + FLAME_REACH_TILES + 1, 4)).toBeCloseTo(40);
         for (let step = 0; step < 10; step++) meadow.step(under(frost));
         expect(meadow.snowAt(5, 4)).toBe(0);
     });
@@ -331,6 +340,67 @@ describe("the heat of a fire on the snow", () => {
         expect(meadow.soakedAt(10, 10)).toBe(false);
         meadow.snowOn(10, 10, 0, 10);
         expect(meadow.soakedAt(10, 10)).toBe(true);
+    });
+});
+
+describe("the flames of a fire on the snow around them", () => {
+    /** 334 kJ melt a mm of snow over a square metre. */
+    const watts = (mmPerSecond: number): number => mmPerSecond * 334_000;
+
+    it("melt it by what they radiate: some 7 kW/m² a tile away, far less farther, none beyond their reach", () => {
+        expect(watts(flameMeltMmPerSecond(1))).toBeGreaterThan(6000);
+        expect(watts(flameMeltMmPerSecond(1))).toBeLessThan(8000);
+        expect(flameMeltMmPerSecond(2)).toBeLessThan(flameMeltMmPerSecond(1) / 4);
+        expect(flameMeltMmPerSecond(FLAME_REACH_TILES)).toBeGreaterThan(0);
+        expect(flameMeltMmPerSecond(FLAME_REACH_TILES + 0.1)).toBe(0);
+        // Under them, or nowhere.
+        expect(flameMeltMmPerSecond(0)).toBe(0);
+        expect(flameMeltMmPerSecond(Number.NaN)).toBe(0);
+    });
+
+    it("melt the snow around a patch of flames by how long they stand on the clock of the cold", () => {
+        const melted = (seconds: number): Meadow => {
+            const meadow = new Meadow(size, undefined, undefined);
+            meadow.snowOn(10, 10, undefined, SNOW_FULL_MM);
+            meadow.radiate(10, 10, 2, seconds);
+            meadow.step(under(frost));
+            return meadow;
+        };
+        // The flames of a patch held a fifth of a second of the real clock, at « >>> » (×600).
+        const fast = melted(0.2 * 600);
+        expect(fast.snowAt(13, 10)).toBeLessThan(SNOW_FULL_MM - 1);
+        // Less farther.
+        expect(fast.snowAt(14, 10)).toBeGreaterThan(fast.snowAt(13, 10));
+        expect(fast.snowAt(14, 10)).toBeLessThan(SNOW_FULL_MM);
+        // Out of their reach: as it was.
+        expect(fast.snowAt(12 + FLAME_REACH_TILES + 1, 10)).toBeCloseTo(SNOW_FULL_MM, 5);
+        // In real time, a fifth of a second of flames does not melt a snow a metre away.
+        const real = melted(0.2);
+        expect(SNOW_FULL_MM - real.snowAt(13, 10)).toBeCloseTo((SNOW_FULL_MM - fast.snowAt(13, 10)) / 600, 4);
+        expect(real.snowAt(13, 10)).toBeGreaterThan(SNOW_FULL_MM - 0.1);
+    });
+
+    it("of a tile on fire light the snow beyond the eight around it, on the clock of the cold", () => {
+        const lit = (snowTimes: number): number => {
+            const meadow = dryPrairie();
+            meadow.ignite(4, 4, 0);
+            meadow.snowOn(6, 4, 0, 40);
+            meadow.step(under(frost, { snowTimes }));
+            return meadow.snowAt(6, 4);
+        };
+        expect(lit(600)).toBeLessThan(40);
+        expect(lit(1)).toBeCloseTo(40, 2);
+    });
+
+    it("give the water of the snow they melt back, as its heat does", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.snowOn(10, 10, undefined, SNOW_FULL_MM);
+        meadow.radiate(10, 10, 1, 600);
+        const before = total(meadow);
+        const thawed = meadow.step(under(frost));
+        const water = thawed?.meltedMm.reduce((sum, mm) => sum + mm, 0) ?? 0;
+        expect(water).toBeGreaterThan(0);
+        expect(water).toBeCloseTo(before - total(meadow), 3);
     });
 });
 
