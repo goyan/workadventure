@@ -3,7 +3,10 @@ import {
     rainMeltMm,
     snowByte,
     snowCoverOf,
+    SNOW_HOLDS_WHILE_FALLING_C,
     snowMeltMmPerHour,
+    snowMeltTemperature,
+    snowMeltWeather,
     snowMmOfByte,
     snowSublimationMmPerHour,
 } from "../src/Terrain/Snow";
@@ -50,5 +53,30 @@ describe("the snow lying on the ground", () => {
         expect(snowMmOfByte(snowByte(15))).toBeLessThan(16);
         // A thin snow is still told.
         expect(snowByte(0.5)).toBeGreaterThan(0);
+    });
+});
+
+describe("the snow lying on the ground while snow falls on it", () => {
+    // The air of Montréal on 2026-11-27 as the user saw it on the map: +1 °C, 96 %, a wind of 18 km/h.
+    const montreal = { temperature: 1, humidity: 96, windSpeed: 18 };
+
+    it("holds up to about +2 °C while it snows: it melts by an air 2 °C colder (choice of the user, 2026-11-27)", () => {
+        expect(SNOW_HOLDS_WHILE_FALLING_C).toBe(2);
+        expect(snowMeltTemperature(1, true)).toBe(-1);
+        expect(snowMeltMmPerHour(snowMeltWeather(montreal, true))).toBe(0);
+        expect(snowMeltMmPerHour(snowMeltWeather({ ...montreal, temperature: 2 }, true))).toBe(0);
+    });
+
+    it("melts weakly just over +2 °C while it snows, as at the degrees over +2 °C", () => {
+        const mild = { ...montreal, temperature: 3 };
+        expect(snowMeltMmPerHour(snowMeltWeather(mild, true))).toBeCloseTo(snowMeltMmPerHour(montreal), 9);
+        expect(snowMeltMmPerHour(snowMeltWeather(mild, true))).toBeLessThan(snowMeltMmPerHour(mild));
+    });
+
+    it("melts as usual once the fall stops: the air itself", () => {
+        expect(snowMeltTemperature(1, false)).toBe(1);
+        expect(snowMeltWeather(montreal, false)).toBe(montreal);
+        // T × 0.2 × (1 + 18 / 20) × (0.5 + 0.96) at +1 °C (the rule of the melt, above).
+        expect(snowMeltMmPerHour(snowMeltWeather(montreal, false))).toBeCloseTo(1 * 0.2 * 1.9 * 1.46, 9);
     });
 });

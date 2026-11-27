@@ -53,6 +53,24 @@ export function snowMeltMmPerHour(weather: SnowWeather): number {
     );
 }
 
+/**
+ * While snow falls on it, the snow lying on the ground melts as if the air were this many degrees colder: every flake
+ * renews a cold surface and the flakes that melt on their way down cool the air under them towards zero. A snow that
+ * falls thus holds on the ground up to about +2 °C, melts weakly just over that, and melts as usual once the fall stops.
+ * A choice of the user (2026-11-27).
+ */
+export const SNOW_HOLDS_WHILE_FALLING_C = 2;
+
+/** The temperature the snow on the ground melts by: SNOW_HOLDS_WHILE_FALLING_C colder while snow falls on it. */
+export function snowMeltTemperature(temperature: number, snowFalling: boolean): number {
+    return snowFalling ? temperature - SNOW_HOLDS_WHILE_FALLING_C : temperature;
+}
+
+/** The air the snow on the ground melts by (snowMeltTemperature): the air itself while no snow falls. */
+export function snowMeltWeather(weather: SnowWeather, snowFalling: boolean): SnowWeather {
+    return snowFalling ? { ...weather, temperature: snowMeltTemperature(weather.temperature, true) } : weather;
+}
+
 /** How fast a dry wind takes the snow without melting it, in mm of water an hour, at any temperature. */
 export function snowSublimationMmPerHour(weather: SnowWeather): number {
     if (!known(weather)) return 0;

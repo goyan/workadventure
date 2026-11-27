@@ -678,19 +678,22 @@ export class MeadowSimulation {
     }
 
     /**
-     * What a step reads of the snow: the air over it, the snow of the map falling on every tile, and the clock its
-     * snow falls, melts and goes and its ice takes and thaws by: all of it at the pace the water of the map comes
-     * (its speed, waterTimesOf), so that a snow weighs what the same rain would have and nothing goes by another clock.
+     * The clock of the cold of the map: the pace its water comes (its speed, waterTimesOf, or what the machine holds
+     * of it, livedTimes) times its speed of the freeze and the thaw. Its snow falls, melts and goes, and its ice takes
+     * and thaws, by it: « >>> » (×600) lays the snow as fast as it melts it.
      */
-    private snowInput(seconds: number): Pick<MeadowStepInput, "weather" | "snowfallMm" | "snowTimes"> {
+    private snowClock(): number {
         const water = this.room.getWam()?.settings?.water;
-        const times = this.livedTimes?.() ?? waterTimesOf(water);
+        return (this.livedTimes?.() ?? waterTimesOf(water)) * freezeThawSpeedOf(water);
+    }
+
+    /** What a step reads of the snow: the air over it, the snow of the map falling on every tile, and its clock. */
+    private snowInput(seconds: number): Pick<MeadowStepInput, "weather" | "snowfallMm" | "snowTimes"> {
+        const times = this.snowClock();
         return {
             weather: this.replay?.weather ? this.replay.weather.snow : this.snowWeather(),
-            // The snow falls as the rain does, on the clock of the water.
             snowfallMm: (this.snowRate * seconds * times) / 3600,
-            // The cold does its work that many times faster again (the speed of the freeze and the thaw).
-            snowTimes: times * freezeThawSpeedOf(water),
+            snowTimes: times,
         };
     }
 
@@ -734,15 +737,12 @@ export class MeadowSimulation {
             // What falls as snow lies where it fell: only the rain runs to the hollows and soaks the soil.
             const mapRain = rainRateAt(settings, this.clock(), slots);
             // Under a hurricane, its rain in place of that of the map: the total of a real passage, over the real
-            // time of the meadow; its snow over the clock of the snow (snowInput), as fast as the water.
+            // time of the meadow; its snow over the clock of the snow (snowClock): the same total of a passage.
             const storm = replaying ? undefined : this.hurricane();
             const falling = skyRainUnder(mapRain, storm, this.clock());
             this.rainRate = liquidRainRate(falling, this.airNow());
             // ...and the snow lies on the ground, until it melts.
-            this.snowRate = snowRainRate(
-                skyRainUnder(mapRain, storm, this.clock(), this.livedTimes?.() ?? waterTimesOf(settings?.water)),
-                this.airNow(),
-            );
+            this.snowRate = snowRainRate(skyRainUnder(mapRain, storm, this.clock(), this.snowClock()), this.airNow());
             // ...and in the same cold the soil freezes: its water stays, its grass lies dormant.
             this.frost = soilFrostOf(this.airNow());
         }
