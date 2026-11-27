@@ -188,10 +188,22 @@ export function rainFineness(screenScale: number): number {
 /** Base cells across the view: the drops are as many on the screen at any zoom, never countless zoomed out. */
 const RAIN_CELLS = 500;
 const SMALLEST_CELL = 16;
+/**
+ * Screen pixels a pixel of a finer grid takes (rainFineness) for which its base cell is the one the same view has at a
+ * usual zoom, the middle of the range the pixel keeps past them.
+ */
+const RAIN_USUAL_PIXEL = 1.25;
 
-/** Side of the base cell for this view: a power of two, so a small scroll or zoom keeps the same grid. */
-export function rainCell(view: WeatherView): number {
-    const wanted = Math.sqrt((view.width * view.height) / RAIN_CELLS);
+/**
+ * Side of the base cell for this view: a power of two, so a small scroll or zoom keeps the same grid. `onScreen`
+ * (screen pixels a pixel of the view, only for a finer grid than the map) keeps the rain as thick on the screen as at a
+ * usual zoom: its drops are `onScreen` times wider there, so as many times fewer of them are wanted. The view of a finer
+ * grid holds more pixels, so its cell follows. Left to the view alone, the cell was twice as wide or not between two
+ * zooms: four times the drops, 10 % of the screen covered against 2.7 %.
+ */
+export function rainCell(view: WeatherView, onScreen?: number): number {
+    const grown = onScreen !== undefined && Number.isFinite(onScreen) && onScreen > 0 ? onScreen / RAIN_USUAL_PIXEL : 1;
+    const wanted = Math.sqrt((view.width * view.height) / RAIN_CELLS) * grown;
     return Math.max(SMALLEST_CELL, 2 ** Math.ceil(Math.log2(Math.max(1, wanted))));
 }
 
@@ -234,8 +246,9 @@ export function rainPlanes(
     wind: RainWind,
     local: boolean,
     copies: number,
+    onScreen?: number,
 ): RainPlane[] {
-    const base = rainCell(view);
+    const base = rainCell(view, onScreen);
     const planes: RainPlane[] = [];
     RAIN_LAYERS.forEach((layer, index) => {
         // No drop of this plane anywhere, even under the thickest cloud.
@@ -319,10 +332,11 @@ export function rainDrops(
     wind: RainWind,
     local?: RainLocal,
     copies = 1,
+    onScreen?: number,
 ): RainDrop[] {
     const seconds = fallSeconds(epoch);
     const drops: RainDrop[] = [];
-    for (const plane of rainPlanes(view, intensity, wind, local !== undefined, copies)) {
+    for (const plane of rainPlanes(view, intensity, wind, local !== undefined, copies, onScreen)) {
         const shown = rainLayerShown(plane.layer, intensity);
         for (let copy = 0; copy < plane.copies; copy++) {
             for (let row = plane.firstRow; row < plane.firstRow + plane.rows; row++) {
@@ -358,8 +372,14 @@ const SPLASH_CYCLES = 100_000;
  * Where drops hit the ground, for a rain of this intensity: in each cell of a grid fixed to the map, one place after
  * the other, each a short splash; the harder the rain, the more cells splash. The same for everyone.
  */
-export function rainSplashes(epoch: number, view: WeatherView, intensity: number, local?: RainLocal): RainSplash[] {
-    const cell = rainCell(view) / 2;
+export function rainSplashes(
+    epoch: number,
+    view: WeatherView,
+    intensity: number,
+    local?: RainLocal,
+    onScreen?: number,
+): RainSplash[] {
+    const cell = rainCell(view, onScreen) / 2;
     if (intensity <= 0) return [];
     const shownAt = (level: number): number => Math.min(1, 0.08 + 0.8 * Math.min(1, level));
     const splashes: RainSplash[] = [];

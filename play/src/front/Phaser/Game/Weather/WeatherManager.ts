@@ -1036,18 +1036,20 @@ export class WeatherManager {
         }
         // Seen from very close the rain is worked out on a finer grid than the map, then brought back to it: the
         // drops keep on screen the size and the number they have at a usual zoom.
-        const fine = rainFineness(this.screenScale());
+        const scale = this.screenScale();
+        const fine = rainFineness(scale);
         const finer =
             fine === 1
                 ? view
                 : { x: view.x * fine, y: view.y * fine, width: view.width * fine, height: view.height * fine };
         const localFine: RainLocal | undefined = local && fine !== 1 ? (x, y) => local(x / fine, y / fine) : local;
+        const onScreen = fine === 1 ? undefined : scale / fine;
         const particles = this.gpuParticles();
         if (particles) {
             // The personal amount adds drops to the rain as it is (the same sizes, the same wind), it does not make it
             // heavier: the intensity stays what the air says.
             const copies = cellCopies(this.seenAmount());
-            particles.rain(rainPlanes(finer, intensity, wind, local !== undefined, copies), {
+            particles.rain(rainPlanes(finer, intensity, wind, local !== undefined, copies, onScreen), {
                 seconds: fallSeconds(epoch),
                 copies,
                 intensity,
@@ -1055,9 +1057,9 @@ export class WeatherManager {
                 color: RAIN_COLOR,
             });
         } else {
-            this.drawRainOnProcessor(epoch, finer, fine, intensity, wind, isOutdoor, localFine);
+            this.drawRainOnProcessor(epoch, finer, fine, intensity, wind, isOutdoor, localFine, onScreen);
         }
-        this.drawSplashes(epoch, finer, fine, intensity, isOutdoor, localFine);
+        this.drawSplashes(epoch, finer, fine, intensity, isOutdoor, localFine, onScreen);
     }
 
     /** The drops of the flat rain drawn in the graphics without WebGL: at most MAX_DRAWN_COPIES a cell. */
@@ -1069,10 +1071,11 @@ export class WeatherManager {
         wind: RainWind,
         isOutdoor: ((x: number, y: number) => boolean) | undefined,
         localFine: RainLocal | undefined,
+        onScreen: number | undefined,
     ): void {
         const copies = cellCopies(this.seenAmount(), this.drawnCopies);
         // A drop shows where its whole streak is outdoors (head, middle and tail): no trail over the edge of a roof.
-        const drops = rainDrops(epoch, finer, intensity, wind, localFine, copies)
+        const drops = rainDrops(epoch, finer, intensity, wind, localFine, copies, onScreen)
             .map((drop) =>
                 fine === 1 ? drop : { ...drop, x: drop.x / fine, y: drop.y / fine, length: drop.length / fine },
             )
@@ -1139,6 +1142,7 @@ export class WeatherManager {
         intensity: number,
         isOutdoor: ((x: number, y: number) => boolean) | undefined,
         localFine: RainLocal | undefined,
+        onScreen?: number,
     ): void {
         if (this.reducedMotion) return;
         const splashing = intensity * this.rainSettings.splashes;
@@ -1146,7 +1150,7 @@ export class WeatherManager {
         const time = this.scene.time.now;
         // The splashes as the drops: on the finer grid, brought back to the map, each this many times smaller.
         const dot = 1 / fine;
-        const splashes = rainSplashes(epoch, finer, splashing, localFine).map((splash) =>
+        const splashes = rainSplashes(epoch, finer, splashing, localFine, onScreen).map((splash) =>
             fine === 1 ? splash : { ...splash, x: splash.x / fine, y: splash.y / fine },
         );
         for (const splash of keepOutdoorParticles(splashes, isOutdoor)) {
