@@ -67,6 +67,18 @@ export const RAIN_FALL_SPEEDS: readonly number[] = [1.4, 3, 5].map(
 export const MAX_RAIN_SLANT = 3;
 
 /**
+ * How far the rain leans with the wind at the most, as a share of the wind (the setting at 100 %). The setting went to
+ * 200 % and the rain, with a strong wind, fell at 45 degrees and more, hiding the map: it is brought down to what the
+ * setting gave at 25 %, whatever the wind, the amount, the zoom or the view.
+ */
+export const RAIN_LEAN_MOST = 0.25;
+
+/** The lean of the rain, as a share of the wind, for the personal setting `lean` (0 to 1): at most RAIN_LEAN_MOST. */
+export function rainLeanOf(lean: number): number {
+    return Number.isFinite(lean) ? Math.min(1, Math.max(0, lean)) * RAIN_LEAN_MOST : RAIN_LEAN_MOST;
+}
+
+/**
  * How a drop of a plane goes for each pixel it falls: `x` across and `y` down or up, on top of its fall, the wind over
  * the speed of its fall, the way the wind blows (both of its parts, as the snow and the clouds). A drop goes with the
  * air within a second (followWind): its slant is the ratio of the two speeds.

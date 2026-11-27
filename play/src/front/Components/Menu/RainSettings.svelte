@@ -40,7 +40,7 @@
         label={$LL.menu.settings.rain.lean()}
         store={rainLeanStore}
         min={0}
-        max={2}
+        max={1}
         step={0.05}
         shown={percent}
     />
