@@ -457,7 +457,12 @@ const actionbar = {
                 none: "No snow on the ground.",
                 some: "Snow on {map} % of the map; under your avatar, the ground is {here} % white.",
                 hidden: "You do not see it: you follow {city}, and this snow is that of the map. Go back to the weather of the server to see it.",
-                building: "It snows on the map ({share} % of flakes): the cover thickens.",
+                building:
+                    "It snows on the map ({share} % of flakes): the cover thickens. While it snows, it holds on the ground up to {holdsUntil}.",
+                fastCap:
+                    "Sped up, it grows no thicker than a ground all white ({mm} mm of water): its melt does not flood the map.",
+                fallingMelts:
+                    "It snows on the map ({share} % of flakes), but at {temperature} it melts as it falls: while it snows, it only holds on the ground up to {holdsUntil}.",
                 melting: "{temperature} on the map: it melts. A ground all white lasts about {duration}.",
                 holding: "{temperature} on the map: at 0 °C and under, it does not melt.",
                 unknownAir: "The air of the map is not known: the snow does not melt.",

@@ -341,6 +341,30 @@ describe("explainWeather: snow on the ground", () => {
         expect(snow.snowShare).toBe(1);
     });
 
+    it("says a snow that falls holds up to about +2 °C, and melts as it falls in a milder air", () => {
+        // Montréal on 2026-11-27 as the user saw it: +1 °C, 96 %, 18 km/h: the snow holds while it falls.
+        const montreal = explainWeather(
+            input({
+                roomAir: { temperature: 1, humidity: 96 },
+                roomWind: 18,
+                mapFalling: true,
+                snow: { map: 0.1, here: 0 },
+            }),
+        ).snow;
+        expect(montreal).toMatchObject({ trend: "building", holdsUntil: 2, capMm: 600 });
+        // A dry air at +4 °C: the snow still falls, but melts by the 2 °C over +2 °C.
+        const mild = explainWeather(
+            input({
+                roomAir: { temperature: 4, humidity: 40 },
+                roomWind: 0,
+                mapFalling: true,
+                snow: { map: 0.1, here: 0 },
+            }),
+        ).snow;
+        expect(mild.snowShare).toBeGreaterThan(0);
+        expect(mild.trend).toBe("fallingMelts");
+    });
+
     it("says it melts over zero, and how long a white ground lasts, from the rule of the server", () => {
         const { snow } = explainWeather(
             input({ roomAir: { temperature: 10, humidity: 50 }, roomWind: 0, snow: { map: 1, here: 1 } }),

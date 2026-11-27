@@ -102,8 +102,8 @@ export function freezeThawSpeedOf(water: { freezeThawSpeed?: number } | undefine
 }
 
 /**
- * The clock the ice takes and thaws, the snow melts and goes and the frost comes and goes by: the clock of the water
- * (waterTimesOf) times the speed of the freeze and the thaw. The snow that falls keeps the clock of the water.
+ * The clock the ice takes and thaws, the snow falls, melts and goes and the frost comes and goes by: the clock of the
+ * water (waterTimesOf) times the speed of the freeze and the thaw. The rain keeps the clock of the water.
  */
 export function freezeThawTimesOf(water: { speed?: number; freezeThawSpeed?: number } | undefined): number {
     return waterTimesOf(water) * freezeThawSpeedOf(water);

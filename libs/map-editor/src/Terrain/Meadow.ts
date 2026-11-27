@@ -9,6 +9,9 @@ import {
     SNOW_MAX_MM,
     snowByte,
     snowMeltMmPerHour,
+    snowMeltTemperature,
+    snowLaid,
+    snowMeltWeather,
     snowMmOfByte,
     snowSublimationMmPerHour,
 } from "./Snow";
@@ -221,12 +224,17 @@ export interface MeadowStepInput {
      */
     cold?: readonly ColdMass[];
     /**
-     * How many times faster than the real clock the snow falls, melts and goes, and the ice takes and thaws: the speed
-     * of the water of the map (waterTimesOf), so that they never part; real time when absent.
+     * How many times faster than the real clock the snow melts and goes, and the ice takes and thaws: the clock of the
+     * cold of the map (freezeThawTimesOf), the one its snow falls by too (snowfallMm); real time when absent.
      */
     snowTimes?: number;
-    /** The snow that falls on every tile outdoors during this step, in mm of water; none when absent. */
+    /**
+     * The snow that falls on every tile outdoors during this step, in mm of water; none when absent. While some falls,
+     * the snow lying melts by an air SNOW_HOLDS_WHILE_FALLING_C colder (snowMeltTemperature).
+     */
     snowfallMm?: number;
+    /** The most that snow lays on a tile, in mm of water (snowfallCapMm); SNOW_MAX_MM when absent. */
+    snowfallCapMm?: number;
 }
 
 /** What one step of the meadow gives back: the water of the snow that melted on each tile, in mm. */
@@ -943,8 +951,15 @@ export class Meadow {
                 : 1;
         const hours = (seconds * times) / 3600;
         const weather = input.weather;
-        const mapMelting = weather
-            ? snowMeltMmPerHour(weather) * hours + rainMeltMm(rain * hours, weather.temperature)
+        // While snow falls it holds on the ground up to about +2 °C: it and the rain with it melt it by a colder air.
+        const snowing = falling > 0;
+        const cap =
+            input.snowfallCapMm !== undefined && Number.isFinite(input.snowfallCapMm)
+                ? input.snowfallCapMm
+                : SNOW_MAX_MM;
+        const meltAir = weather ? snowMeltWeather(weather, snowing) : undefined;
+        const mapMelting = meltAir
+            ? snowMeltMmPerHour(meltAir) * hours + rainMeltMm(rain * hours, meltAir.temperature)
             : 0;
         const going = weather ? snowSublimationMmPerHour(weather) * hours : 0;
         // When it freezes the water does not take the snow: it holds on it as on ice.
@@ -955,15 +970,15 @@ export class Meadow {
         let any = false;
         for (let index = 0; index < snow.length; index++) {
             if (!outdoor[index]) continue;
-            let lying = Math.min(SNOW_MAX_MM, snow[index] + falling);
+            let lying = snowLaid(snow[index], falling, cap);
             if (lying <= 0) continue;
             let melting = mapMelting;
             let freezing = mapFreezing;
             // Under a mass of cold air the snow melts, or holds on the water, by the air of its tile.
             if (chilled && chilled[index] === chilled[index]) {
-                chilledAir.temperature = chilled[index];
+                chilledAir.temperature = snowMeltTemperature(chilled[index], snowing);
                 melting = snowMeltMmPerHour(chilledAir) * hours + rainMeltMm(rain * hours, chilledAir.temperature);
-                freezing = chilledAir.temperature <= 0;
+                freezing = chilled[index] <= 0;
             }
             // The heat of a fire first: it melts the snow whatever the air, and dries the soil it bares.
             const burnt = Math.min(lying, heat[index]);

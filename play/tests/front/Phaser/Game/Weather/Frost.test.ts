@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { SNOW_MAX_MM } from "@workadventure/map-editor";
+import {
+    SNOW_FULL_MM,
+    SNOW_MAX_MM,
+    snowMeltMmPerHour,
+    snowShare,
+    snowSublimationMmPerHour,
+} from "@workadventure/map-editor";
 import { ICE_BEARS_MM } from "@workadventure/map-editor";
 import {
     cycleAfterAbsence,
@@ -74,11 +80,35 @@ describe("the snow of a player's own city", () => {
         expect(ownSnowAfter(20, 3, 0, mild)).toBeCloseTo(20 - (2 * 3) / 3600);
     });
 
-    it("melts on the clock of the freeze and the thaw of the map, and falls on the clock of its water", () => {
-        // The water in real time, the freeze and the thaw at 60: an hour of melt in a minute.
-        expect(ownSnowAfter(20, 3, 0, mild, 1, 60)).toBeCloseTo(20 - (2 * 60 * 3) / 3600);
-        // What falls keeps the clock of the water.
-        expect(ownSnowAfter(0, 9, 2, frost, 1, 60)).toBeCloseTo((2 * 9) / 3600);
+    it("falls and melts on one clock, that of the freeze and the thaw of the map (decision of the user, 2026-11-27)", () => {
+        // The water in real time, the freeze and the thaw at 60 (freezeThawTimesOf): an hour of melt in a minute...
+        expect(ownSnowAfter(20, 3, 0, mild, 60)).toBeCloseTo(20 - (2 * 60 * 3) / 3600);
+        // ...and an hour of snow too.
+        expect(ownSnowAfter(0, 9, 2, frost, 60)).toBeCloseTo((2 * 60 * 9) / 3600);
+    });
+
+    it("holds up to about +2 °C while it snows, and melts as usual once the fall stops", () => {
+        // Montréal on 2026-11-27 as the user saw it: +1 °C, 96 %, 18 km/h; 8 mm an hour of water, nearly all snow.
+        const montreal = { temperature: 1, humidity: 96, windSpeed: 18 };
+        const share = snowShare(1, 96);
+        const subliming = snowSublimationMmPerHour(montreal);
+        expect(ownSnowAfter(0, 3, 8, montreal, THAW_SPEED)).toBeCloseTo(
+            ((8 * share - subliming) * THAW_SPEED * 3) / 3600,
+        );
+        // Without anything falling, the melt of +1 °C.
+        const melt = snowMeltMmPerHour(montreal);
+        expect(ownSnowAfter(20, 3, 0, montreal, THAW_SPEED)).toBeCloseTo(
+            20 - ((melt + subliming) * THAW_SPEED * 3) / 3600,
+        );
+        // At ×600 (« >>> ») the ground of the player is white (SNOW_FULL_MM) in a few seconds of the real clock.
+        expect(ownSnowAfter(0, 12, 8, montreal, THAW_SPEED)).toBeGreaterThan(SNOW_FULL_MM);
+    });
+
+    it("lies no thicker than a ground all white while the cold of the map goes faster, as on the server", () => {
+        const frozen = { temperature: -10, humidity: 100, windSpeed: 0 };
+        expect(ownSnowAfter(0, 60, 8, frozen, THAW_SPEED, SNOW_FULL_MM)).toBe(SNOW_FULL_MM);
+        // A thicker snow, kept from real time, stays as it was.
+        expect(ownSnowAfter(40, 60, 8, frozen, THAW_SPEED, SNOW_FULL_MM)).toBe(40);
     });
 
     it("holds in a still cold air without anything falling, and goes slowly in a dry wind", () => {
@@ -115,12 +145,12 @@ describe("the cycle of a player's own city after an absence", () => {
         expect(real.frost).toBeCloseTo(1 / 60);
         expect(real.ice).toBeCloseTo(1 / 120);
         // At ×60 of the freeze and the thaw: the frost whole in a second, the ice in two.
-        const fast = cycleAfterAbsence(kept, 1, target, 0, undefined, 1, 60);
+        const fast = cycleAfterAbsence(kept, 1, target, 0, undefined, 60);
         expect(fast.frost).toBe(1);
         expect(fast.ice).toBeCloseTo(0.5);
-        expect(cycleAfterAbsence(kept, 2, target, 0, undefined, 1, 60).ice).toBe(1);
+        expect(cycleAfterAbsence(kept, 2, target, 0, undefined, 60).ice).toBe(1);
         // And back: the frost goes as fast as it came.
-        expect(cycleAfterAbsence({ ...kept, frost: 1 }, 1, { ...target, frost: 0 }, 0, undefined, 1, 60).frost).toBe(0);
+        expect(cycleAfterAbsence({ ...kept, frost: 1 }, 1, { ...target, frost: 0 }, 0, undefined, 60).frost).toBe(0);
     });
 
     it("keeps the snow of the city when its air is not known, instead of starting again from bare ground", () => {

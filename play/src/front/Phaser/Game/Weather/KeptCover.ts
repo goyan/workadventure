@@ -6,6 +6,7 @@ import {
     iceGrowthMmPerDay,
     iceThawMmPerHour,
     snowMeltMmPerHour,
+    snowMeltWeather,
     snowSublimationMmPerHour,
 } from "@workadventure/map-editor";
 import type { SnowWeather } from "@workadventure/map-editor";
@@ -151,7 +152,9 @@ export interface KeptSnow {
 
 /**
  * Where a snow of the server is going under the air of the room, as Meadow.stepSnow: it melts over zero and a dry
- * wind takes some at any temperature. `building`: a snow falls on it now.
+ * wind takes some at any temperature. `building`: a snow falls on it now, and it melts by an air
+ * SNOW_HOLDS_WHILE_FALLING_C colder: it grows while that air does not melt it, else it goes at that melt (how hard
+ * the snow falls is not known here).
  */
 export function explainKeptSnow(input: {
     mm: number;
@@ -161,11 +164,12 @@ export function explainKeptSnow(input: {
 }): KeptSnow {
     const mm = Number.isFinite(input.mm) ? Math.max(0, input.mm) : 0;
     const weather = input.weather;
-    if (input.building)
+    const building = input.building === true;
+    if (building && (!weather || snowMeltMmPerHour(snowMeltWeather(weather, true)) <= 0))
         return { mm, trend: "growing", mmPerHour: 0, meltMmPerHour: 0, temperature: weather?.temperature };
     if (mm <= 0) return { mm, trend: "none", mmPerHour: 0, meltMmPerHour: 0, temperature: weather?.temperature };
     if (!weather) return { mm, trend: "unknown", mmPerHour: 0, meltMmPerHour: 0 };
-    const melt = snowMeltMmPerHour(weather) * clock(input.times);
+    const melt = snowMeltMmPerHour(snowMeltWeather(weather, building)) * clock(input.times);
     const going = melt + snowSublimationMmPerHour(weather) * clock(input.times);
     const known = { mm, meltMmPerHour: melt, temperature: weather.temperature };
     if (going <= 0) return { ...known, trend: "holding", mmPerHour: 0 };

@@ -9,6 +9,23 @@ export const SNOW_MAX_MM = 600;
 /** The snow, in mm of water, from which the ground under it is all white. */
 export const SNOW_FULL_MM = 15;
 
+/**
+ * The most the snow that falls lays on a tile, in mm of water, at that speed of the freeze and the thaw of the map
+ * (WaterSettings.freezeThawSpeed): SNOW_MAX_MM in real time; a ground all white (SNOW_FULL_MM) as soon as it goes
+ * faster (« >> », « >>> »), where the snow falls as fast as the cold goes: the water of its melt, poured on the
+ * relief, then never floods the map (a choice of the user, 2026-11-27). A snow already thicker is kept, only no more
+ * falls on it; back to ×1 it thickens again at the pace of reality.
+ */
+export function snowfallCapMm(freezeThawSpeed: number): number {
+    return Number.isFinite(freezeThawSpeed) && freezeThawSpeed > 1 ? SNOW_FULL_MM : SNOW_MAX_MM;
+}
+
+/** `snowMm` lying, with `fallenMm` fallen on it, no thicker than `capMm` unless it was already. */
+export function snowLaid(snowMm: number, fallenMm: number, capMm = SNOW_MAX_MM): number {
+    const cap = Math.min(SNOW_MAX_MM, capMm);
+    return fallenMm > 0 && snowMm < cap ? Math.min(cap, snowMm + fallenMm) : snowMm;
+}
+
 /** Melt by degree and by hour: a degree-day factor of 4.8 mm/°C/day, within the usual 3 to 6. */
 const MELT_MM_PER_DEGREE_HOUR = 0.2;
 /** The wind (km/h) that doubles the melt: it brings the heat of the air to the snow. */
@@ -51,6 +68,24 @@ export function snowMeltMmPerHour(weather: SnowWeather): number {
         (1 + Math.max(0, weather.windSpeed) / MELT_WIND_KMH) *
         (0.5 + share(weather.humidity))
     );
+}
+
+/**
+ * While snow falls on it, the snow lying on the ground melts as if the air were this many degrees colder: every flake
+ * renews a cold surface and the flakes that melt on their way down cool the air under them towards zero. A snow that
+ * falls thus holds on the ground up to about +2 °C, melts weakly just over that, and melts as usual once the fall stops.
+ * A choice of the user (2026-11-27).
+ */
+export const SNOW_HOLDS_WHILE_FALLING_C = 2;
+
+/** The temperature the snow on the ground melts by: SNOW_HOLDS_WHILE_FALLING_C colder while snow falls on it. */
+export function snowMeltTemperature(temperature: number, snowFalling: boolean): number {
+    return snowFalling ? temperature - SNOW_HOLDS_WHILE_FALLING_C : temperature;
+}
+
+/** The air the snow on the ground melts by (snowMeltTemperature): the air itself while no snow falls. */
+export function snowMeltWeather(weather: SnowWeather, snowFalling: boolean): SnowWeather {
+    return snowFalling ? { ...weather, temperature: snowMeltTemperature(weather.temperature, true) } : weather;
 }
 
 /** How fast a dry wind takes the snow without melting it, in mm of water an hour, at any temperature. */

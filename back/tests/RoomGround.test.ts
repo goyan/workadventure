@@ -231,6 +231,8 @@ describe("the ground of a room behind its door (RoomGround)", () => {
 
     it("keeps the floor of a building dry through its drain, as before (the sinks that dry a floor)", async () => {
         const { inputs, state } = world(groundWam());
+        // A warm air: what falls is rain (at +1 °C it would be a snow that holds on the ground while it falls).
+        state.air = { temperature: 26, humidity: 80 };
         const ground = new InlineRoomGround(inputs);
         await ground.startWater();
         await ground.startMeadow();

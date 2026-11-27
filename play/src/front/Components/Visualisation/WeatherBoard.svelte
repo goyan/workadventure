@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { SNOW_MAX_MM } from "@workadventure/map-editor";
     import type {
         AirOwner,
         Audience,
@@ -267,8 +268,22 @@
         switch (snow.trend) {
             case "none":
                 return undefined;
-            case "building":
-                return t.snow.building({ share: share(snow.snowShare) });
+            case "building": {
+                const building = t.snow.building({
+                    share: share(snow.snowShare),
+                    holdsUntil: degreesOr(snow.holdsUntil),
+                });
+                // Sped up, it falls no thicker than a ground all white (Terrain/Snow.ts, snowfallCapMm).
+                return snow.capMm < SNOW_MAX_MM
+                    ? `${building} ${t.snow.fastCap({ mm: whole.format(snow.capMm) })}`
+                    : building;
+            }
+            case "fallingMelts":
+                return t.snow.fallingMelts({
+                    share: share(snow.snowShare),
+                    temperature,
+                    holdsUntil: degreesOr(snow.holdsUntil),
+                });
             case "holding":
                 return t.snow.holding({ temperature });
             case "unknown":
@@ -314,7 +329,8 @@
     ]);
     /** The snow: what falls on it first (the old sentence, with its share of flakes), else where the thickest goes. */
     const snowWhy = $derived.by(() => {
-        if (board.snow.trend === "building" || !keptSnow || keptSnow.mm <= 0) {
+        const falling = board.snow.trend === "building" || board.snow.trend === "fallingMelts";
+        if (falling || !keptSnow || keptSnow.mm <= 0) {
             return snowTrend === undefined ? [] : [snowTrend];
         }
         const trend = catchingUp ? t.kept.catchingUp() : snowTrendLine(t, figures, keptSnow, true);

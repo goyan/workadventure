@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { Meadow, MEADOW_STEP_SECONDS } from "../src/Terrain/Meadow";
 import type { MeadowStepInput } from "../src/Terrain/Meadow";
-import { SNOW_MAX_MM } from "../src/Terrain/Snow";
+import { SNOW_FULL_MM, SNOW_MAX_MM, snowMeltMmPerHour, snowSublimationMmPerHour } from "../src/Terrain/Snow";
+import { snowShare } from "../src/Weather/Precipitation";
 import type { SnowWeather } from "../src/Terrain/Snow";
 import { cellKey } from "../src/Terrain/TerrainGrid";
 import { Season } from "../src/types";
@@ -156,6 +157,76 @@ describe("the snow melting", () => {
         expect(meadow.melt(10, 10, 1)).toBeCloseTo(5 * 20);
         expect(meadow.snowAt(10, 10)).toBe(0);
         expect(meadow.snowAt(12, 10)).toBeCloseTo(20);
+    });
+});
+
+describe("the snow that falls holds on the ground", () => {
+    // The air of Montréal on 2026-11-27 as the user saw it on the map: +1 °C, 96 %, a wind of 18 km/h.
+    const montreal: SnowWeather = { temperature: 1, humidity: 96, windSpeed: 18 };
+    const step = (seconds: number, hours: number): number => (seconds * hours) / 3600;
+
+    it("lies up to about +2 °C while it falls, and melts as usual once it stops", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.snowOn(10, 10, 0, 20);
+        // While it snows only the damp wind takes a little: no melt at +1 °C, nor at +2 °C.
+        const subliming = (snowSublimationMmPerHour(montreal) * THAW_SPEED * MEADOW_STEP_SECONDS) / 3600;
+        expect(meadow.step(under(montreal, { snowfallMm: 1 }))).toBeUndefined();
+        expect(meadow.snowAt(10, 10)).toBeCloseTo(21 - subliming, 4);
+        meadow.step(under({ ...montreal, temperature: 2 }, { snowfallMm: 1 }));
+        expect(meadow.snowAt(10, 10)).toBeCloseTo(22 - 2 * subliming, 4);
+        // The fall stops: the usual melt of +1 °C.
+        const melt = (snowMeltMmPerHour(montreal) * THAW_SPEED * MEADOW_STEP_SECONDS) / 3600;
+        const melted = meadow.step(under(montreal));
+        expect(melted?.meltedMm[10 * size.width + 10]).toBeCloseTo(melt, 4);
+        expect(meadow.snowAt(10, 10)).toBeCloseTo(22 - 3 * subliming - melt, 4);
+    });
+
+    it("melts weakly over +2 °C while it falls, as by the degrees over +2 °C", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.snowOn(10, 10, 0, 20);
+        const melted = meadow.step(under({ ...montreal, temperature: 3 }, { snowfallMm: 1 }));
+        expect(melted?.meltedMm[10 * size.width + 10]).toBeCloseTo(
+            step(MEADOW_STEP_SECONDS, THAW_SPEED) * snowMeltMmPerHour(montreal),
+            6,
+        );
+    });
+
+    it("holds under a mass of cold air by the air of its tile, 2 °C colder while it falls", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.snowOn(10, 10, 0, 20);
+        // A mass at +1.5 °C over a map at 10 °C: the snow under it holds while it falls.
+        const cold = [{ id: 1, x: 10 * 32 + 16, y: 10 * 32 + 16, radiusTiles: 2, temperature: 1.5 }];
+        meadow.step(under({ ...montreal, temperature: 10 }, { snowfallMm: 1, cold }));
+        expect(meadow.snowAt(10, 10)).toBeGreaterThan(20.9);
+        // Out of it the map melts it at 10 °C less 2.
+        expect(meadow.snowAt(0, 0)).toBeLessThan(1);
+    });
+
+    it("whitens the ground in seconds of the real clock at « >>> » (×600) in the snow of Montréal", () => {
+        // 8 mm an hour of water (Open-Meteo, Montréal, 2026-11-27 09:30 UTC), of which snowShare falls as snow, on
+        // the clock of the cold: the water in real time, its freeze and its thaw at ×600.
+        const share = snowShare(montreal.temperature, montreal.humidity);
+        const meadow = new Meadow(size, undefined, undefined);
+        let seconds = 0;
+        while (meadow.snowAt(0, 0) < SNOW_FULL_MM && seconds < 3600) {
+            meadow.step(under(montreal, { snowfallMm: 8 * share * step(MEADOW_STEP_SECONDS, THAW_SPEED) }));
+            seconds += MEADOW_STEP_SECONDS;
+        }
+        // 2.56 mm a step of two seconds: white in six steps.
+        expect(seconds).toBe(12);
+    });
+});
+
+describe("the snow that falls sped up", () => {
+    it("lies no thicker than a ground all white, and leaves a thicker snow as it was", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.snowOn(10, 10, 0, 40);
+        for (let step = 0; step < 20; step++) meadow.step(under(frost, { snowfallMm: 3, snowfallCapMm: SNOW_FULL_MM }));
+        expect(meadow.snowAt(0, 0)).toBeCloseTo(SNOW_FULL_MM, 5);
+        expect(meadow.snowAt(10, 10)).toBeCloseTo(40, 5);
+        // Back to real time, the usual most: it thickens again.
+        meadow.step(under(frost, { snowfallMm: 3 }));
+        expect(meadow.snowAt(0, 0)).toBeCloseTo(SNOW_FULL_MM + 3, 5);
     });
 });
 
