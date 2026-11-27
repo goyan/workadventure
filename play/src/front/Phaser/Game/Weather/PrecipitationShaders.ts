@@ -217,6 +217,11 @@ void main() {
     }
     // Its streak: where it was ${EXPOSURE_S} s before, higher and upwind.
     vec3 tail = project(point - uWind * ${glsl(EXPOSURE_S)}, min(uCamera.z * 0.99, z + speed * ${glsl(EXPOSURE_S)}));
+    // Nor over a roof: a near drop lands far from where it is seen, so it must be outdoors where it is seen too.
+    if (!outdoor(head.xy) || !outdoor(tail.xy)) {
+        gl_Position = HIDDEN;
+        return;
+    }
     vec2 b = uSizeB[group];
     // Near the camera a drop is out of focus: wider and fainter as it grows (by steps, as the processor drew them).
     float width = max(1.0, floor(min(uLook.y, b.x * head.z) * 2.0 + 0.5) / 2.0);
@@ -356,6 +361,11 @@ void main() {
     // Where it lands, read only for a flake in the view (the textures cost the most): outdoors, under its cloud.
     vec2 land = point + uWind * z / speed;
     if ((hasLocal() && !copyShown(copy, uCopies, a.y * underCloud(land), pick)) || !outdoor(land)) {
+        gl_Position = HIDDEN;
+        return;
+    }
+    // Nor over a roof: a near flake lands far from where it is seen, so it must be outdoors where it is seen too.
+    if (!outdoor(seen.xy)) {
         gl_Position = HIDDEN;
         return;
     }

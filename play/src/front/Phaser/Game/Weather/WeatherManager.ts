@@ -1289,7 +1289,11 @@ export class WeatherManager {
         }
         const copies = cellCopies(this.seenAmount(), this.drawnCopies);
         const drops = perspectiveDrops(still ? 0 : epoch, view, camera, intensity, air, local, copies, thin).filter(
-            (drop) => !isOutdoor || isOutdoor(drop.landX, drop.landY),
+            (drop) =>
+                !isOutdoor ||
+                (isOutdoor(drop.landX, drop.landY) &&
+                    isOutdoor(drop.headX, drop.headY) &&
+                    isOutdoor(drop.tailX, drop.tailY)),
         );
         // Grouped by how they are drawn: a few lines styles for the whole rain.
         const groups = new Map<string, { width: number; alpha: number; drops: typeof drops }>();
@@ -1362,7 +1366,7 @@ export class WeatherManager {
         }
         const copies = cellCopies(this.seenAmount(), this.drawnCopies);
         for (const flake of perspectiveFlakes(epoch, view, camera, fall, air, local, still, copies, thin)) {
-            if (isOutdoor && !isOutdoor(flake.landX, flake.landY)) continue;
+            if (isOutdoor && !(isOutdoor(flake.landX, flake.landY) && isOutdoor(flake.x, flake.y))) continue;
             const kind = FLAKE_KINDS[flake.kind];
             // The shape of the flake as on the ground, its pixels as many times bigger as the flake is near.
             const grown = Math.min(PERSPECTIVE_FLAKE_BIGGEST, flake.scale);
