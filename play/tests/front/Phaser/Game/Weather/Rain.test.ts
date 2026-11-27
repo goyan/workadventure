@@ -14,6 +14,8 @@ import {
     rainUnderCloud,
     STORM_RAIN,
     USUAL_RAIN,
+    RAIN_NATIVE_SCALE,
+    rainCell,
     rainFineness,
 } from "../../../../../src/front/Phaser/Game/Weather/Rain";
 import { FLAKE_KINDS, groundWind, PX_PER_METRE } from "../../../../../src/front/Phaser/Game/Weather/Snowfall";
@@ -262,25 +264,64 @@ describe("rain sound and development override", () => {
     });
 });
 
+describe("rainCell", () => {
+    const screen = { width: 1920, height: 1080 };
+    /** The view of a finer grid (rainFineness) for a screen seen at this scale: the map view, `fine` times finer. */
+    const finerView = (scale: number) => {
+        const fine = rainFineness(scale);
+        return {
+            view: { x: 0, y: 0, width: (screen.width / scale) * fine, height: (screen.height / scale) * fine },
+            fine,
+        };
+    };
+
+    // Seen from close the drops are `onScreen` times wider than at a usual zoom: the rain is as thick on the screen with
+    // as many times fewer of them. Without it the cell was a power of two of the view alone: twice as wide or not between
+    // two zooms, so four times the drops (10 % of the screen covered at a scale of 1.25 and 2.7 % at 1, measured).
+    it("holds as many drops on the screen at a scale past the usual zooms as at the usual ones", () => {
+        const usual = finerView(1.25);
+        const perScreenAtUsual = (usual.view.width * usual.view.height) / rainCell(usual.view) ** 2;
+        for (const scale of [1.6, 2, 3, 4, 6.5, 8, 16, 30]) {
+            const { view, fine } = finerView(scale);
+            const onScreen = scale / fine;
+            const cells = (view.width * view.height) / rainCell(view, onScreen) ** 2;
+            // The same cover (drops times the square of their size), as the cell is a power of two: within a share of two.
+            const cover = (cells * onScreen ** 2) / (perScreenAtUsual * 1.25 ** 2);
+            expect(cover).toBeGreaterThan(0.5);
+            expect(cover).toBeLessThan(2);
+        }
+    });
+
+    it("is the cell of the view alone without a finer grid, and keeps the grid for a small zoom", () => {
+        const wide = { x: 0, y: 0, width: 1920, height: 1080 };
+        expect(rainCell(wide)).toBe(rainCell(wide, undefined));
+        expect(rainCell({ ...wide, width: 1930, height: 1085 })).toBe(rainCell(wide));
+        expect(rainCell(wide, Number.NaN)).toBe(rainCell(wide));
+    });
+});
+
 describe("rainFineness", () => {
     it("draws the rain in map pixels at the usual zooms", () => {
         expect(rainFineness(0.2)).toBe(1);
         expect(rainFineness(1)).toBe(1);
-        expect(rainFineness(2.5)).toBe(1);
+        expect(rainFineness(1.5)).toBe(1);
+        expect(RAIN_NATIVE_SCALE).toBe(1.5);
     });
 
-    // Zoomed in to the full a drop was a streak as thick as a finger, and the drops hid the map.
-    it("draws it finer and finer past them, so a drop keeps on screen the size it has at a usual zoom", () => {
+    // Zoomed in the flakes were each wider on the screen while their number stayed: 10 % of the screen covered at a
+    // scale of 2.5 and over, against 1.8 % at 1 and 3.8 % at 1.5 (measured, flat snow), and the map could not be read.
+    it("draws it finer and finer past them, so a drop or a flake keeps on screen the size it has at a usual zoom", () => {
+        expect(rainFineness(1.6)).toBe(2);
         expect(rainFineness(3)).toBe(2);
-        expect(rainFineness(5)).toBe(2);
-        expect(rainFineness(8)).toBe(4);
-        expect(rainFineness(10)).toBe(4);
-        expect(rainFineness(16)).toBe(8);
-        // On screen a map pixel of rain never takes more than at the usual zooms.
-        for (const scale of [3, 4.9, 7, 12, 19, 40]) {
+        expect(rainFineness(3.1)).toBe(4);
+        expect(rainFineness(5)).toBe(4);
+        expect(rainFineness(6.1)).toBe(8);
+        expect(rainFineness(16)).toBe(16);
+        // On screen a map pixel of rain never takes more than at the top of the usual zooms, nor much less.
+        for (const scale of [1.6, 2.5, 3, 3.1, 4.9, 7, 12, 19, 40]) {
             const onScreen = scale / rainFineness(scale);
-            expect(onScreen).toBeLessThanOrEqual(2.5);
-            expect(onScreen).toBeGreaterThan(1.25);
+            expect(onScreen).toBeLessThanOrEqual(1.5);
+            expect(onScreen).toBeGreaterThan(0.75);
         }
     });
 
