@@ -354,7 +354,8 @@ describe("perspectiveThinning", () => {
     });
 
     it("thins them further as the zoom lengthens them and the canvas widens them, never over that share", () => {
-        expect(perspectiveThinning(5, 1)).toBeCloseTo(Math.sqrt(1.25 / 5));
+        expect(perspectiveThinning(5, 1)).toBe(0.4);
+        expect(perspectiveThinning(12, 1)).toBeCloseTo(Math.sqrt(1.25 / 12));
         // A stretched canvas: no streak thinner than its pixel, so fewer again.
         expect(perspectiveThinning(8, 8)).toBeLessThan(perspectiveThinning(8, 1));
         for (const scale of [2, 4, 8, 16]) expect(perspectiveThinning(scale, scale)).toBeLessThanOrEqual(0.4);
