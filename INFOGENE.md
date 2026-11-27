@@ -4847,6 +4847,15 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   Ctrl+clic ouvre le menu contextuel sur Mac. La consigne de l'outil le mentionne. Les écouteurs des touches Ctrl et
   Maj sont retirés à la désactivation : ils s'empilaient à chaque activation et changeaient le curseur des autres outils.
 
+## Zoom et glisser au-dessus du nom d'un avatar
+
+Le nom d'un avatar est un élément HTML posé sur le canvas (`UsernameDisplay`), qui prend la souris (`pointer-events:
+auto`, déjà le cas dans WorkAdventure ; son survol éclaire l'avatar). Phaser n'écoute que le canvas : une molette ou un
+glisser parti du nom ne zoomait ni ne déplaçait la vue. Le nom rend au canvas `wheel`, `mousedown` et `mousemove`
+(`forwardToGame`) ; un simple clic sur la carte ne fait rien, seul le double-clic fait marcher l'avatar. Non traité :
+le toucher (un doigt posé sur le nom). Vérifié le 2026-11-27 dans l'app desktop sur le dev local (entrées Chromium
+simulées) : avant, zoom et caméra immobiles depuis le nom ; après, la molette et le glisser agissent.
+
 ## Paliers et escaliers de l'outil Carte
 
 Étages posés sur le dessus des murs hauts, reliés par des escaliers. Tout est dessiné par l'outil Carte, section
@@ -4952,6 +4961,14 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   l'arrivée est sur un palier, le trajet passe par les dalles et les escaliers, contourne les murs de chaque étage
   (les portes sont franchissables) et évite les cases d'escalier au sol. Sans escalier menant à l'arrivée, depuis un
   escalier, ou pour un trajet qui reste au sol : trajet ordinaire. Les meubles des paliers ne sont pas contournés.
+  **Étage visé par un clic** (`FloorSpike.shownFloorAt`, `GameScene.clickedFloorLevelAt`) : le plus haut étage
+  **affiché** sous le pointeur, pas un étage caché au-dessus de l'avatar. Avant, un clic au sol dans un bâtiment ou
+  sur l'étage 1 envoyait l'avatar tout en haut (le plus haut palier dessiné à ce point, même invisible). Au sol dans
+  un bâtiment, les étages sont cachés : le clic reste au sol ; un étage choisi dans la pile sous l'horloge cache ceux
+  du dessus, le clic va donc à cet étage. « Y aller » garde le plus haut palier du point. Un trajet par les étages
+  n'est plus vérifié contre la grille de collision du sol (`Player.setPathToFollow(…, throughFloors)`) : ses points
+  sont dessinés plus au nord que leur case, souvent sur un mur du sol, et la marche s'arrêtait un ou deux étages
+  trop bas (constaté le 2026-11-27 sur la carte d'entrée de la beta, importée en local : sol → 244 arrêté au 180).
 - **Bulles par niveau** (`back/src/Model/FloorLevel.ts`) : le `back` lit l'altitude que le navigateur publie dans
   la variable de joueur `_floorZ` ; deux joueurs ne forment une bulle, et n'en écoutent une, que sur le même palier
   (moins de 6 px d'écart : deux niveaux peuvent n'être qu'à 12 px). Monter ou descendre fait quitter la bulle ; à

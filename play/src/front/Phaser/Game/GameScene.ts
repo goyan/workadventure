@@ -7213,7 +7213,7 @@ ${escapedMessage}
      * them). Only applied when the path does reach the destination.
      */
     public async moveTo(
-        position: { x: number; y: number },
+        position: { x: number; y: number; level?: number },
         tryFindingNearestAvailable = false,
         speed: number | undefined = undefined,
         stopDistance: number | undefined = undefined,
@@ -7224,6 +7224,7 @@ ${escapedMessage}
             const result = await this.CurrentPlayer.setPathToFollow(
                 floorWalk,
                 speed ?? this.CurrentPlayer.walkingSpeed,
+                true,
             );
             return { x: result.x, y: result.y, cancelled: result.cancelled };
         }
@@ -7281,13 +7282,23 @@ ${escapedMessage}
     }
 
     /**
-     * The walk to a point through the raised floors (see `floorPath`); undefined for a walk that stays on the ground,
-     * from a stair, or when no stair leads there: the ordinary walk of the ground then applies.
+     * The floor a click of the user on a point of the screen aims at (0: the ground): the highest one shown there. A
+     * floor hidden above the avatar does not count (see FloorSpike.shownFloorAt).
      */
-    private floorWalkTo(position: { x: number; y: number }): { x: number; y: number }[] | undefined {
+    public clickedFloorLevelAt(point: { x: number; y: number }): number {
+        return this.floorSpike?.walkContext() ? this.floorSpike.shownFloorAt(point.x, point.y) : 0;
+    }
+
+    /**
+     * The walk to a point through the raised floors (see `floorPath`); undefined for a walk that stays on the ground,
+     * from a stair, or when no stair leads there: the ordinary walk of the ground then applies. The floor aimed at is
+     * `position.level`, the highest one drawn at the point without it.
+     */
+    private floorWalkTo(position: { x: number; y: number; level?: number }): { x: number; y: number }[] | undefined {
         const floors = this.floorSpike?.walkContext();
         if (!floors || floors.state.stair !== undefined) return undefined;
-        if (floors.state.elevation < 2 && levelUnderPoint(floors.model, position.x, position.y) === 0) {
+        const level = position.level ?? levelUnderPoint(floors.model, position.x, position.y);
+        if (floors.state.elevation < 2 && level === 0) {
             return undefined;
         }
         const grid = this.gameMapFrontWrapper.getSharedCollisionGrid();
@@ -7319,7 +7330,7 @@ ${escapedMessage}
                 return cell !== undefined && cell !== PathTileType.Collider;
             },
             from: { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y, elevation: floors.state.elevation },
-            to: position,
+            to: { x: position.x, y: position.y, level },
         });
     }
 

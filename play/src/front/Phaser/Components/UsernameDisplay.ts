@@ -56,6 +56,21 @@ export class UsernameDisplay {
         this.hovered = false;
         this.onHover(false);
     };
+    /**
+     * The name floats over the canvas and takes the mouse (its hover lights the woka up): Phaser only listens to the
+     * canvas, so a wheel, a press or a move on the name neither zoomed nor dragged the view. They are handed to the canvas,
+     * as if the name were not there.
+     */
+    private readonly forwardToGame = (event: MouseEvent): void => {
+        const canvas = this.scene.game.canvas;
+        if (!canvas) return;
+        if (event instanceof WheelEvent) {
+            event.preventDefault();
+            canvas.dispatchEvent(new WheelEvent(event.type, event));
+        } else {
+            canvas.dispatchEvent(new MouseEvent(event.type, event));
+        }
+    };
 
     constructor(
         private scene: GameScene,
@@ -83,6 +98,9 @@ export class UsernameDisplay {
         this.element.style.background = PLAYER_NAME_BACKGROUND_COLOR;
         this.element.addEventListener("mouseenter", this.onMouseEnter);
         this.element.addEventListener("mouseleave", this.onMouseLeave);
+        this.element.addEventListener("wheel", this.forwardToGame, { passive: false });
+        this.element.addEventListener("mousedown", this.forwardToGame);
+        this.element.addEventListener("mousemove", this.forwardToGame);
 
         this.applyStyles();
         this.updatePlayerDepth();
@@ -178,6 +196,9 @@ export class UsernameDisplay {
         this.onMouseLeave();
         this.element.removeEventListener("mouseenter", this.onMouseEnter);
         this.element.removeEventListener("mouseleave", this.onMouseLeave);
+        this.element.removeEventListener("wheel", this.forwardToGame);
+        this.element.removeEventListener("mousedown", this.forwardToGame);
+        this.element.removeEventListener("mousemove", this.forwardToGame);
         this.element.remove();
         this.statusDisplay.destroy();
         this.megaphoneDisplay.destroy();

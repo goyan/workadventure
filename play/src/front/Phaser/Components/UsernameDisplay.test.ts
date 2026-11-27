@@ -72,4 +72,46 @@ describe("username hover", () => {
         expect(node?.classList.contains("in-discussion")).toBe(false);
         display.destroy();
     });
+
+    it("hands the wheel and the presses on the name to the canvas, so that it zooms and drags the view", () => {
+        const layer = document.createElement("div");
+        const canvas = document.createElement("canvas");
+        document.body.append(layer, canvas);
+        const scene = Object.assign(mock<GameScene>(), {
+            events: mock<GameScene["events"]>(),
+            game: { events: mock<GameScene["game"]["events"]>(), canvas },
+            usernameDomLayer: mock<UsernameDomLayer>({
+                addUsername: (node) => layer.append(node),
+                getAncestorScale: () => 1,
+            }),
+        });
+        const display = new UsernameDisplay(scene, 100, 200, "Carol", undefined, vi.fn());
+        const node = layer.querySelector<HTMLDivElement>(".username-display");
+        const received: Event[] = [];
+        for (const type of ["wheel", "mousedown", "mousemove"]) canvas.addEventListener(type, (e) => received.push(e));
+
+        const wheel = new WheelEvent("wheel", {
+            deltaY: -120,
+            clientX: 12,
+            clientY: 34,
+            cancelable: true,
+            bubbles: true,
+        });
+        node?.dispatchEvent(wheel);
+        node?.dispatchEvent(
+            new MouseEvent("mousedown", { button: 0, buttons: 1, clientX: 12, clientY: 34, bubbles: true }),
+        );
+        node?.dispatchEvent(new MouseEvent("mousemove", { buttons: 1, clientX: 20, clientY: 40, bubbles: true }));
+
+        expect(received.map((e) => e.type)).toEqual(["wheel", "mousedown", "mousemove"]);
+        expect((received[0] as WheelEvent).deltaY).toBe(-120);
+        expect((received[1] as MouseEvent).clientX).toBe(12);
+        expect((received[2] as MouseEvent).buttons).toBe(1);
+        expect(wheel.defaultPrevented).toBe(true);
+
+        display.destroy();
+        received.length = 0;
+        node?.dispatchEvent(new WheelEvent("wheel", { deltaY: 1 }));
+        expect(received).toHaveLength(0);
+    });
 });
